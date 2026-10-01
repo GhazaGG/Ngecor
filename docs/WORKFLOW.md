@@ -106,7 +106,7 @@ Usulan awal; ubah lewat PR bila tim tidak setuju.
 
 ## Review dan Definition of Done
 
-**Review teknis:** perubahan terfokus, tidak merusak sistem lain, dependency jelas, console bersih, dan mudah dijelaskan. **Review gameplay:** reviewer memainkan alur, mencatat kemudahan kontrol, feel, jitter/fisika, serta apakah interaksi menghasilkan pengalaman yang dituju.
+**Review teknis:** perubahan terfokus, tidak merusak sistem lain, dependency jelas, console bersih, mengikuti [Anggaran performa](DECISIONS.md#anggaran-performa), dan mudah dijelaskan. **Review gameplay:** reviewer memainkan alur, mencatat kemudahan kontrol, feel, jitter/fisika, serta apakah interaksi menghasilkan pengalaman yang dituju.
 
 Task selesai setelah acceptance criteria terpenuhi, tidak ada game-breaking bug atau console error baru yang diketahui, developer dan minimal satu reviewer sudah menguji, PR approved dan merge ke `main`. Fitur multiplayer juga harus diuji bersama host dan client sesuai scope. Target feel adalah cukup baik untuk milestone saat ini, bukan sempurna.
 

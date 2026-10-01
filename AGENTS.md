@@ -39,6 +39,7 @@ Aturan ini berlaku tanpa pengecualian kecuali developer dan issue menyatakan lai
 
 - Bekerja di branch task sendiri. Jangan push langsung ke `main` dan jangan merge PR tanpa review tim.
 - Utamakan satu perubahan yang bisa dimainkan dan diuji. Hindari framework, abstraksi, dependency, atau konten yang belum dibutuhkan task.
+- Game harus sangat ringan. Ikuti [Anggaran performa](docs/DECISIONS.md#anggaran-performa); jangan menambah efek grafis, texture besar, atau objek fisika berlebihan di luar anggaran tanpa persetujuan.
 - Terapkan prinsip fisik di `docs/GAME_DESIGN.md`: material harus benar-benar berada dan dipindahkan di dunia; kapasitas mengikuti ruang dan muatan fisik. Jangan menambahkan magic inventory atau transfer material tanpa pengangkutan. Biarkan solusi improvisasi bekerja jika keadaan fisik memungkinkan.
 - Untuk setiap alat atau upgrade, jelaskan masalah yang diatasi dan risiko baru yang berasal dari perubahan tersebut. Risiko harus memiliki pemicu yang masuk akal serta cara dicegah atau dipulihkan pemain; jangan memaksakan bencana acak setiap kali upgrade dipakai.
 - Jaga scene tetap sebagai tempat merakit prefab. Koordinasikan perubahan scene bersama; gunakan scene uji terpisah jika cocok.

@@ -14,6 +14,8 @@ Tujuan dokumen ini adalah mencegah AI atau anggota tim mengisi celah desain deng
 | Multiplayer prototype | Host sebagai sumber kebenaran; client mengirim niat | Workflow tim |
 | Integrasi kerja | Branch + PR, review teknis dan gameplay, `main` playable | Workflow tim |
 | Versi Unity (major) | Unity 6 (`6000.x`); versi patch persis ditetapkan di SETUP-001 | Keputusan pemilik proyek, 2026-10-01 |
+| Performa | Game harus sangat ringan; target dan anggaran di [Anggaran performa](#anggaran-performa) | Keputusan pemilik proyek, 2026-10-01 |
+| Render pipeline | URP (Universal Render Pipeline) | Keputusan pemilik proyek, 2026-10-01 |
 
 Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinciannya sudah dipilih**. Ubah arah melalui diskusi tim dan catat keputusan baru di bawah.
 
@@ -23,7 +25,6 @@ Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinci
 | --- | --- | --- |
 | Versi patch Unity 6 dan modules | Saat SETUP-001 | Versi editor persis (contoh format `6000.x.yfz`), modules, dan `ProjectSettings/ProjectVersion.txt` yang menguncinya |
 | Target platform dan bentuk gameplay awal | Sebelum menetapkan build/input/camera | OS/platform prototype, perspektif, dan perangkat input yang diuji |
-| Render pipeline | Saat membuat baseline Unity | Pilihan pipeline dan alasan singkat |
 | Input system | Sebelum implementasi kontrol M1 | Package/pendekatan dan binding minimum |
 | Networking package/transport | Sebelum sistem jaringan M3; lebih awal jika M1/M2 bergantung padanya | Package/versi, model host, dan batas ownership objek fisika |
 | Git ignore, LFS, dan file Unity | Dalam SETUP-002/003 sebelum banyak asset masuk | Pola ignore, pola LFS, batas ukuran bila ada, Visible Meta Files, Force Text, dan cara memverifikasinya |
@@ -62,3 +63,29 @@ Owner/source: orang atau link keputusan
 **Applies from:** SETUP-001 (#34).
 
 **Owner/source:** Keputusan pemilik proyek dalam percakapan 2026-10-01.
+
+### 2026-10-01 — Game sangat ringan dan URP
+
+**Decision:** Game harus berjalan lancar di laptop kelas bawah. Render pipeline memakai URP.
+
+**Reason:** Pemain dan developer memakai laptop yang berbeda-beda, dan co-op 4 pemain dengan banyak objek fisika sudah cukup membebani CPU. URP lebih ringan dan skalabel dibanding HDRP. Built-in Render Pipeline tidak dipakai karena Unity mengarahkan proyek baru ke URP.
+
+**Applies from:** SETUP-001 (#34) dan semua task berikutnya.
+
+**Owner/source:** Keputusan pemilik proyek dalam percakapan 2026-10-01.
+
+## Anggaran performa
+
+Angka di bawah adalah titik awal. Ubah lewat PR setelah ada data Profiler, jangan diubah karena satu fitur sulit memenuhinya.
+
+**Target:** 60 FPS stabil di 1080p dengan 4 pemain pada laptop GPU terintegrasi (setara Intel Iris Xe atau AMD Radeon Vega 8, RAM 8 GB). Sampai ada perangkat acuan, uji di laptop paling lemah di tim.
+
+| Area | Aturan |
+| --- | --- |
+| Grafis | Satu directional light real-time dengan shadow jarak pendek; light lain baked atau tanpa shadow. Tanpa real-time GI, SSAO, motion blur, atau depth of field. Post-processing hanya tonemapping dan color grading ringan. MSAA maksimal 2x. |
+| Art | Low-poly dan stylized. Texture maksimal 1024 px untuk objek besar, 512 px untuk props kecil. Pakai ulang material yang sama sebanyak mungkin. |
+| Fisika | Collider primitif (box, sphere, capsule) untuk objek yang bergerak; mesh collider hanya untuk lingkungan statis. Rigidbody dibiarkan sleep saat diam. Material tidak disimulasikan per partikel (lihat `docs/GAME_DESIGN.md`). |
+| Kode | Hindari `Find`, `GetComponent`, dan alokasi memori di `Update`/`FixedUpdate`; cache referensi saat `Awake`/`Start`. |
+| Jaringan | Hanya kirim state yang dibutuhkan client. Rincian menunggu keputusan networking package. |
+
+**Cara memeriksa:** fitur yang menambah banyak objek, efek, atau fisika menyertakan angka FPS dan screenshot Unity Profiler (CPU dan GPU) di PR. Playtest mingguan mencatat FPS di laptop paling lemah.
