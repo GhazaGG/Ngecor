@@ -12,15 +12,16 @@ Aturan ini berlaku tanpa pengecualian kecuali developer dan issue menyatakan lai
 2. Jangan memilih versi Unity, render pipeline, input system, atau networking. Jika belum tercatat di `docs/DECISIONS.md`, berhenti dan tanyakan.
 3. Pindah, rename, dan hapus asset hanya lewat Unity Editor (jendela Project). Jangan memakai File Explorer, terminal, atau `git mv` untuk file di `Assets/`; GUID di `.meta` bisa putus dan referensi hilang tanpa error.
 4. Jangan mengedit `.unity`, `.prefab`, `.asset`, atau `.meta` dengan teks editor. Ubah lewat Unity Editor.
-5. Jangan mengubah scene utama kecuali issue menyebutnya. Uji fitur di dev scene sendiri (lihat `docs/WORKFLOW.md`).
-6. Jangan push ke `main`, force push, `git reset --hard`, atau menghapus branch orang lain.
-7. Jangan membuat manager/singleton global, event bus, atau framework umum kecuali issue membutuhkannya.
-8. Jangan menulis kode multiplayer yang membuat client menentukan state (posisi objek fisika, hasil grab, jumlah material). Client hanya mengirim niat.
-9. Jangan menyatakan "sudah dites" atau mencentang checklist jika belum dijalankan di Unity. Tulis apa yang belum dites.
+5. Jangan membuat folder atau menaruh file di luar `docs/PROJECT_STRUCTURE.md`. Jika tidak ada tempat yang cocok, tanyakan.
+6. Jangan mengubah scene utama kecuali issue menyebutnya. Uji fitur di dev scene sendiri (lihat `docs/WORKFLOW.md`).
+7. Jangan push ke `main`, force push, `git reset --hard`, atau menghapus branch orang lain.
+8. Jangan membuat manager/singleton global, event bus, atau framework umum kecuali issue membutuhkannya.
+9. Jangan menulis kode multiplayer yang membuat client menentukan state (posisi objek fisika, hasil grab, jumlah material). Client hanya mengirim niat.
+10. Jangan menyatakan "sudah dites" atau mencentang checklist jika belum dijalankan di Unity. Tulis apa yang belum dites.
 
 ## Baca sebelum bekerja
 
-1. Baca `README.md`, bagian yang relevan dari `docs/GAME_DESIGN.md`, `docs/WORKFLOW.md`, dan `docs/DECISIONS.md`.
+1. Baca `README.md`, bagian yang relevan dari `docs/GAME_DESIGN.md`, `docs/WORKFLOW.md`, `docs/PROJECT_STRUCTURE.md`, dan `docs/DECISIONS.md`.
 2. Baca issue yang dikerjakan, file terkait, serta laporan relevan di `.development-history/`.
 3. Periksa branch dan working tree. Jangan menghapus, me-reset, atau menimpa pekerjaan orang lain.
 4. Jika `.codegraph/` ada di root repo, gunakan CodeGraph sebelum pencarian teks untuk memahami atau mencari kode. Jangan membuat index sendiri.

@@ -92,13 +92,13 @@ git branch -D feat/player-grab   # -D karena squash merge tidak dikenali -d
 - Pindah, rename, dan hapus asset hanya lewat Unity Editor agar GUID di `.meta` tetap terhubung. Jangan memakai File Explorer, terminal, atau `git mv` untuk file di `Assets/`.
 - Koordinasikan sebelum dua orang mengubah scene, prefab inti, `ProjectSettings`, `Packages`, atau pengaturan Git/LFS yang sama. Jika terjadi konflik serialisasi Unity, minta pemilik perubahan meninjau hasil merge di Editor dan Play Mode.
 - Saat project tersedia, asset Unity dan file `.meta` pasangannya harus ikut version control. Jangan commit cache atau hasil build lokal. Pola final `.gitignore` dan `.gitattributes` dikerjakan oleh issue setup, bukan ditebak dari dokumen ini.
-- Struktur awal yang diusulkan adalah `Assets/Game/{Art,Audio,Materials,Prefabs,Scenes,Scripts,Settings}`. Tambahkan subfolder saat ada asset nyata; jangan membuat hierarki kosong untuk rencana masa depan.
+- Letak folder dan penamaan file mengikuti [Struktur Folder dan Penamaan](PROJECT_STRUCTURE.md).
 
 ## Konvensi kode C#
 
 Usulan awal; ubah lewat PR bila tim tidak setuju.
 
-- Script di `Assets/Game/Scripts/<System>/`, memakai namespace `Ngecor.<System>` (contoh `Ngecor.Player`). `<System>` mengikuti field System di [Manajemen Proyek](PROJECT_MANAGEMENT.md).
+- Script di `Assets/Game/Scripts/<System>/`, memakai namespace `Ngecor.<System>` (contoh `Ngecor.Player`). Lihat [Struktur Folder dan Penamaan](PROJECT_STRUCTURE.md).
 - Nama file sama dengan nama class (wajib di Unity untuk MonoBehaviour). Satu MonoBehaviour per file.
 - Penamaan C# standar: `PascalCase` untuk class, method, property; `camelCase` untuk variabel lokal dan parameter; `_camelCase` untuk field private.
 - Identifier dalam bahasa Inggris. Field yang perlu diatur di Inspector memakai `[SerializeField] private`, bukan `public`.

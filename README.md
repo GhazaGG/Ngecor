@@ -10,9 +10,10 @@ Repo ini masih dalam tahap **M0: project setup**. Keberadaan dokumen desain tida
 
 1. Baca [Desain Game](docs/GAME_DESIGN.md) untuk arah produk dan target vertical slice.
 2. Baca [Alur Kerja](docs/WORKFLOW.md) untuk branch, review, playtest, dan aturan file Unity.
-3. Baca [Manajemen Proyek](docs/PROJECT_MANAGEMENT.md) untuk board, prioritas, milestone, dan kesiapan ticket.
-4. Sebelum memulai setup Unity, selesaikan keputusan yang relevan di [Keputusan Proyek](docs/DECISIONS.md).
-5. Jika memakai AI, berikan [AGENTS.md](AGENTS.md) sebagai instruksi awal ketika tool tidak membacanya otomatis.
+3. Baca [Struktur Folder dan Penamaan](docs/PROJECT_STRUCTURE.md) sebelum menambah file ke project Unity.
+4. Baca [Manajemen Proyek](docs/PROJECT_MANAGEMENT.md) untuk board, prioritas, milestone, dan kesiapan ticket.
+5. Sebelum memulai setup Unity, selesaikan keputusan yang relevan di [Keputusan Proyek](docs/DECISIONS.md).
+6. Jika memakai AI, berikan [AGENTS.md](AGENTS.md) sebagai instruksi awal ketika tool tidak membacanya otomatis.
 
 Pekerjaan setup dilacak di issue [SETUP-001](https://github.com/GhazaGG/Ngecor/issues/34), [SETUP-002](https://github.com/GhazaGG/Ngecor/issues/35), dan [SETUP-003](https://github.com/GhazaGG/Ngecor/issues/36). Ambil task dari issue yang sudah siap, kerjakan di branch sendiri, dan ajukan PR. Jangan push langsung ke `main`.
 
