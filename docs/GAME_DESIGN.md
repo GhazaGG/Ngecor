@@ -14,14 +14,30 @@ Keseruan datang dari **logistik fisik, koordinasi manusia, improvisasi, dan reak
 
 Fase awal pengembangan membuktikan interaksi pendek yang menyenangkan. Workshop, ekonomi, reputasi, dan banyak kontrak adalah arah game, bukan syarat untuk playground pertama.
 
-## Pilar desain
+## Dua prinsip inti
 
-1. **Logistik fisik.** Tidak ada magic inventory. Semen, pasir, kerikil, bata, beton, dan scaffolding harus dipindahkan, dimuat, dilempar, disekop, atau diangkat di dunia game.
-2. **Solusi bebas.** Berikan masalah, bukan satu cara benar. Tangga, scaffolding, pulley, crane, ramp, lemparan antarpemain, atau kendaraan sebagai platform boleh menjadi solusi bila sistem memungkinkan.
-3. **Alat memberi manfaat dan risiko.** Setiap alat idealnya memecahkan satu masalah dan membuka paling tidak satu masalah baru. Contoh: gerobak membawa banyak barang tetapi bisa terguling; pickup mengangkut lebih banyak tetapi bisa overload atau terjebak.
-4. **Kegagalan lunak.** Kesalahan menimbulkan pekerjaan tambahan yang dapat dipulihkan: tarik pickup dari lumpur, aduk manual saat mixer rusak, bangun ulang scaffolding. Hindari game over sebagai respons pertama.
-5. **Tekanan situasional.** Hujan, beton yang mulai mengeras, supplier yang menunggu, atau alat yang bermasalah menciptakan pilihan prioritas. Hindari mengandalkan timer arcade sederhana.
-6. **Kontrol sederhana, kombinasi kaya.** Aksi yang dipertimbangkan: grab, carry, push/pull, throw, pour, shovel, hammer, connect, drive, climb. Kompleksitas berasal dari interaksi antarsistem, bukan banyak tombol.
+### 1. Sepenuhnya fisik: material dan solusi mengikuti keadaan dunia
+
+Tidak ada magic inventory. Material, alat, kendaraan, dan konstruksi berinteraksi melalui posisi, ruang, berat, kontak, serta kondisi fisiknya. Semen, pasir, kerikil, kayu, bata, beton, dan scaffolding harus benar-benar dipindahkan dan tersedia di lokasi untuk dipakai. Kapasitas angkut mengikuti muatan yang ada secara fisik; material tidak boleh tersimpan di slot tersembunyi atau muncul di tujuan tanpa diangkut.
+
+Contoh: jika gerobak penuh pasir dan tidak ada ruang untuk kayu, gerobak hanya membawa pasir. Untuk membawa kayu, pemain perlu mengurangi atau menata ulang muatan, menyediakan pengangkutan lain, atau menemukan susunan fisik yang memungkinkan.
+
+Solusi juga mengikuti fisika. Jika kendaraan terlalu berat untuk ditahan rem di tanjakan, pemain dapat mencoba mengganjal roda dengan batu. Keberhasilannya mengikuti posisi batu, kontak, dan kemampuan ganjal menahan kendaraan. Solusi improvisasi yang masuk akal harus bisa dicoba tanpa menunggu satu cara yang ditentukan desainer.
+
+### 2. Peningkatan mengubah masalah dan membawa tantangan baru
+
+Setiap alat atau peningkatan kemampuan harus memecahkan masalah sekaligus membawa paling tidak satu risiko atau tantangan baru yang berasal dari perubahan tersebut. Kapasitas lebih besar, kecepatan lebih tinggi, atau akses lebih jauh tetap memiliki konsekuensi yang harus dikelola pemain.
+
+Contoh: mengganti gerobak dengan pickup memungkinkan lebih banyak pasir diangkut, tetapi memperkenalkan kebutuhan mengamankan muatan. Jika pengunci bak tidak dipasang, pasir dapat tumpah saat kendaraan menanjak. Risiko lain dapat berasal dari berat, pengereman, kestabilan, atau medan, sesuai sistem yang benar-benar dibuat.
+
+Risiko baru harus dapat dipahami, dicegah, atau diatasi pemain. Masalah muncul ketika kondisi pemicunya terjadi; bencana tidak wajib terjadi setiap kali alat dipakai. Contoh di atas menjelaskan hubungan sebab-akibat, bukan kewajiban membuat semua mekaniknya sekaligus.
+
+## Pilar pendukung
+
+1. **Solusi bebas.** Berikan masalah, bukan satu cara benar. Tangga, scaffolding, pulley, crane, ramp, lemparan antarpemain, atau kendaraan sebagai platform boleh menjadi solusi bila sistem memungkinkan.
+2. **Kegagalan lunak.** Kesalahan menimbulkan pekerjaan tambahan yang dapat dipulihkan: tarik pickup dari lumpur, aduk manual saat mixer rusak, bangun ulang scaffolding. Hindari game over sebagai respons pertama.
+3. **Tekanan situasional.** Hujan, beton yang mulai mengeras, supplier yang menunggu, atau alat yang bermasalah menciptakan pilihan prioritas. Hindari mengandalkan timer arcade sederhana.
+4. **Kontrol sederhana, kombinasi kaya.** Aksi yang dipertimbangkan: grab, carry, push/pull, throw, pour, shovel, hammer, connect, drive, climb. Kompleksitas berasal dari interaksi antarsistem, bukan banyak tombol.
 
 ## Bahan, alat, dan lingkungan
 

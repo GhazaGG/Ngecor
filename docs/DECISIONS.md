@@ -8,6 +8,8 @@ Tujuan dokumen ini adalah mencegah AI atau anggota tim mengisi celah desain deng
 | --- | --- | --- |
 | Genre dan pemain | Game konstruksi kooperatif untuk 1–4 pemain | Brief konsep |
 | Gameplay utama | Logistik fisik, solusi improvisasi, alat dengan manfaat dan risiko, kegagalan yang bisa dipulihkan | Brief konsep |
+| Prinsip inti 1 | Material, kapasitas angkut, dan solusi improvisasi mengikuti keadaan fisik dunia; tanpa magic inventory | Klarifikasi pemilik proyek, 2026-10-01 |
+| Prinsip inti 2 | Setiap alat atau upgrade membawa tantangan baru yang sesuai dengan kemampuannya; risiko muncul melalui sebab-akibat dan dapat dikelola pemain | Klarifikasi pemilik proyek, 2026-10-01 |
 | Struktur jangka panjang | Workshop permanen dan map kontrak khusus; Rumah Pak Ujang sebagai target vertical slice | Brief konsep |
 | Multiplayer prototype | Host sebagai sumber kebenaran; client mengirim niat | Workflow tim |
 | Integrasi kerja | Branch + PR, review teknis dan gameplay, `main` playable | Workflow tim |
@@ -40,4 +42,12 @@ Applies from: issue/PR atau milestone
 Owner/source: orang atau link keputusan
 ```
 
-Belum ada keputusan teknis tambahan yang diverifikasi dalam repo saat dokumen ini dibuat.
+### 2026-10-01 — Dua prinsip inti gameplay
+
+**Decision:** Tegaskan gameplay sepenuhnya fisik dan peningkatan yang membawa tantangan baru sebagai dua prinsip inti. Rincian dan contoh ada di [Desain Game](GAME_DESIGN.md).
+
+**Reason:** Kapasitas, muatan, dan solusi harus mengikuti keadaan dunia; peningkatan perlu memperkenalkan konsekuensi yang sesuai agar pemain tetap berkoordinasi dan berimprovisasi.
+
+**Applies from:** Desain dan review fitur material, transportasi, alat, serta upgrade berikutnya.
+
+**Owner/source:** Klarifikasi langsung pemilik proyek dalam percakapan 2026-10-01. Contoh gerobak, ganjal batu, dan pengunci bak adalah ilustrasi, bukan tambahan scope implementasi.
