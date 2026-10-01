@@ -41,6 +41,7 @@ Assets/
 │   ├── Scripts/
 │   │   ├── <System>/
 │   │   └── Editor/            hanya script editor (bukan bagian build)
+│   ├── Tests/<System>/        automated Unity tests per sistem
 │   └── Settings/              render pipeline, input actions, physics material bersama
 └── ThirdParty/                asset dari luar (Asset Store, download)
     └── <NamaAsset>/
@@ -53,6 +54,8 @@ Nama subfolder memakai nilai field **System** di [Manajemen Proyek](PROJECT_MANA
 `Player`, `Interaction`, `Physics`, `Vehicle`, `Material`, `Construction`, `Multiplayer`, `Level`, `UI`
 
 Contoh: script gerobak di `Scripts/Vehicle/`, prefab gerobak di `Prefabs/Vehicle/`, model gerobak di `Art/Models/Vehicle/`. Satu sistem memakai nama yang sama di setiap folder tipe.
+
+Automated Unity tests live under `Assets/Game/Tests/<System>/` and use a test assembly definition that references the system's runtime assembly. Add this folder convention in the first PR that needs it; do not create empty test folders.
 
 File yang benar-benar dipakai dua sistem atau lebih boleh ditaruh di `<Tipe>/Shared/`. "Mungkin nanti dipakai sistem lain" tidak cukup; letakkan di sistem pemiliknya dulu dan pindahkan lewat Editor saat dibutuhkan.
 
