@@ -2,6 +2,22 @@
 
 File ini berlaku untuk semua AI yang membantu empat developer Ngecor. Jika tool tidak membaca `AGENTS.md` otomatis, developer perlu menyertakannya dalam konteks task. Instruksi langsung dari developer dan acceptance criteria issue yang disetujui menentukan scope task; catat konflik dengan dokumen proyek sebelum mengubah desain.
 
+**Jika AI tidak bisa membaca repo** (chat web/aplikasi tanpa akses file), developer menempelkan: isi file ini, isi issue, baris relevan dari `docs/DECISIONS.md`, dan file yang akan diubah. AI tidak boleh menebak isi file yang tidak ditempel; minta developer menempelkannya.
+
+## Larangan keras
+
+Aturan ini berlaku tanpa pengecualian kecuali developer dan issue menyatakan lain secara eksplisit.
+
+1. Jangan memasang package, plugin, atau asset store apa pun (termasuk networking seperti Mirror, Photon, Fish-Net, NGO) yang belum tercatat di `docs/DECISIONS.md`.
+2. Jangan memilih versi Unity, render pipeline, input system, atau networking. Jika belum tercatat di `docs/DECISIONS.md`, berhenti dan tanyakan.
+3. Pindah, rename, dan hapus asset hanya lewat Unity Editor (jendela Project). Jangan memakai File Explorer, terminal, atau `git mv` untuk file di `Assets/`; GUID di `.meta` bisa putus dan referensi hilang tanpa error.
+4. Jangan mengedit `.unity`, `.prefab`, `.asset`, atau `.meta` dengan teks editor. Ubah lewat Unity Editor.
+5. Jangan mengubah scene utama kecuali issue menyebutnya. Uji fitur di dev scene sendiri (lihat `docs/WORKFLOW.md`).
+6. Jangan push ke `main`, force push, `git reset --hard`, atau menghapus branch orang lain.
+7. Jangan membuat manager/singleton global, event bus, atau framework umum kecuali issue membutuhkannya.
+8. Jangan menulis kode multiplayer yang membuat client menentukan state (posisi objek fisika, hasil grab, jumlah material). Client hanya mengirim niat.
+9. Jangan menyatakan "sudah dites" atau mencentang checklist jika belum dijalankan di Unity. Tulis apa yang belum dites.
+
 ## Baca sebelum bekerja
 
 1. Baca `README.md`, bagian yang relevan dari `docs/GAME_DESIGN.md`, `docs/WORKFLOW.md`, dan `docs/DECISIONS.md`.

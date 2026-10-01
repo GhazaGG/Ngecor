@@ -20,6 +20,8 @@ Fase awal pengembangan membuktikan interaksi pendek yang menyenangkan. Workshop,
 
 Tidak ada magic inventory. Material, alat, kendaraan, dan konstruksi berinteraksi melalui posisi, ruang, berat, kontak, serta kondisi fisiknya. Semen, pasir, kerikil, kayu, bata, beton, dan scaffolding harus benar-benar dipindahkan dan tersedia di lokasi untuk dipakai. Kapasitas angkut mengikuti muatan yang ada secara fisik; material tidak boleh tersimpan di slot tersembunyi atau muncul di tujuan tanpa diangkut.
 
+Fisik bukan berarti simulasi partikel. Representasi sederhana seperti satu objek sak, tumpukan, atau isi bak sebagai level volume boleh dipakai, asalkan material itu berada di dunia, terlihat, dan ikut berpindah bersama pengangkutnya.
+
 Contoh: jika gerobak penuh pasir dan tidak ada ruang untuk kayu, gerobak hanya membawa pasir. Untuk membawa kayu, pemain perlu mengurangi atau menata ulang muatan, menyediakan pengangkutan lain, atau menemukan susunan fisik yang memungkinkan.
 
 Solusi juga mengikuti fisika. Jika kendaraan terlalu berat untuk ditahan rem di tanjakan, pemain dapat mencoba mengganjal roda dengan batu. Keberhasilannya mengikuti posisi batu, kontak, dan kemampuan ganjal menahan kendaraan. Solusi improvisasi yang masuk akal harus bisa dicoba tanpa menunggu satu cara yang ditentukan desainer.

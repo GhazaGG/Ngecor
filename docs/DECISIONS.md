@@ -13,6 +13,7 @@ Tujuan dokumen ini adalah mencegah AI atau anggota tim mengisi celah desain deng
 | Struktur jangka panjang | Workshop permanen dan map kontrak khusus; Rumah Pak Ujang sebagai target vertical slice | Brief konsep |
 | Multiplayer prototype | Host sebagai sumber kebenaran; client mengirim niat | Workflow tim |
 | Integrasi kerja | Branch + PR, review teknis dan gameplay, `main` playable | Workflow tim |
+| Versi Unity (major) | Unity 6 (`6000.x`); versi patch persis ditetapkan di SETUP-001 | Keputusan pemilik proyek, 2026-10-01 |
 
 Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinciannya sudah dipilih**. Ubah arah melalui diskusi tim dan catat keputusan baru di bawah.
 
@@ -20,7 +21,7 @@ Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinci
 
 | Topik | Kapan harus jelas | Yang perlu dicatat |
 | --- | --- | --- |
-| Versi Unity dan modules | Sebelum baseline Unity dibagikan | Versi editor persis, cara install, dan file proyek yang menguncinya |
+| Versi patch Unity 6 dan modules | Saat SETUP-001 | Versi editor persis (contoh format `6000.x.yfz`), modules, dan `ProjectSettings/ProjectVersion.txt` yang menguncinya |
 | Target platform dan bentuk gameplay awal | Sebelum menetapkan build/input/camera | OS/platform prototype, perspektif, dan perangkat input yang diuji |
 | Render pipeline | Saat membuat baseline Unity | Pilihan pipeline dan alasan singkat |
 | Input system | Sebelum implementasi kontrol M1 | Package/pendekatan dan binding minimum |
@@ -51,3 +52,13 @@ Owner/source: orang atau link keputusan
 **Applies from:** Desain dan review fitur material, transportasi, alat, serta upgrade berikutnya.
 
 **Owner/source:** Klarifikasi langsung pemilik proyek dalam percakapan 2026-10-01. Contoh gerobak, ganjal batu, dan pengunci bak adalah ilustrasi, bukan tambahan scope implementasi.
+
+### 2026-10-01 — Unity 6
+
+**Decision:** Proyek memakai Unity 6 (`6000.x`). Semua developer memakai versi patch yang sama persis.
+
+**Reason:** Pilihan pemilik proyek. Versi patch belum dipilih; pembuat baseline di SETUP-001 memilih satu versi Unity 6 lalu mencatatnya di sini dan di `ProjectSettings/ProjectVersion.txt`.
+
+**Applies from:** SETUP-001 (#34).
+
+**Owner/source:** Keputusan pemilik proyek dalam percakapan 2026-10-01.
