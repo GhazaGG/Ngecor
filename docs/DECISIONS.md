@@ -13,10 +13,11 @@ Tujuan dokumen ini adalah mencegah AI atau anggota tim mengisi celah desain deng
 | Struktur jangka panjang | Workshop permanen dan map kontrak khusus; Rumah Pak Ujang sebagai target vertical slice | Brief konsep |
 | Multiplayer prototype | Host sebagai sumber kebenaran; client mengirim niat | Workflow tim |
 | Integrasi kerja | Branch + PR, review teknis dan gameplay, `main` playable | Workflow tim |
-| Versi Unity (major) | Unity 6 (`6000.x`); versi patch persis ditetapkan di SETUP-001 | Keputusan pemilik proyek, 2026-10-01 |
+| Versi Unity | **6000.3.25f1** (Unity 6.3 LTS), dikunci oleh `ProjectSettings/ProjectVersion.txt`; tanpa module tambahan | Keputusan pemilik proyek, 2026-10-01 (SETUP-001) |
 | Performa | Game harus sangat ringan; target dan anggaran di [Anggaran performa](#anggaran-performa) | Keputusan pemilik proyek, 2026-10-01 |
 | Render pipeline | URP (Universal Render Pipeline) | Keputusan pemilik proyek, 2026-10-01 |
 | Lokasi project Unity | Root repo: `Assets/`, `Packages/`, `ProjectSettings/` sejajar dengan `docs/` | Keputusan pemilik proyek, 2026-10-01 |
+| Struktur proyek nyata | Scene awal `Assets/Game/Scenes/Playground.unity` (satu-satunya scene di Build Settings); URP, volume profile, dan input actions di `Assets/Game/Settings/` | SETUP-001 |
 
 Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinciannya sudah dipilih**. Ubah arah melalui diskusi tim dan catat keputusan baru di bawah.
 
@@ -24,12 +25,10 @@ Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinci
 
 | Topik | Kapan harus jelas | Yang perlu dicatat |
 | --- | --- | --- |
-| Versi patch Unity 6 dan modules | Saat SETUP-001 | Versi editor persis (contoh format `6000.x.yfz`), modules, dan `ProjectSettings/ProjectVersion.txt` yang menguncinya |
 | Target platform dan bentuk gameplay awal | Sebelum menetapkan build/input/camera | OS/platform prototype, perspektif, dan perangkat input yang diuji |
-| Input system | Sebelum implementasi kontrol M1 | Package/pendekatan dan binding minimum |
+| Input system | Sebelum implementasi kontrol M1 | Baseline sudah membawa `com.unity.inputsystem` 1.20.0 dari template, dengan Active Input Handling = Input System Package. Yang perlu diputuskan: tetap memakai ini atau tidak, dan binding minimum |
 | Networking package/transport | Sebelum sistem jaringan M3; lebih awal jika M1/M2 bergantung padanya | Package/versi, model host, dan batas ownership objek fisika |
 | Git ignore, LFS, dan file Unity | Dalam SETUP-002/003 sebelum banyak asset masuk | Pola ignore, pola LFS, batas ukuran bila ada, Visible Meta Files, Force Text, dan cara memverifikasinya |
-| Struktur proyek nyata | Saat SETUP-001 selesai | Scene bootstrap dan folder yang benar-benar dibuat |
 
 Jika sebuah topik ternyata sudah diputuskan dalam issue atau rapat, **catat keputusan dan sumbernya di sini**. Jangan menebak nilai dari contoh dokumen atau kebiasaan pribadi. Untuk hal yang tidak menghalangi task sekarang, biarkan tetap terbuka.
 
@@ -72,6 +71,16 @@ Owner/source: orang atau link keputusan
 **Reason:** Pemain dan developer memakai laptop yang berbeda-beda, dan co-op 4 pemain dengan banyak objek fisika sudah cukup membebani CPU. URP lebih ringan dan skalabel dibanding HDRP. Built-in Render Pipeline tidak dipakai karena Unity mengarahkan proyek baru ke URP.
 
 **Applies from:** SETUP-001 (#34) dan semua task berikutnya.
+
+**Owner/source:** Keputusan pemilik proyek dalam percakapan 2026-10-01.
+
+### 2026-10-01 — Versi Unity 6000.3.25f1
+
+**Decision:** Semua developer memakai Unity **6000.3.25f1** (6.3 LTS). Module tambahan tidak diperlukan; build Windows memakai backend Mono bawaan.
+
+**Reason:** LTS memberi dukungan dan perbaikan bug paling lama untuk tim. Dipilih pemilik proyek saat SETUP-001.
+
+**Applies from:** SETUP-001 (#34).
 
 **Owner/source:** Keputusan pemilik proyek dalam percakapan 2026-10-01.
 
