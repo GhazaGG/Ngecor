@@ -21,8 +21,9 @@ Pekerjaan setup dilacak di issue [SETUP-001](https://github.com/GhazaGG/Ngecor/i
 
 1. Install Unity **6000.3.25f1** lewat Unity Hub, tanpa module tambahan. Versi lain tidak boleh dipakai (lihat [Keputusan Proyek](docs/DECISIONS.md)).
 2. Cek instalasinya: folder `C:\Program Files\Unity\Hub\Editor\6000.3.25f1\Editor\Data\UnityReferenceAssemblies` harus ada. Hub bisa melaporkan "installed" walaupun installer gagal di tengah jalan. Kalau folder itu tidak ada, uninstall, kosongkan disk (minimal sekitar 20 GB), lalu install ulang memakai installer manual dari [Unity Download Archive](https://unity.com/releases/editor/archive) dengan Run as administrator.
-3. Clone repo, lalu di Unity Hub pilih **Add → Add project from disk** dan arahkan ke folder root repo.
-4. Buka `Assets/Game/Scenes/Playground.unity`, lalu tekan Play.
+3. Jalankan `git lfs install` satu kali di komputer (butuh [Git LFS](https://git-lfs.com/)), baru clone repo. Kalau sudah terlanjur clone sebelum itu, jalankan `git lfs pull`.
+4. Di Unity Hub pilih **Add → Add project from disk** dan arahkan ke folder root repo.
+5. Buka `Assets/Game/Scenes/Playground.unity`, lalu tekan Play.
 
 ## Prinsip prototype
 

@@ -17,6 +17,7 @@ Tujuan dokumen ini adalah mencegah AI atau anggota tim mengisi celah desain deng
 | Performa | Game harus sangat ringan; target dan anggaran di [Anggaran performa](#anggaran-performa) | Keputusan pemilik proyek, 2026-10-01 |
 | Render pipeline | URP (Universal Render Pipeline) | Keputusan pemilik proyek, 2026-10-01 |
 | Lokasi project Unity | Root repo: `Assets/`, `Packages/`, `ProjectSettings/` sejajar dengan `docs/` | Keputusan pemilik proyek, 2026-10-01 |
+| Git ignore dan LFS | Pola di `.gitignore` dan `.gitattributes` (gambar, model, audio, video, font, `.dll`/`.so`, `.zip` lewat LFS; YAML Unity sebagai teks LF). Visible Meta Files dan Force Text aktif | SETUP-002/003 |
 | Struktur proyek nyata | Scene awal `Assets/Game/Scenes/Playground.unity` (satu-satunya scene di Build Settings); URP, volume profile, dan input actions di `Assets/Game/Settings/` | SETUP-001 |
 
 Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinciannya sudah dipilih**. Ubah arah melalui diskusi tim dan catat keputusan baru di bawah.
@@ -28,7 +29,6 @@ Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinci
 | Target platform dan bentuk gameplay awal | Sebelum menetapkan build/input/camera | OS/platform prototype, perspektif, dan perangkat input yang diuji |
 | Input system | Sebelum implementasi kontrol M1 | Baseline sudah membawa `com.unity.inputsystem` 1.20.0 dari template, dengan Active Input Handling = Input System Package. Yang perlu diputuskan: tetap memakai ini atau tidak, dan binding minimum |
 | Networking package/transport | Sebelum sistem jaringan M3; lebih awal jika M1/M2 bergantung padanya | Package/versi, model host, dan batas ownership objek fisika |
-| Git ignore, LFS, dan file Unity | Dalam SETUP-002/003 sebelum banyak asset masuk | Pola ignore, pola LFS, batas ukuran bila ada, Visible Meta Files, Force Text, dan cara memverifikasinya |
 
 Jika sebuah topik ternyata sudah diputuskan dalam issue atau rapat, **catat keputusan dan sumbernya di sini**. Jangan menebak nilai dari contoh dokumen atau kebiasaan pribadi. Untuk hal yang tidak menghalangi task sekarang, biarkan tetap terbuka.
 
