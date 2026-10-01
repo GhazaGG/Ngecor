@@ -8,9 +8,13 @@ Kenapa perubahan ini dibutuhkan? Link issue terkait dengan `Closes #<issue>` jik
 
 ## How to Test
 
-1. Buka scene / feature terkait.
-2. Jalankan Play Mode atau build.
-3. Jelaskan langkah untuk membuktikan feature bekerja.
+1. Sebutkan environment, scene / feature, dan versi Unity jika relevan.
+2. Tulis langkah uji yang benar-benar dijalankan (Play Mode, build, host/client, atau pemeriksaan setup/dokumen).
+3. Tulis hasil yang diamati, termasuk masalah yang ditemukan.
+
+## Not Tested
+
+Sebutkan pemeriksaan relevan yang belum bisa dilakukan dan alasannya. Tulis `Tidak ada` jika semuanya sudah diuji.
 
 ## Acceptance Checklist
 
@@ -18,7 +22,7 @@ Kenapa perubahan ini dibutuhkan? Link issue terkait dengan `Closes #<issue>` jik
 - [ ] Tidak ada console error baru
 - [ ] Sudah dites secara lokal
 - [ ] Tidak merusak feature existing
-- [ ] Gameplay feel sudah cukup untuk milestone saat ini
+- [ ] Gameplay feel sudah cukup untuk milestone saat ini (jika PR gameplay)
 
 ## Affected Systems
 
