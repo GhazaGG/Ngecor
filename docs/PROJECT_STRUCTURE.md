@@ -4,7 +4,7 @@ Aturan ini menentukan di mana setiap file diletakkan dan bagaimana menamainya. T
 
 ## Root repo
 
-Usulan: project Unity berada langsung di root repo, sejajar dengan `docs/`. Konfirmasi dan catat di `docs/DECISIONS.md` saat SETUP-001.
+Project Unity berada langsung di root repo, sejajar dengan `docs/` (lihat `docs/DECISIONS.md`). Jangan membuat project di subfolder seperti `My project/`.
 
 ```text
 Ngecor/
