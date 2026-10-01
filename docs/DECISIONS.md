@@ -19,7 +19,7 @@ Tujuan dokumen ini adalah mencegah AI atau anggota tim mengisi celah desain deng
 | Lokasi project Unity | Root repo: `Assets/`, `Packages/`, `ProjectSettings/` sejajar dengan `docs/` | Keputusan pemilik proyek, 2026-10-01 |
 | Git ignore dan LFS | Pola di `.gitignore` dan `.gitattributes` (gambar, model, audio, video, font, `.dll`/`.so`, `.zip` lewat LFS; YAML Unity sebagai teks LF). Visible Meta Files dan Force Text aktif | SETUP-002/003 |
 | Platform, input, kamera | Windows PC, online co-op satu PC per pemain, keyboard + mouse, Input System package, first-person | Keputusan pemilik proyek, 2026-10-01 |
-| Networking | Netcode for GameObjects 2.x + Unity Transport, mode host | Keputusan pemilik proyek, 2026-10-01 |
+| Networking | Netcode for GameObjects 2.x (`com.unity.netcode.gameobjects: 2.13.3`) + Unity Transport (`com.unity.transport: 2.7.4`), mode host | Keputusan pemilik proyek, 2026-10-01; dipasang & dikunci NET-001 (#20) |
 | Struktur proyek nyata | Scene awal `Assets/Game/Scenes/Playground.unity` (satu-satunya scene di Build Settings); URP, volume profile, dan input actions di `Assets/Game/Settings/` | SETUP-001 |
 
 Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinciannya sudah dipilih**. Ubah arah melalui diskusi tim dan catat keputusan baru di bawah.
@@ -28,7 +28,6 @@ Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinci
 
 | Topik | Kapan harus jelas | Yang perlu dicatat |
 | --- | --- | --- |
-| Versi NGO dan Unity Transport | Saat install di NET-001 (#20) | Versi verified di Package Manager untuk 6000.3.25f1 |
 | Relay/Lobby | Saat tim perlu join lewat internet tanpa VPN | Layanan yang dipakai dan batas biaya |
 | Binding input minimum | PLAYER-001 (#7) | Tombol untuk move, look, interact, throw |
 
@@ -105,7 +104,7 @@ Owner/source: orang atau link keputusan
 ### 2026-10-01 — Networking dan batas authority
 
 **Decision:**
-- Package: Netcode for GameObjects (NGO) 2.x + Unity Transport, mode host (salah satu pemain menjadi host). Versi persis adalah versi verified di Package Manager untuk 6000.3.25f1, dipasang dan dicatat di sini oleh NET-001 (#20). Jangan memasangnya lebih awal.
+- Package: Netcode for GameObjects (NGO) 2.x (`com.unity.netcode.gameobjects: 2.13.3`) + Unity Transport (`com.unity.transport: 2.7.4`), mode host (salah satu pemain menjadi host). Versi verified di Package Manager untuk 6000.3.25f1, dipasang dan dikunci oleh NET-001 (#20).
 - Koneksi M3: LAN atau direct IP. Developer di lokasi berbeda boleh memakai VPN mesh (mis. Tailscale/ZeroTier) di luar repo. Relay/Lobby (Unity Gaming Services) ditunda sampai tim perlu join lewat internet tanpa VPN.
 - Authority:
   - **Host menentukan:** posisi dan state objek fisika, hasil grab/drop/throw, jumlah dan keadaan material, state proyek.
