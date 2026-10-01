@@ -16,7 +16,7 @@ Aturan ini berlaku tanpa pengecualian kecuali developer dan issue menyatakan lai
 6. Jangan mengubah scene utama kecuali issue menyebutnya. Uji fitur di dev scene sendiri (lihat `docs/WORKFLOW.md`).
 7. Jangan push ke `main`, force push, `git reset --hard`, atau menghapus branch orang lain.
 8. Jangan membuat manager/singleton global, event bus, atau framework umum kecuali issue membutuhkannya.
-9. Jangan menulis kode multiplayer yang membuat client menentukan state (posisi objek fisika, hasil grab, jumlah material). Client hanya mengirim niat.
+9. Jangan menulis kode multiplayer yang membuat client menentukan state dunia (posisi objek fisika, hasil grab, jumlah material). Client hanya mengirim niat. Satu-satunya pengecualian: movement dan arah pandang player milik client itu sendiri.
 10. Jangan menyatakan "sudah dites" atau mencentang checklist jika belum dijalankan di Unity. Tulis apa yang belum dites.
 
 ## Baca sebelum bekerja
@@ -45,7 +45,7 @@ Aturan ini berlaku tanpa pengecualian kecuali developer dan issue menyatakan lai
 - Jaga scene tetap sebagai tempat merakit prefab. Koordinasikan perubahan scene bersama; gunakan scene uji terpisah jika cocok.
 - Saat proyek Unity tersedia, pertahankan pasangan asset dan `.meta`-nya. Jangan menghapus atau membuat ulang `.meta` yang sudah dipakai, dan jangan mengedit file Unity hasil serialisasi secara spekulatif.
 - Jangan mengubah aturan Git/LFS, pengaturan Unity bersama, package, atau sistem multiplayer lintas tim tanpa issue dan kesepakatan teknis.
-- Untuk multiplayer, ikuti keputusan prototype **host sebagai sumber kebenaran**. Client mengirim niat; host memvalidasi dan menentukan state. Rincian package dan ownership tetap menunggu keputusan teknis.
+- Untuk multiplayer, ikuti keputusan prototype **host sebagai sumber kebenaran**. Client mengirim niat; host memvalidasi dan menentukan state. Package (NGO + Unity Transport) dan batas authority tercatat di [Networking dan batas authority](docs/DECISIONS.md#2026-10-01--networking-dan-batas-authority).
 - Hindari random failure yang merampas agency pemain. Kegagalan gameplay sebaiknya menghasilkan masalah yang bisa dipulihkan, sesuai desain game.
 
 ## Verifikasi dan serah terima

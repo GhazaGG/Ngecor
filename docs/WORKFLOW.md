@@ -114,7 +114,7 @@ AI dan developer harus menyebutkan tes yang **tidak** dilakukan secara eksplisit
 
 ## Multiplayer dan playtest
 
-Multiplayer tidak ditunda sampai akhir. Urutan pembuktian: movement offline → interaction offline → physics toy → 2-player networking → network interaction/physics → 4-player test. Untuk prototype, **host adalah sumber kebenaran**: client mengirim niat, host memvalidasi dan menentukan state yang direplikasi. Pilihan package belum tercatat di repo; lihat [Keputusan Proyek](DECISIONS.md).
+Multiplayer tidak ditunda sampai akhir. Urutan pembuktian: movement offline → interaction offline → physics toy → 2-player networking → network interaction/physics → 4-player test. Untuk prototype, **host adalah sumber kebenaran**: client mengirim niat, host memvalidasi dan menentukan state yang direplikasi. Pengecualian: movement player ditentukan client pemiliknya. Package dan batas authority ada di [Keputusan Proyek](DECISIONS.md#2026-10-01--networking-dan-batas-authority).
 
 Adakan playtest tim minimal sekali seminggu. Mainkan `main` tanpa berhenti untuk coding. Catat observasi terlebih dahulu, misalnya “gerobak terlalu stabil” atau “grab sering jitter”, lalu buat issue untuk keputusan/perbaikan. Jangan menjadikan debat solusi sebagai pengganti observasi.
 
