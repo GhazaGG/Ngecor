@@ -56,8 +56,7 @@ namespace Ngecor.Player.Tests
             _player.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
 
             Press(keyboard.wKey);
-            for (var i = 0; i < 10; i++)
-                yield return null;
+            yield return WaitForFixedFrames(10);
 
             Assert.That(_moveAction.ReadValue<Vector2>().y, Is.GreaterThan(0f), "Move action did not receive the W key.");
             Assert.That(_player.transform.position.x, Is.GreaterThan(TestOrigin.x + 0.01f));
@@ -85,55 +84,54 @@ namespace Ngecor.Player.Tests
             CreatePlayer();
 
             Press(keyboard.wKey);
-            for (var i = 0; i < 8; i++) yield return null;
+            yield return WaitForFixedFrames(8);
             Assert.That(_player.transform.position.z, Is.GreaterThan(0.01f));
             Release(keyboard.wKey);
-            yield return null;
+            yield return WaitForFixedFrames(1);
 
             ResetPlayer();
             Press(keyboard.sKey);
-            for (var i = 0; i < 8; i++) yield return null;
+            yield return WaitForFixedFrames(8);
             Assert.That(_player.transform.position.z, Is.LessThan(-0.01f));
             Release(keyboard.sKey);
-            yield return null;
+            yield return WaitForFixedFrames(1);
 
             ResetPlayer();
             Press(keyboard.aKey);
-            for (var i = 0; i < 8; i++) yield return null;
+            yield return WaitForFixedFrames(8);
             Assert.That(_player.transform.position.x, Is.LessThan(TestOrigin.x - 0.01f));
             Release(keyboard.aKey);
-            yield return null;
+            yield return WaitForFixedFrames(1);
 
             ResetPlayer();
             Press(keyboard.dKey);
-            for (var i = 0; i < 8; i++) yield return null;
+            yield return WaitForFixedFrames(8);
             Assert.That(_player.transform.position.x, Is.GreaterThan(TestOrigin.x + 0.01f));
         }
 
         [UnityTest]
-        public IEnumerator NonLocalPlayerDoesNotEnableOrReadInput()
+        public IEnumerator NonLocalPlayerDoesNotMoveFromInput()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
             CreatePlayer(null);
 
             Press(keyboard.wKey);
-            for (var i = 0; i < 10; i++) yield return null;
+            yield return WaitForFixedFrames(10);
 
-            Assert.That(_moveAction.enabled, Is.False);
+            Assert.That(_moveAction.ReadValue<Vector2>().y, Is.GreaterThan(0f), "The project-wide Move action should remain enabled for all players.");
             Assert.That(_player.transform.position.z, Is.EqualTo(0f).Within(0.01f));
         }
 
         [UnityTest]
-        public IEnumerator LocalOwnerCanEnableInputAfterInstantiation()
+        public IEnumerator LocalOwnerCanMoveAfterInstantiation()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
             CreatePlayer(null);
 
             _player.GetComponent<Ngecor.Player.PlayerMovement>().SetLocalPlayer(true);
             Press(keyboard.wKey);
-            for (var i = 0; i < 8; i++) yield return null;
+            yield return WaitForFixedFrames(8);
 
-            Assert.That(_moveAction.enabled, Is.True);
             Assert.That(_player.transform.position.z, Is.GreaterThan(0.01f));
         }
 
@@ -147,7 +145,7 @@ namespace Ngecor.Player.Tests
             _wall.transform.localScale = new Vector3(4f, 3f, 1f);
 
             Press(keyboard.wKey);
-            for (var i = 0; i < 60; i++) yield return null;
+            yield return WaitForFixedFrames(60);
 
             Assert.That(_player.transform.position.z, Is.LessThan(1f));
         }
@@ -167,16 +165,7 @@ namespace Ngecor.Player.Tests
             controller.enabled = true;
 
             Press(keyboard.sKey);
-            var previousCaptureFramerate = Time.captureFramerate;
-            Time.captureFramerate = 60;
-            try
-            {
-                for (var i = 0; i < 100; i++) yield return null;
-            }
-            finally
-            {
-                Time.captureFramerate = previousCaptureFramerate;
-            }
+            yield return WaitForFixedFrames(100);
 
             Assert.That(_player.transform.position.z, Is.LessThan(8f), $"Player stopped at {_player.transform.position}; Move={_moveAction.ReadValue<Vector2>()}; grounded={_player.GetComponent<CharacterController>().isGrounded}.");
             Assert.That(_player.transform.position.y, Is.GreaterThan(0.25f), "Player fell through or failed to climb the ramp.");
@@ -189,8 +178,7 @@ namespace Ngecor.Player.Tests
             CreatePlayer();
 
             Press(keyboard.wKey);
-            for (var i = 0; i < 10; i++)
-                yield return null;
+            yield return WaitForFixedFrames(10);
 
             var cardinalOffset = _player.transform.position - TestOrigin;
             var cardinalDistance = new Vector2(cardinalOffset.x, cardinalOffset.z).magnitude;
@@ -205,8 +193,7 @@ namespace Ngecor.Player.Tests
 
             Press(keyboard.wKey);
             Press(keyboard.dKey);
-            for (var i = 0; i < 10; i++)
-                yield return null;
+            yield return WaitForFixedFrames(10);
 
             var diagonalOffset = _player.transform.position - TestOrigin;
             var diagonalDistance = new Vector2(diagonalOffset.x, diagonalOffset.z).magnitude;
@@ -226,6 +213,7 @@ namespace Ngecor.Player.Tests
                 .With("Right", "<Keyboard>/d");
             _lookAction = playerMap.AddAction("Look", InputActionType.Value, expectedControlLayout: "Vector2");
             _lookAction.AddBinding("<Mouse>/delta");
+            playerMap.Enable();
             _moveReference = InputActionReference.Create(_moveAction);
             _lookReference = InputActionReference.Create(_lookAction);
 
@@ -245,14 +233,10 @@ namespace Ngecor.Player.Tests
             pivot.transform.localPosition = new Vector3(0f, 1.6f, 0f);
             _cameraPivot = pivot.transform;
 
-            var playerAssembly = Array.Find(AppDomain.CurrentDomain.GetAssemblies(), assembly => assembly.GetName().Name == "Ngecor.Player");
-            var movementType = playerAssembly?.GetType("Ngecor.Player.PlayerMovement");
-            Assert.That(movementType, Is.Not.Null, "PlayerMovement component is missing.");
-
-            var movement = _player.AddComponent(movementType);
-            SetPrivateField(movementType, movement, "_moveAction", _moveReference);
-            SetPrivateField(movementType, movement, "_lookAction", _lookReference);
-            SetPrivateField(movementType, movement, "_cameraPivot", _cameraPivot);
+            var movement = _player.AddComponent<Ngecor.Player.PlayerMovement>();
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_moveAction", _moveReference);
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_lookAction", _lookReference);
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_cameraPivot", _cameraPivot);
             if (isLocalPlayer.HasValue)
                 ((Ngecor.Player.PlayerMovement)movement).SetLocalPlayer(isLocalPlayer.Value);
             _player.SetActive(true);
@@ -270,8 +254,23 @@ namespace Ngecor.Player.Tests
         private static void SetPrivateField(Type type, object target, string name, object value)
         {
             var field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
-            if (field != null)
-                field.SetValue(target, value);
+            Assert.That(field, Is.Not.Null, $"Missing {type.Name} field '{name}'.");
+            field.SetValue(target, value);
+        }
+
+        private static IEnumerator WaitForFixedFrames(int frameCount)
+        {
+            var previousCaptureFramerate = Time.captureFramerate;
+            Time.captureFramerate = 60;
+            try
+            {
+                for (var i = 0; i < frameCount; i++)
+                    yield return null;
+            }
+            finally
+            {
+                Time.captureFramerate = previousCaptureFramerate;
+            }
         }
     }
 }

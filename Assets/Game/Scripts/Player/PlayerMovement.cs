@@ -16,7 +16,6 @@ namespace Ngecor.Player
         private CharacterController _characterController;
         private float _verticalVelocity;
         private float _cameraPitch;
-        private bool _controlsEnabled;
 
         private void Awake()
         {
@@ -25,53 +24,9 @@ namespace Ngecor.Player
                 _cameraPitch = Mathf.DeltaAngle(0f, _cameraPivot.localEulerAngles.x);
         }
 
-        private void OnEnable()
-        {
-            EnableControls();
-        }
-
-        private void OnDisable()
-        {
-            DisableControls();
-        }
-
         public void SetLocalPlayer(bool isLocalPlayer)
         {
-            if (_isLocalPlayer == isLocalPlayer)
-                return;
-
             _isLocalPlayer = isLocalPlayer;
-            if (!isActiveAndEnabled)
-                return;
-
-            if (_isLocalPlayer)
-                EnableControls();
-            else
-                DisableControls();
-        }
-
-        private void EnableControls()
-        {
-            if (!_isLocalPlayer || _controlsEnabled)
-                return;
-
-            if (_moveAction != null)
-                _moveAction.action.Enable();
-            if (_lookAction != null)
-                _lookAction.action.Enable();
-            _controlsEnabled = true;
-        }
-
-        private void DisableControls()
-        {
-            if (!_controlsEnabled)
-                return;
-
-            if (_moveAction != null)
-                _moveAction.action.Disable();
-            if (_lookAction != null)
-                _lookAction.action.Disable();
-            _controlsEnabled = false;
         }
 
         private void Update()
