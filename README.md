@@ -17,6 +17,13 @@ Repo ini masih dalam tahap **M0: project setup**. Keberadaan dokumen desain tida
 
 Pekerjaan setup dilacak di issue [SETUP-001](https://github.com/GhazaGG/Ngecor/issues/34), [SETUP-002](https://github.com/GhazaGG/Ngecor/issues/35), dan [SETUP-003](https://github.com/GhazaGG/Ngecor/issues/36). Ambil task dari issue yang sudah siap, kerjakan di branch sendiri, dan ajukan PR. Jangan push langsung ke `main`.
 
+## Setup lokal
+
+1. Install Unity **6000.3.25f1** lewat Unity Hub, tanpa module tambahan. Versi lain tidak boleh dipakai (lihat [Keputusan Proyek](docs/DECISIONS.md)).
+2. Cek instalasinya: folder `C:\Program Files\Unity\Hub\Editor\6000.3.25f1\Editor\Data\UnityReferenceAssemblies` harus ada. Hub bisa melaporkan "installed" walaupun installer gagal di tengah jalan. Kalau folder itu tidak ada, uninstall, kosongkan disk (minimal sekitar 20 GB), lalu install ulang memakai installer manual dari [Unity Download Archive](https://unity.com/releases/editor/archive) dengan Run as administrator.
+3. Clone repo, lalu di Unity Hub pilih **Add → Add project from disk** dan arahkan ke folder root repo.
+4. Buka `Assets/Game/Scenes/Playground.unity`, lalu tekan Play.
+
 ## Prinsip prototype
 
 **Works → Fun → Reliable → Clean → Pretty.** Bangun satu interaksi yang bisa dimainkan dan diuji sebelum menambah konten, sistem progression, atau polish. `main` harus tetap playable setelah proyek Unity dibuat.
