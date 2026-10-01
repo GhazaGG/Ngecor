@@ -14,7 +14,7 @@ Panduan ini merangkum `01-development-workflow.md` untuk dipakai langsung di rep
 
 ## Langkah Git
 
-`main` diproteksi: perubahan hanya masuk lewat PR dengan minimal 1 approval dari anggota lain, dan force push ke `main` ditolak. Perubahan di `ProjectSettings/`, `Packages/`, `.gitignore`, `.gitattributes`, dan `.github/` juga butuh approval team lead (lihat `.github/CODEOWNERS`). Team lead dapat merge PR sendiri tanpa approval hanya saat darurat; GitHub mencatat setiap bypass.
+`main` diproteksi: perubahan hanya masuk lewat PR dengan minimal 1 approval dari anggota lain, dan force push ke `main` ditolak. Perubahan di `ProjectSettings/`, `Packages/`, `.gitignore`, `.gitattributes`, dan `.github/` juga butuh approval code owner, yaitu GhazaGG atau RyoFPS (lihat `.github/CODEOWNERS`). Tidak ada yang bisa merge PR sendiri tanpa approval, termasuk admin.
 
 ### Nama branch
 

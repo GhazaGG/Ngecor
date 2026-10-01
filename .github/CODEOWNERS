@@ -1,6 +1,6 @@
-# File bersama yang berisiko; perubahan butuh approval team lead.
-/ProjectSettings/ @GhazaGG
-/Packages/ @GhazaGG
-/.gitignore @GhazaGG
-/.gitattributes @GhazaGG
-/.github/ @GhazaGG
+# File bersama yang berisiko; perubahan butuh approval salah satu code owner.
+/ProjectSettings/ @GhazaGG @RyoFPS
+/Packages/ @GhazaGG @RyoFPS
+/.gitignore @GhazaGG @RyoFPS
+/.gitattributes @GhazaGG @RyoFPS
+/.github/ @GhazaGG @RyoFPS
