@@ -39,25 +39,25 @@
 - Consumes: None
 - Produces: NGO package references (`Unity.Netcode`, `Unity.Netcode.Transports.UTP`) available for compilation.
 
-- [ ] **Step 1: Check baseline manifest before modification**
+- [x] **Step 1: Check baseline manifest before modification**
 Run: `git diff Packages/manifest.json`
 Expected: Clean.
 
-- [ ] **Step 2: Add NGO and Unity Transport dependencies to `Packages/manifest.json`**
+- [x] **Step 2: Add NGO and Unity Transport dependencies to `Packages/manifest.json`**
 Tambahkan:
 ```json
 "com.unity.netcode.gameobjects": "2.13.3",
 "com.unity.transport": "2.7.4",
 ```
 
-- [ ] **Step 3: Update `docs/DECISIONS.md` with pinned package versions**
+- [x] **Step 3: Update `docs/DECISIONS.md` with pinned package versions**
 Catat versi exact `com.unity.netcode.gameobjects: 2.13.3` dan `com.unity.transport: 2.7.4` pada tabel status dan catatan keputusan Networking.
 
-- [ ] **Step 4: Verify Unity package resolution and compilation**
+- [x] **Step 4: Verify Unity package resolution and compilation**
 Run: `powershell -Command "& 'C:\Program Files\Unity\Hub\Editor\6000.3.25f1\Editor\Unity.exe' -batchmode -quit -projectPath . -logFile -"`
 Expected: Clean exit code 0 tanpa compiler error.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 ```bash
 git add Packages/manifest.json Packages/packages-lock.json docs/DECISIONS.md
 git commit -m "chore: add NGO and Unity Transport packages"
@@ -81,18 +81,18 @@ git commit -m "chore: add NGO and Unity Transport packages"
   - `public event Action<ulong> OnClientDisconnectedEvent`
   - `public SessionState CurrentState { get; }`
 
-- [ ] **Step 1: Implement `SessionManager.cs` in `Assets/Game/Scripts/Multiplayer/`**
+- [x] **Step 1: Implement `SessionManager.cs` in `Assets/Game/Scripts/Multiplayer/`**
 Implementasikan MonoBehaviour `SessionManager` di namespace `Ngecor.Multiplayer`:
 - Menangani `StartHostSession` dan `StartClientSession`.
 - Mengkonfigurasi `UnityTransport.SetConnectionData(ip, port)`.
 - Mengaitkan event handler untuk `NetworkManager.Singleton.OnClientConnectedCallback` dan `OnClientDisconnectCallback`.
 - Menangani graceful shutdown tanpa crash ketika client atau host menghentikan sesi.
 
-- [ ] **Step 2: Verify compilation and namespace formatting**
+- [x] **Step 2: Verify compilation and namespace formatting**
 Run: `powershell -Command "& 'C:\Program Files\Unity\Hub\Editor\6000.3.25f1\Editor\Unity.exe' -batchmode -quit -projectPath . -logFile -"`
 Expected: No script compilation errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 ```bash
 git add Assets/Game/Scripts/Multiplayer/SessionManager.cs Assets/Game/Scripts/Multiplayer/SessionManager.cs.meta
 git commit -m "feat: implement SessionManager for host and client lifecycle"
@@ -110,18 +110,18 @@ git commit -m "feat: implement SessionManager for host and client lifecycle"
 - Consumes: `Unity.Netcode.NetworkObject`, `Unity.Netcode.Components.NetworkTransform`
 - Produces: Default Player Prefab untuk `NetworkManager` yang mereplikasi posisi dasar dan warna pembeda (mis. Host vs Client) saat di-spawn.
 
-- [ ] **Step 1: Create minimal Network Player Prefab structure**
+- [x] **Step 1: Create minimal Network Player Prefab structure**
 Prefab Capsule sederhana dengan:
 - `CapsuleCollider`, `MeshFilter`, `MeshRenderer`
 - `NetworkObject` (Synchronize Transform: true)
 - `NetworkTransform`
 - Material placeholder kontras agar mudah dibedakan saat pengetesan.
 
-- [ ] **Step 2: Verify prefab validation via Unity command**
+- [x] **Step 2: Verify prefab validation via Unity command**
 Run batchmode verify untuk memastikan prefab dan GUID meta terbaca tanpa missing component.
 Expected: Unity log bersih tanpa missing reference.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 ```bash
 git add Assets/Game/Prefabs/Multiplayer/Player_Prototype.prefab Assets/Game/Prefabs/Multiplayer/Player_Prototype.prefab.meta
 git commit -m "feat: add prototype network player prefab"
@@ -144,14 +144,14 @@ git commit -m "feat: add prototype network player prefab"
   - "Disconnect"
   - Status display ("Connected as Host", "Connected as Client", "Disconnected", Player count)
 
-- [ ] **Step 1: Implement `SessionHUD.cs` in `Assets/Game/Scripts/Multiplayer/`**
+- [x] **Step 1: Implement `SessionHUD.cs` in `Assets/Game/Scripts/Multiplayer/`**
 Implementasikan script HUD minimalis yang memanggil method pada `SessionManager`. Menggunakan `OnGUI` ringan sesuai prinsip [Anggaran Performa](docs/DECISIONS.md#anggaran-performa) (tidak membutuhkan asset grafik tambahan untuk prototype NET-001).
 
-- [ ] **Step 2: Verify compilation**
+- [x] **Step 2: Verify compilation**
 Run: `powershell -Command "& 'C:\Program Files\Unity\Hub\Editor\6000.3.25f1\Editor\Unity.exe' -batchmode -quit -projectPath . -logFile -"`
 Expected: No compiler errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 ```bash
 git add Assets/Game/Scripts/Multiplayer/SessionHUD.cs Assets/Game/Scripts/Multiplayer/SessionHUD.cs.meta
 git commit -m "feat: add SessionHUD for host and client connection controls"
