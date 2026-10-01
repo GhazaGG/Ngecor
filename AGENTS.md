@@ -18,6 +18,7 @@ Aturan ini berlaku tanpa pengecualian kecuali developer dan issue menyatakan lai
 8. Jangan membuat manager/singleton global, event bus, atau framework umum kecuali issue membutuhkannya.
 9. Jangan menulis kode multiplayer yang membuat client menentukan state dunia (posisi objek fisika, hasil grab, jumlah material). Client hanya mengirim niat. Satu-satunya pengecualian: movement dan arah pandang player milik client itu sendiri.
 10. Jangan menyatakan "sudah dites" atau mencentang checklist jika belum dijalankan di Unity. Tulis apa yang belum dites.
+11. Jangan menulis kode networking (`NetworkBehaviour`, `NetworkObject`, RPC, `NetworkVariable`, atau API NGO lain) di luar tiket `NET-*`, atau tiket yang secara eksplisit memintanya. Fitur lain tetap offline; tiket NET-lah yang menyambungkannya ke jaringan.
 
 ## Baca sebelum bekerja
 
