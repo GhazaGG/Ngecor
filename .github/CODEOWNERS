@@ -1,0 +1,6 @@
+# File bersama yang berisiko; perubahan butuh approval team lead.
+/ProjectSettings/ @GhazaGG
+/Packages/ @GhazaGG
+/.gitignore @GhazaGG
+/.gitattributes @GhazaGG
+/.github/ @GhazaGG
