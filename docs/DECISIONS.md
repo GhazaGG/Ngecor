@@ -112,6 +112,24 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Pemilik task PLAYER-001, mengikuti issue #7 dan keputusan M1 di atas.
 
+### 2026-10-02 — Player mendorong objek fisika lewat kontak
+
+**Decision:**
+- Player yang berjalan menabrak Rigidbody dinamis mendorongnya. Perilaku ini generik untuk semua objek fisika, tidak khusus gerobak, dan berada di player movement.
+- Objek statis dan Rigidbody kinematic tidak didorong. Objek yang sedang diinjak player tidak didorong.
+- Kekuatan dorong bergantung pada arah gerak yang diinginkan player dan massa objek, sehingga objek berat terasa lebih sulit didorong.
+- Mendorong lewat kontak bukan pengganti aksi push/pull yang disengaja. Memegang handle gerobak tetap dikerjakan di VEH-002 (#14).
+
+**Reason:** Identitas game adalah kekacauan fisik yang muncul dari keputusan pemain; prop yang terasa seperti tembok bertentangan dengan itu. Cara ini juga membuat VEH-001 (#13) bisa dimainkan tanpa menunggu rantai interaction.
+
+**Konsekuensi multiplayer:** Mengikuti [batas authority](#2026-10-01--networking-dan-batas-authority), objek fisika milik host bersifat kinematic di client, sehingga dorongan lokal dari client tidak berpengaruh. NET-003 (#22) harus membuat player client tetap bisa mendorong, misalnya dengan mengirim niat dorong ke host. Jangan membiarkan client menentukan posisi objek.
+
+**Revisit:** Jika playtest menunjukkan dorongan kontak merusak tumpukan cargo atau susunan material terlalu mudah, pertimbangkan batas massa atau mengecualikan objek tertentu.
+
+**Applies from:** VEH-001 (#13).
+
+**Owner/source:** Keputusan pemilik proyek saat review PR #53, 2026-10-02.
+
 ### 2026-10-01 — Networking dan batas authority
 
 **Decision:**
