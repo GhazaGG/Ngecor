@@ -248,6 +248,32 @@ namespace Ngecor.Interaction.Tests
             Assert.That(_playerGrab.IsCarrying, Is.False);
             Assert.That(_playerGrab.CarriedObject, Is.Null);
         }
+
+        [UnityTest]
+        public IEnumerator RequestDrop_DropsCarriedObjectAndAllowsNewGrab()
+        {
+            _targetObject1 = CreateGrabbable("TargetDrop1", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject2 = CreateGrabbable("TargetDrop2", new Vector3(0f, 1.4f, 2.5f)).gameObject;
+            var grabbable1 = _targetObject1.GetComponent<GrabbableObject>();
+            var grabbable2 = _targetObject2.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            bool firstGrab = _playerGrab.ExecuteGrab(grabbable1);
+            Assert.That(firstGrab, Is.True);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            bool dropped = _playerGrab.RequestDrop();
+            Assert.That(dropped, Is.True);
+            Assert.That(_playerGrab.IsCarrying, Is.False);
+            Assert.That(grabbable1.IsHeld, Is.False);
+
+            bool secondGrab = _playerGrab.RequestGrab(grabbable2);
+            Assert.That(secondGrab, Is.True);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+            Assert.That(_playerGrab.CarriedObject, Is.EqualTo(grabbable2));
+        }
     }
 }
 

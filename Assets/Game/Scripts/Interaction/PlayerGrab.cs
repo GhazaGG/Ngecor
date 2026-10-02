@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using Ngecor.Player;
 
 namespace Ngecor.Interaction
@@ -10,6 +11,8 @@ namespace Ngecor.Interaction
     {
         [SerializeField] private Transform _holdPoint;
         [SerializeField, Min(0.1f)] private float _maxGrabDistance = 3.5f;
+        [SerializeField] private InputActionReference _interactAction;
+        [SerializeField] private bool _showDebugFeedback = true;
 
         private PlayerMovement _playerMovement;
         private InteractionDetector _detector;
@@ -35,6 +38,54 @@ namespace Ngecor.Interaction
             _playerMovement = GetComponent<PlayerMovement>();
             _detector = GetComponent<InteractionDetector>();
             _playerColliders = GetComponentsInChildren<Collider>();
+        }
+
+        private void Update()
+        {
+            if (_playerMovement == null)
+                _playerMovement = GetComponent<PlayerMovement>();
+
+            // Only process input for the local player
+            if (_playerMovement == null || _playerMovement.LocalCamera == null)
+                return;
+
+            bool interactTriggered = false;
+            if (_interactAction != null && _interactAction.action != null)
+            {
+                interactTriggered = _interactAction.action.WasPressedThisFrame();
+            }
+            else if (Keyboard.current != null)
+            {
+                interactTriggered = Keyboard.current.eKey.wasPressedThisFrame;
+            }
+
+            if (interactTriggered)
+            {
+                if (IsCarrying)
+                    RequestDrop();
+                else
+                    RequestGrab();
+            }
+        }
+
+        private void OnGUI()
+        {
+            if (!_showDebugFeedback)
+                return;
+
+            if (_playerMovement == null)
+                _playerMovement = GetComponent<PlayerMovement>();
+
+            var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+            if (camera == null)
+                return;
+
+            if (IsCarrying)
+            {
+                string objectName = _carriedObject != null ? _carriedObject.gameObject.name : "Object";
+                GUI.Box(new Rect(Screen.width / 2f - 120f, Screen.height / 2f + 75f, 240f, 30f),
+                    $"[Carrying]: {objectName} (Press E to drop)");
+            }
         }
 
         private void LateUpdate()
