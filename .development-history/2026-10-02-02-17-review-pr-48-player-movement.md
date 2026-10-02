@@ -50,8 +50,22 @@ Team Lead session. Reviewed RyoFPS's PR #48 `[PLAYER-001] Add basic player movem
 ## Final result
 PR #48 is blocked on Must Fix items 1–3. Its approach is approved. Issue #8 now has a non-overlapping scope.
 
+## Re-review (same session)
+- The owner decided that a gameplay clip is optional, not a Must Fix.
+- RyoFPS pushed `5901698`, which handles every review item:
+  - removes `docs/superpowers/`
+  - makes `SetPrivateField` assert that the field exists, and replaces the reflection type lookup with `AddComponent<PlayerMovement>()`
+  - removes the Enable/Disable gating
+  - changes the non-local test so it checks that the shared action still reads input while the player stays still
+  - adds a `WaitForFixedFrames` helper that sets `captureFramerate` to 60 and restores it in `finally`
+- He also pushed `7244142`, which records his manual playtest. Results: WASD, arrows, mouse look, ramp, and walls all OK; Console clean; speed 5 to 2.5 feels like a small change. The visible cursor is distracting, which is now tracked in #8.
+- The PR description now lists the non-local Camera/AudioListener as a NET-001 handoff.
+- Remaining nit, not blocking: a now-redundant `(PlayerMovement)movement` cast in the tests.
+- PR #48 has no conflicts with `main`. GitHub still blocks the merge, but only because it needs an approving review.
+
 ## Known limitations
-- The point that the Enable/Disable gating does nothing relies on Unity 6 enabling project-wide actions automatically. Nobody has observed this in this project's Play Mode yet.
+- Movement works in manual Play Mode without the component enabling any action. That confirms the project-wide actions are enabled at startup.
+- The manual playtest results come from RyoFPS's own report. This session didn't run Unity.
 
 ## Unresolved issues or follow-up work
 - Design question for interaction/physics: should walking players push physics props? `CharacterController` doesn't push Rigidbodies. If they should, the push has to happen on the host. No ticket exists yet.
