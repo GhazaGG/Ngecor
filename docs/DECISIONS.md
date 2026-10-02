@@ -21,6 +21,7 @@ Tujuan dokumen ini adalah mencegah AI atau anggota tim mengisi celah desain deng
 | Platform, input, kamera | Windows PC, online co-op satu PC per pemain, keyboard + mouse, Input System package, first-person | Keputusan pemilik proyek, 2026-10-01 |
 | Networking | Netcode for GameObjects 2.x + Unity Transport, mode host | Keputusan pemilik proyek, 2026-10-01 |
 | Struktur proyek nyata | Scene awal `Assets/Game/Scenes/Playground.unity` (satu-satunya scene di Build Settings); URP, volume profile, dan input actions di `Assets/Game/Settings/` | SETUP-001 |
+| Material bulk | Tipe + jumlah unit integer di container dunia; transfer hanya lewat tuang/sekop fisik; tumpahan menjadi pile; aduk manual dasar, mixer upgrade. Lihat [kontrak material bulk](#2026-10-02--kontrak-material-bulk) | Keputusan pemilik proyek, 2026-10-02 |
 
 Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinciannya sudah dipilih**. Ubah arah melalui diskusi tim dan catat keputusan baru di bawah.
 
@@ -130,6 +131,28 @@ Owner/source: orang atau link keputusan
 **Applies from:** INT-002 (#10) untuk pemisahan niat/eksekusi; NET-001 (#20) untuk install.
 
 **Owner/source:** Keputusan pemilik proyek dalam percakapan 2026-10-01.
+
+### 2026-10-02 — Kontrak material bulk
+
+**Decision:**
+- Material bulk (sand, cement, concrete) disimpan sebagai **tipe + jumlah unit integer** di container yang ada di dunia. Player tidak pernah menyimpan jumlah material.
+- **Container** punya kapasitas, satu tipe material, dan visual level isi. Bucket, shovel, pile, spot aduk, mixer, dan construction target memakai **satu komponen container yang sama** (dibuat pertama di MAT-002 #16). Spot aduk dan mixer adalah container multi-bahan.
+- **Transfer hanya lewat aksi fisik:** tuang dari container yang dipegang atau scoop/dump dengan shovel, di dekat receiver. Unit berpindah dengan laju yang dapat dituning dan selalu kekal (keluar = masuk). Receiver menentukan tipe yang diterimanya.
+- **Tumpah:** container yang miring melewati sudut yang dapat dituning kehilangan isi per detik. Isi yang tumpah menjadi **pile** di tanah (container tanpa Rigidbody) dan digabung ke pile tipe sama dalam radius yang dapat dituning. Pile bisa disekop lagi.
+- **Sak semen** tetap benda diskret dan berubah menjadi N unit cement saat masuk spot aduk atau mixer.
+- **Aduk manual dengan shovel adalah cara dasar membuat concrete** (MIX-003 #55). Mixer (MIX-001 #17) adalah upgrade di M4 yang memakai resep yang sama.
+- Resep MVP: cement + sand. Kerikil dan air ditambah sebagai tipe baru setelah playtest logistik, tanpa sistem baru.
+- **Concrete** membawa freshness (MIX-002 #45) sejak jadi. Saat dituang freshness ikut pindah; batch tercampur memakai umur tertua. Concrete keras hanya bisa dibuang dengan mengosongkan container.
+- Sand source adalah pile terbatas. Wheelbarrow tidak menjadi container bulk di MVP; ia membawa bucket dan sak.
+- Multiplayer nanti: tipe, jumlah, dan freshness adalah state container milik host; tuang, scoop, dump, dan aduk adalah niat.
+
+**Reason:** Empat tiket dengan pemilik berbeda (#16, #19, #45, #55) memindahkan jumlah material. Satu kontrak mencegah beberapa sistem quantity yang tidak cocok. Integer membuat jumlah kekal dan mudah dites. Pile dan shovel membuat tumpahan menjadi pekerjaan tambahan yang bisa dipulihkan. Aduk manual sebagai dasar membuat mixer menjadi alat yang menyelesaikan masalah (tenaga dan waktu) sekaligus membawa risiko baru (macet, overheat).
+
+**Revisit:** Wheelbarrow sebagai container bulk (mengangkut concrete langsung di bak) setelah playtest logistik M2. Jumlah pile di scene jika Profiler menunjukkan beban.
+
+**Applies from:** MAT-002 (#16), MAT-004 (#54), MIX-003 (#55), BUILD-002 (#19), MIX-002 (#45), MIX-001 (#17).
+
+**Owner/source:** Keputusan pemilik proyek dalam sesi diskusi desain 2026-10-02.
 
 ## Anggaran performa
 
