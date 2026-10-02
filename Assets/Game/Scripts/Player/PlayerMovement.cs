@@ -11,6 +11,7 @@ namespace Ngecor.Player
         [SerializeField] private Transform _cameraPivot;
         [SerializeField] private bool _isLocalPlayer;
         [SerializeField, Min(0f)] private float _moveSpeed = 5f;
+        [SerializeField, Min(0f)] private float _pushStrength = 5f;
         [SerializeField, Min(0f)] private float _lookSensitivity = 0.1f;
 
         private CharacterController _characterController;
@@ -83,6 +84,22 @@ namespace Ngecor.Player
 
             var movement = direction * _moveSpeed + Vector3.up * _verticalVelocity;
             _characterController.Move(movement * Time.deltaTime);
+        }
+
+        private void OnControllerColliderHit(ControllerColliderHit hit)
+        {
+            var body = hit.rigidbody;
+            if (body == null || body.isKinematic || hit.moveDirection.y < -0.3f)
+                return;
+
+            var pushDirection = Vector3.ProjectOnPlane(hit.moveDirection, Vector3.up);
+            if (pushDirection.sqrMagnitude <= Mathf.Epsilon)
+                return;
+
+            body.AddForceAtPosition(
+                pushDirection.normalized * _moveSpeed * _pushStrength * Time.deltaTime,
+                hit.point,
+                ForceMode.Impulse);
         }
 
         private void HandleCursorInput()

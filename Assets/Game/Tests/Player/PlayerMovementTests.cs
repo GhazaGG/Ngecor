@@ -15,6 +15,7 @@ namespace Ngecor.Player.Tests
         private GameObject _ground;
         private GameObject _wall;
         private GameObject _ramp;
+        private GameObject _pushTarget;
         private Transform _cameraPivot;
         private Camera _camera;
         private InputActionAsset _actionAsset;
@@ -39,6 +40,9 @@ namespace Ngecor.Player.Tests
 
             if (_ramp != null)
                 UnityEngine.Object.DestroyImmediate(_ramp);
+
+            if (_pushTarget != null)
+                UnityEngine.Object.DestroyImmediate(_pushTarget);
 
             if (_moveReference != null)
                 UnityEngine.Object.DestroyImmediate(_moveReference);
@@ -221,11 +225,112 @@ namespace Ngecor.Player.Tests
             _wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
             _wall.transform.position = TestOrigin + new Vector3(0f, 1.5f, 1.5f);
             _wall.transform.localScale = new Vector3(4f, 3f, 1f);
+            var wallPosition = _wall.transform.position;
 
             Press(keyboard.wKey);
             yield return WaitForFixedFrames(60);
 
             Assert.That(_player.transform.position.z, Is.LessThan(1f));
+            Assert.That(_wall.transform.position, Is.EqualTo(wallPosition));
+        }
+
+        [UnityTest]
+        public IEnumerator ContactPushesDynamicRigidbodyWithBoundedSpeed()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(size: 1.5f);
+            var startingPosition = body.position;
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(30);
+
+            Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.1f));
+            Assert.That(body.linearVelocity.magnitude, Is.LessThan(3f));
+        }
+
+        [UnityTest]
+        public IEnumerator ContactPushHasSimilarDisplacementAtDifferentFrameRates()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(size: 1.5f);
+            body.mass = 5f;
+            body.useGravity = false;
+            body.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotation;
+            var startingPosition = body.position;
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(30, 30);
+            var displacementAt30Fps = body.position.z - startingPosition.z;
+
+            Release(keyboard.wKey);
+            yield return null;
+            ResetPlayer();
+            body.position = startingPosition;
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+            Physics.SyncTransforms();
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(120, 120);
+            var displacementAt120Fps = body.position.z - startingPosition.z;
+
+            Assert.That(displacementAt30Fps, Is.GreaterThan(0.1f));
+            Assert.That(displacementAt120Fps, Is.GreaterThan(0.1f));
+            var averageDisplacement = (displacementAt30Fps + displacementAt120Fps) * 0.5f;
+            Assert.That(Mathf.Abs(displacementAt30Fps - displacementAt120Fps) / averageDisplacement,
+                Is.LessThan(0.2f),
+                $"Push displacement differed at 30 FPS ({displacementAt30Fps:F3} m) and 120 FPS ({displacementAt120Fps:F3} m).");
+        }
+
+        [UnityTest]
+        public IEnumerator ContactDoesNotMoveKinematicRigidbody()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(true, 1.5f);
+            var startingPosition = body.position;
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(30);
+
+            Assert.That(body.position, Is.EqualTo(startingPosition));
+        }
+
+        [UnityTest]
+        public IEnumerator ContactPushesHorizontally()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(size: 1.5f);
+            body.useGravity = false;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(30);
+
+            Assert.That(body.linearVelocity.z, Is.GreaterThan(0f));
+            Assert.That(body.linearVelocity.y, Is.EqualTo(0f).Within(0.01f));
+        }
+
+        [UnityTest]
+        public IEnumerator WalkingOnDynamicRigidbodyDoesNotPushIt()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(size: 1f, position: TestOrigin + new Vector3(0f, 0.5f, 0f));
+            _player.transform.position = TestOrigin + Vector3.up;
+            Physics.SyncTransforms();
+            var startingPosition = body.position;
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(6);
+
+            Assert.That(Vector2.Distance(
+                new Vector2(body.position.x, body.position.z),
+                new Vector2(startingPosition.x, startingPosition.z)), Is.LessThan(0.01f));
+            Assert.That(new Vector2(body.linearVelocity.x, body.linearVelocity.z).magnitude, Is.LessThan(0.01f));
         }
 
         [UnityTest]
@@ -332,6 +437,17 @@ namespace Ngecor.Player.Tests
             controller.enabled = true;
         }
 
+        private Rigidbody CreatePushTarget(bool isKinematic = false, float size = 0.5f, Vector3? position = null)
+        {
+            _pushTarget = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _pushTarget.transform.localScale = Vector3.one * size;
+            _pushTarget.transform.position = position ?? TestOrigin + new Vector3(0f, size * 0.5f, 1.2f);
+            var body = _pushTarget.AddComponent<Rigidbody>();
+            body.mass = 1f;
+            body.isKinematic = isKinematic;
+            return body;
+        }
+
         private static void SetPrivateField(Type type, object target, string name, object value)
         {
             var field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
@@ -346,10 +462,10 @@ namespace Ngecor.Player.Tests
             return field.GetValue(target);
         }
 
-        private static IEnumerator WaitForFixedFrames(int frameCount)
+        private static IEnumerator WaitForFixedFrames(int frameCount, int framerate = 60)
         {
             var previousCaptureFramerate = Time.captureFramerate;
-            Time.captureFramerate = 60;
+            Time.captureFramerate = framerate;
             try
             {
                 for (var i = 0; i < frameCount; i++)
