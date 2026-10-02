@@ -8,7 +8,6 @@ namespace Ngecor.Multiplayer
     public enum SessionState
     {
         Disconnected,
-        StartingHost,
         Hosting,
         StartingClient,
         ConnectedClient
@@ -17,14 +16,8 @@ namespace Ngecor.Multiplayer
     [DisallowMultipleComponent]
     public class SessionManager : MonoBehaviour
     {
-        public static SessionManager Instance { get; private set; }
-
         [SerializeField] private string _defaultAddress = "127.0.0.1";
         [SerializeField] private ushort _defaultPort = 7777;
-
-        public event Action<ulong> OnClientConnectedEvent;
-        public event Action<ulong> OnClientDisconnectedEvent;
-        public event Action<SessionState> OnSessionStateChanged;
 
         public SessionState CurrentState { get; private set; } = SessionState.Disconnected;
         public string CurrentAddress => _currentAddress;
@@ -36,13 +29,6 @@ namespace Ngecor.Multiplayer
 
         private void Awake()
         {
-            if (Instance != null && Instance != this)
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            Instance = this;
             _currentAddress = _defaultAddress;
             _currentPort = _defaultPort;
         }
@@ -54,13 +40,17 @@ namespace Ngecor.Multiplayer
             CheckCommandLineArgs();
         }
 
+        private void OnDestroy()
+        {
+            UnregisterNetworkCallbacks();
+        }
+
         private void CheckCommandLineArgs()
         {
             string[] args = Environment.GetCommandLineArgs();
             string mode = null;
             string ip = _defaultAddress;
             ushort port = _defaultPort;
-            float autoCloseSec = 0f;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -76,15 +66,6 @@ namespace Ngecor.Multiplayer
                 {
                     if (ushort.TryParse(args[i + 1], out var p)) port = p;
                 }
-                else if (args[i].Equals("-autoclose", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
-                {
-                    if (float.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var s)) autoCloseSec = s;
-                }
-            }
-
-            if (autoCloseSec > 0f)
-            {
-                StartCoroutine(AutoCloseRoutine(autoCloseSec));
             }
 
             if (mode == "host")
@@ -107,24 +88,6 @@ namespace Ngecor.Multiplayer
         {
             yield return null;
             StartClientSession(ip, port);
-        }
-
-        private System.Collections.IEnumerator AutoCloseRoutine(float delay)
-        {
-            yield return new WaitForSeconds(delay);
-            Debug.Log($"[SessionManager] AutoClose triggered after {delay}s.");
-            DisconnectSession();
-            Application.Quit();
-        }
-
-        private void OnDestroy()
-        {
-            UnregisterNetworkCallbacks();
-
-            if (Instance == this)
-            {
-                Instance = null;
-            }
         }
 
         private void EnsureTransport()
@@ -164,7 +127,17 @@ namespace Ngecor.Multiplayer
 
         private void HandleConnectionApproval(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
         {
-            response.Approved = true;
+            var netManager = NetworkManager.Singleton;
+            bool underLimit = netManager != null && netManager.ConnectedClientsIds.Count < 4;
+
+            response.Approved = underLimit;
+            if (!underLimit)
+            {
+                response.Reason = "Server full (max 4 players).";
+                Debug.LogWarning($"[SessionManager] Connection rejected for client {request.ClientNetworkId}: Server is full.");
+                return;
+            }
+
             response.CreatePlayerObject = true;
             float offset = (float)(request.ClientNetworkId % 4) * 2.0f;
             response.Position = new Vector3(-2f + offset, 0.05f, 0f);
@@ -189,8 +162,8 @@ namespace Ngecor.Multiplayer
             _currentAddress = string.IsNullOrWhiteSpace(ip) ? _defaultAddress : ip.Trim();
             _currentPort = port == 0 ? _defaultPort : port;
 
-            ConfigureTransport(_currentAddress, _currentPort);
-            SetState(SessionState.StartingHost);
+            // Host listens on 0.0.0.0 to accept connections on all network interfaces (LAN/VPN)
+            ConfigureTransport(_currentAddress, _currentPort, "0.0.0.0");
 
             bool success = netManager.StartHost();
             if (!success)
@@ -201,7 +174,7 @@ namespace Ngecor.Multiplayer
             }
 
             SetState(SessionState.Hosting);
-            Debug.Log($"[SessionManager] Host started on {_currentAddress}:{_currentPort}");
+            Debug.Log($"[SessionManager] Host started on {_currentAddress}:{_currentPort} (listening on 0.0.0.0)");
             return true;
         }
 
@@ -252,12 +225,19 @@ namespace Ngecor.Multiplayer
             SetState(SessionState.Disconnected);
         }
 
-        private void ConfigureTransport(string ip, ushort port)
+        private void ConfigureTransport(string ip, ushort port, string listenAddress = null)
         {
             EnsureTransport();
             if (_transport != null)
             {
-                _transport.SetConnectionData(ip, port);
+                if (!string.IsNullOrEmpty(listenAddress))
+                {
+                    _transport.SetConnectionData(ip, port, listenAddress);
+                }
+                else
+                {
+                    _transport.SetConnectionData(ip, port);
+                }
             }
             else
             {
@@ -285,8 +265,6 @@ namespace Ngecor.Multiplayer
             {
                 Debug.Log($"[SessionManager] Client {clientId} connected to server.");
             }
-
-            OnClientConnectedEvent?.Invoke(clientId);
         }
 
         private void HandleClientDisconnected(ulong clientId)
@@ -308,15 +286,11 @@ namespace Ngecor.Multiplayer
             {
                 SetState(SessionState.Disconnected);
             }
-
-            OnClientDisconnectedEvent?.Invoke(clientId);
         }
 
         private void SetState(SessionState newState)
         {
-            if (CurrentState == newState) return;
             CurrentState = newState;
-            OnSessionStateChanged?.Invoke(newState);
         }
     }
 }

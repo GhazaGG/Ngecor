@@ -17,10 +17,6 @@ namespace Ngecor.Multiplayer
             if (_sessionManager == null)
             {
                 _sessionManager = GetComponent<SessionManager>();
-                if (_sessionManager == null)
-                {
-                    _sessionManager = SessionManager.Instance;
-                }
             }
         }
 
@@ -35,8 +31,7 @@ namespace Ngecor.Multiplayer
 
         private void OnGUI()
         {
-            var manager = _sessionManager != null ? _sessionManager : SessionManager.Instance;
-            if (manager == null)
+            if (_sessionManager == null)
             {
                 GUILayout.BeginArea(new Rect(10, 10, 260, 50), GUI.skin.box);
                 GUILayout.Label("SessionManager not found.");
@@ -47,28 +42,32 @@ namespace Ngecor.Multiplayer
             var netManager = NetworkManager.Singleton;
             bool isListening = netManager != null && netManager.IsListening;
 
-            GUILayout.BeginArea(new Rect(10, 10, 280, 220), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(10, 10, 280, 230), GUI.skin.box);
             GUILayout.Label("<b>Ngecor — Multiplayer Prototype</b>");
 
-            string stateLabel = manager.CurrentState.ToString();
+            string stateLabel = _sessionManager.CurrentState.ToString();
             int connectedCount = netManager != null ? netManager.ConnectedClientsIds.Count : 0;
 
-            if (manager.CurrentState == SessionState.Hosting)
+            if (_sessionManager.CurrentState == SessionState.Hosting)
             {
                 GUILayout.Label($"<b>Status:</b> Hosting ({connectedCount} players)");
-                GUILayout.Label($"Port: {manager.CurrentPort}");
+                GUILayout.Label($"Port: {_sessionManager.CurrentPort}");
             }
-            else if (manager.CurrentState == SessionState.ConnectedClient)
+            else if (_sessionManager.CurrentState == SessionState.ConnectedClient)
             {
                 GUILayout.Label($"<b>Status:</b> Connected Client (ID: {netManager?.LocalClientId})");
-                GUILayout.Label($"Connected to: {manager.CurrentAddress}:{manager.CurrentPort}");
+                GUILayout.Label($"Connected to: {_sessionManager.CurrentAddress}:{_sessionManager.CurrentPort}");
             }
             else
             {
                 GUILayout.Label($"<b>Status:</b> {stateLabel}");
             }
 
-            if (!string.IsNullOrEmpty(_statusMessage))
+            if (netManager != null && !isListening && !string.IsNullOrEmpty(netManager.DisconnectReason))
+            {
+                GUILayout.Label($"<color=red>Reason: {netManager.DisconnectReason}</color>");
+            }
+            else if (!string.IsNullOrEmpty(_statusMessage))
             {
                 GUILayout.Label($"<color=yellow>{_statusMessage}</color>");
             }
@@ -94,7 +93,7 @@ namespace Ngecor.Multiplayer
                     if (TryParsePort(out ushort port))
                     {
                         _statusMessage = "";
-                        manager.StartHostSession(_ipAddress, port);
+                        _sessionManager.StartHostSession(_ipAddress, port);
                     }
                     else
                     {
@@ -107,7 +106,7 @@ namespace Ngecor.Multiplayer
                     if (TryParsePort(out ushort port))
                     {
                         _statusMessage = "";
-                        manager.StartClientSession(_ipAddress, port);
+                        _sessionManager.StartClientSession(_ipAddress, port);
                     }
                     else
                     {
@@ -120,7 +119,7 @@ namespace Ngecor.Multiplayer
                 if (GUILayout.Button("Disconnect / Leave"))
                 {
                     _statusMessage = "";
-                    manager.DisconnectSession();
+                    _sessionManager.DisconnectSession();
                 }
             }
 
