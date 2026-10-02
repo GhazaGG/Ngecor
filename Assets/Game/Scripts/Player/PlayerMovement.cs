@@ -97,9 +97,9 @@ namespace Ngecor.Player
                 return;
 
             body.AddForceAtPosition(
-                pushDirection.normalized * _moveSpeed * _pushStrength,
+                pushDirection.normalized * _moveSpeed * _pushStrength * Time.deltaTime,
                 hit.point,
-                ForceMode.Force);
+                ForceMode.Impulse);
         }
 
         private void HandleCursorInput()
