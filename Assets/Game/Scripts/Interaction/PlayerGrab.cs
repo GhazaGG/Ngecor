@@ -15,9 +15,13 @@ namespace Ngecor.Interaction
         private InteractionDetector _detector;
         private GrabbableObject _carriedObject;
         private Transform _resolvedHoldPoint;
+        private Collider[] _playerColliders;
 
-        public bool IsCarrying => _carriedObject != null;
-        public GrabbableObject CarriedObject => _carriedObject;
+        private bool _savedWasKinematic;
+        private bool _savedUseGravity;
+
+        public bool IsCarrying => _carriedObject != null && _carriedObject.gameObject != null;
+        public GrabbableObject CarriedObject => IsCarrying ? _carriedObject : null;
         public Transform HoldPoint => ResolveHoldPoint();
 
         public float MaxGrabDistance
@@ -30,6 +34,36 @@ namespace Ngecor.Interaction
         {
             _playerMovement = GetComponent<PlayerMovement>();
             _detector = GetComponent<InteractionDetector>();
+            _playerColliders = GetComponentsInChildren<Collider>();
+        }
+
+        private void LateUpdate()
+        {
+            if (!IsCarrying)
+            {
+                if (_carriedObject != null)
+                    _carriedObject = null;
+                return;
+            }
+
+            var holdPoint = HoldPoint;
+            if (holdPoint != null && _carriedObject != null)
+            {
+                var rb = _carriedObject.Rigidbody;
+                if (rb != null)
+                {
+                    rb.position = holdPoint.position;
+                    rb.rotation = holdPoint.rotation;
+                }
+                _carriedObject.transform.position = holdPoint.position;
+                _carriedObject.transform.rotation = holdPoint.rotation;
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (IsCarrying)
+                ExecuteDrop();
         }
 
         public bool RequestGrab()
@@ -89,7 +123,31 @@ namespace Ngecor.Interaction
         private void AttachObject(GrabbableObject target)
         {
             _carriedObject = target;
+
+            var rb = target.Rigidbody;
+            if (rb != null)
+            {
+                _savedWasKinematic = rb.isKinematic;
+                _savedUseGravity = rb.useGravity;
+                rb.isKinematic = true;
+                rb.useGravity = false;
+            }
+
+            SetPlayerCollisionIgnored(target, true);
+
             target.OnGrab(gameObject);
+
+            var holdPoint = HoldPoint;
+            if (holdPoint != null)
+            {
+                if (rb != null)
+                {
+                    rb.position = holdPoint.position;
+                    rb.rotation = holdPoint.rotation;
+                }
+                target.transform.position = holdPoint.position;
+                target.transform.rotation = holdPoint.rotation;
+            }
         }
 
         private void DetachObject()
@@ -98,7 +156,40 @@ namespace Ngecor.Interaction
             {
                 var target = _carriedObject;
                 _carriedObject = null;
+
+                SetPlayerCollisionIgnored(target, false);
+
+                var rb = target.Rigidbody;
+                if (rb != null)
+                {
+                    rb.isKinematic = _savedWasKinematic;
+                    rb.useGravity = _savedUseGravity;
+                }
+
                 target.OnRelease();
+            }
+        }
+
+        private void SetPlayerCollisionIgnored(GrabbableObject target, bool ignore)
+        {
+            if (target == null)
+                return;
+
+            if (_playerColliders == null || _playerColliders.Length == 0)
+                _playerColliders = GetComponentsInChildren<Collider>();
+
+            var targetColliders = target.Colliders;
+            if (_playerColliders != null && targetColliders != null)
+            {
+                foreach (var pCol in _playerColliders)
+                {
+                    if (pCol == null) continue;
+                    foreach (var tCol in targetColliders)
+                    {
+                        if (tCol == null) continue;
+                        Physics.IgnoreCollision(pCol, tCol, ignore);
+                    }
+                }
             }
         }
 

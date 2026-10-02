@@ -159,5 +159,95 @@ namespace Ngecor.Interaction.Tests
             Assert.That(_playerGrab.IsCarrying, Is.False);
             Assert.That(_playerGrab.CarriedObject, Is.Null);
         }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_FollowsHoldPointPositionAndRotation()
+        {
+            _targetObject1 = CreateGrabbable("TargetFollow", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            var holdPoint = _playerGrab.HoldPoint;
+            Assert.That(Vector3.Distance(_targetObject1.transform.position, holdPoint.position), Is.LessThan(0.01f));
+            Assert.That(Quaternion.Angle(_targetObject1.transform.rotation, holdPoint.rotation), Is.LessThan(1f));
+
+            // Move player
+            _playerObject.transform.position = new Vector3(5f, 0f, 5f);
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(Vector3.Distance(_targetObject1.transform.position, holdPoint.position), Is.LessThan(0.01f));
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_CollisionsWithPlayerAreIgnoredWhileHeld()
+        {
+            _targetObject1 = CreateGrabbable("TargetCollision", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            var playerCollider = _playerObject.GetComponent<Collider>();
+            var targetCollider = _targetObject1.GetComponent<Collider>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+
+            Assert.That(Physics.GetIgnoreCollision(playerCollider, targetCollider), Is.True);
+
+            _playerGrab.ExecuteDrop();
+
+            Assert.That(Physics.GetIgnoreCollision(playerCollider, targetCollider), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteDrop_RestoresOriginalPhysicsState()
+        {
+            _targetObject1 = CreateGrabbable("TargetPhysics", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            var rb = grabbable.Rigidbody;
+            rb.isKinematic = false;
+            rb.useGravity = true;
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+
+            Assert.That(rb.isKinematic, Is.True);
+            Assert.That(rb.useGravity, Is.False);
+
+            _playerGrab.ExecuteDrop();
+
+            Assert.That(rb.isKinematic, Is.False);
+            Assert.That(rb.useGravity, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_HandlesExternalDestructionGracefully()
+        {
+            _targetObject1 = CreateGrabbable("TargetDestroy", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            Object.DestroyImmediate(_targetObject1);
+            _targetObject1 = null;
+
+            yield return null;
+
+            Assert.DoesNotThrow(() => { bool carrying = _playerGrab.IsCarrying; });
+            Assert.That(_playerGrab.IsCarrying, Is.False);
+            Assert.That(_playerGrab.CarriedObject, Is.Null);
+        }
     }
 }
+
