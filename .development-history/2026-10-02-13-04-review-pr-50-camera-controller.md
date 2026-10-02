@@ -40,3 +40,9 @@ PR #50 is waiting for RyoFPS to confirm the camera height. After that, the Team 
 ## Unresolved issues or follow-up work
 - #12 has to handle the relock-click conflict when it's implemented.
 - Cursor behavior in a standalone build should be checked once playtests run from builds.
+
+## Re-review (same session)
+- RyoFPS first confirmed the camera height in a PR comment (lowered to 1.4 m), but the prefab change was not pushed. I asked him in a PR comment to save it through the Editor and push it.
+- Commit `c4f7358` was then pushed. In `Player.prefab`, `CameraPivot` changes from `y: 1.6` to `y: 1.4`. The Editor re-serialized the file, which also wrote the default `_isLocalPlayer: 0` explicitly. The Playground instance still overrides `_isLocalPlayer` to `1`.
+- The PR description now states the final height and lists the 1.8 m capsule vs. 1.4 m eye height as a known issue.
+- PR #50 was approved, and GitHub shows it as APPROVED/CLEAN. The owner merges it.
