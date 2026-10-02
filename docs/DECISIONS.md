@@ -153,7 +153,7 @@ Owner/source: orang atau link keputusan
 
 **Decision:**
 - Material bulk (sand, cement, concrete) disimpan sebagai **tipe + jumlah unit integer** di container yang ada di dunia. Player tidak pernah menyimpan jumlah material.
-- **Container** punya kapasitas, satu tipe material, dan visual level isi. Bucket, shovel, pile, spot aduk, mixer, dan construction target memakai **satu komponen container yang sama** (dibuat pertama di MAT-002 #16). Spot aduk dan mixer adalah container multi-bahan.
+- **Container** punya kapasitas, satu tipe material, dan visual level isi. Bucket, shovel, pile, spot aduk, mixer, dan construction target memakai **satu komponen container yang sama** (dibuat di MAT-005 #62; MAT-002 #16 adalah pemakai pertamanya untuk sand pile dan bucket). Spot aduk dan mixer adalah container multi-bahan.
 - **Transfer hanya lewat aksi fisik:** tuang dari container yang dipegang atau scoop/dump dengan shovel, di dekat receiver. Unit berpindah dengan laju yang dapat dituning dan selalu kekal (keluar = masuk). Receiver menentukan tipe yang diterimanya.
 - **Tumpah:** container yang miring melewati sudut yang dapat dituning kehilangan isi per detik. Isi yang tumpah menjadi **pile** di tanah (container tanpa Rigidbody) dan digabung ke pile tipe sama dalam radius yang dapat dituning. Pile bisa disekop lagi.
 - **Sak semen** tetap benda diskret dan berubah menjadi N unit cement saat masuk spot aduk atau mixer.
@@ -167,7 +167,7 @@ Owner/source: orang atau link keputusan
 
 **Revisit:** Wheelbarrow sebagai container bulk (mengangkut concrete langsung di bak) setelah playtest logistik M2. Jumlah pile di scene jika Profiler menunjukkan beban.
 
-**Applies from:** MAT-002 (#16), MAT-004 (#54), MIX-003 (#55), BUILD-002 (#19), MIX-002 (#45), MIX-001 (#17).
+**Applies from:** MAT-005 (#62), MAT-002 (#16), MAT-004 (#54), MIX-003 (#55), BUILD-002 (#19), MIX-002 (#45), MIX-001 (#17).
 
 **Owner/source:** Keputusan pemilik proyek dalam sesi diskusi desain 2026-10-02.
 
