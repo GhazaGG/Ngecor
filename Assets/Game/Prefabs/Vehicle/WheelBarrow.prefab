@@ -98,7 +98,7 @@ BoxCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 40847168243260631}
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 13400000, guid: 63e0e13c5fc5cf44babf4efc57a6885c, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -124,7 +124,6 @@ GameObject:
   - component: {fileID: 1077601374799457102}
   - component: {fileID: 867615854724217461}
   - component: {fileID: 5424963445741255486}
-  - component: {fileID: 78679588789342766}
   m_Layer: 0
   m_Name: Tray_Front
   m_TagString: Untagged
@@ -225,33 +224,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!54 &78679588789342766
-Rigidbody:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 382626741381281411}
-  serializedVersion: 5
-  m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
-  m_CenterOfMass: {x: 0, y: 0, z: 0}
-  m_InertiaTensor: {x: 1, y: 1, z: 1}
-  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ImplicitCom: 1
-  m_ImplicitTensor: 1
-  m_UseGravity: 1
-  m_IsKinematic: 0
-  m_Interpolate: 0
-  m_Constraints: 0
-  m_CollisionDetection: 0
 --- !u!1 &577869982222215981
 GameObject:
   m_ObjectHideFlags: 0
@@ -350,7 +322,7 @@ BoxCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 577869982222215981}
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 13400000, guid: 63e0e13c5fc5cf44babf4efc57a6885c, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
@@ -462,7 +434,7 @@ CapsuleCollider:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1949399570841796789}
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 13400000, guid: ce8640d089ca9794ebfb79eb46dbd95d, type: 2}
   m_IncludeLayers:
     serializedVersion: 2
     m_Bits: 0
