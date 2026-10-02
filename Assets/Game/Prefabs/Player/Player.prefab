@@ -226,7 +226,7 @@ MonoBehaviour:
   _moveAction: {fileID: 11400000, guid: f376be441368409409fedb4a09042b6b, type: 2}
   _lookAction: {fileID: 11400000, guid: 640bc3e258ae42e49baa2dfc5d6109ce, type: 2}
   _cameraPivot: {fileID: 8468392425559774994}
-  _isLocalPlayer: 1
+  _isLocalPlayer: 0
   _moveSpeed: 5
   _lookSensitivity: 0.1
 --- !u!114 &1868023085897671051
