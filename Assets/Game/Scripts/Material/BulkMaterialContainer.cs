@@ -169,7 +169,7 @@ namespace Ngecor.Material
             return result;
         }
 
-        public int TransferUnitsTo(BulkMaterialContainer target, MaterialType type, int requestedUnits)
+        private int TransferUnitsTo(BulkMaterialContainer target, MaterialType type, int requestedUnits)
         {
             if (target == null || target == this || requestedUnits <= 0 || !target.Accepts(type))
                 return 0;

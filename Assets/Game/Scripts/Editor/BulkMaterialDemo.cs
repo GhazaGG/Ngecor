@@ -117,7 +117,7 @@ namespace Ngecor.Editor
             var before = sand.TotalUnits + mixed.TotalUnits;
             var moved = sand.TransferForSeconds(mixed, MaterialType.Sand, 1f);
             if (moved != 10 || before != sand.TotalUnits + mixed.TotalUnits
-                || cement.TransferUnitsTo(sandOnly, MaterialType.Cement, 3) != 0
+                || cement.TransferForSeconds(sandOnly, MaterialType.Cement, 1f) != 0
                 || cement.GetUnits(MaterialType.Cement) != 6)
                 throw new InvalidOperationException("Dev scene transfer check failed.");
 

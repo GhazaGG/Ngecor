@@ -26,7 +26,7 @@ namespace Ngecor.Material.Tests
             target.AddUnits(MaterialType.Cement, 3);
 
             var before = source.TotalUnits + target.TotalUnits;
-            Assert.That(source.TransferUnitsTo(target, MaterialType.Sand, 10), Is.EqualTo(5));
+            Assert.That(source.TransferForSeconds(target, MaterialType.Sand, 1f), Is.EqualTo(5));
             Assert.That(source.GetUnits(MaterialType.Sand), Is.EqualTo(5));
             Assert.That(target.GetUnits(MaterialType.Sand), Is.EqualTo(5));
             Assert.That(target.GetUnits(MaterialType.Cement), Is.EqualTo(3));
@@ -40,13 +40,13 @@ namespace Ngecor.Material.Tests
             var sandOnly = CreateContainer(2, ContainerMode.SingleType, MaterialType.Sand);
             source.AddUnits(MaterialType.Cement, 4);
 
-            Assert.That(source.TransferUnitsTo(sandOnly, MaterialType.Cement, 2), Is.Zero);
-            Assert.That(source.TransferUnitsTo(sandOnly, MaterialType.Sand, 2), Is.Zero);
-            Assert.That(source.TransferUnitsTo(null, MaterialType.Cement, 2), Is.Zero);
-            Assert.That(source.TransferUnitsTo(source, MaterialType.Cement, 2), Is.Zero);
+            Assert.That(source.TransferForSeconds(sandOnly, MaterialType.Cement, 1f), Is.Zero);
+            Assert.That(source.TransferForSeconds(sandOnly, MaterialType.Sand, 1f), Is.Zero);
+            Assert.That(source.TransferForSeconds(null, MaterialType.Cement, 1f), Is.Zero);
+            Assert.That(source.TransferForSeconds(source, MaterialType.Cement, 1f), Is.Zero);
             source.AddUnits(MaterialType.Sand, 2);
             sandOnly.AddUnits(MaterialType.Sand, 2);
-            Assert.That(source.TransferUnitsTo(sandOnly, MaterialType.Sand, 2), Is.Zero);
+            Assert.That(source.TransferForSeconds(sandOnly, MaterialType.Sand, 1f), Is.Zero);
             Assert.That(source.GetUnits(MaterialType.Cement), Is.EqualTo(4));
             Assert.That(source.GetUnits(MaterialType.Sand), Is.EqualTo(2));
             Assert.That(sandOnly.GetUnits(MaterialType.Sand), Is.EqualTo(2));
