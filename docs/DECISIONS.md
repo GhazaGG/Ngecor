@@ -101,6 +101,16 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Keputusan pemilik proyek dalam percakapan 2026-10-01.
 
+### 2026-10-02 — Binding input minimum M1
+
+**Decision:** Gunakan binding Input System yang sudah ada: Move = WASD dan tombol panah; Look = mouse delta; Interact = E; Throw = tombol kiri mouse (binding saat ini pada action `Attack`). Gamepad tidak wajib dan tetap di backlog. Issue PLAYER-001 mengimplementasikan Move dan Look; Interact dan Throw dicatat untuk task berikutnya.
+
+**Reason:** Menetapkan kontrol dasar sesuai technical notes issue PLAYER-001 tanpa menambah package atau mengubah action asset bersama.
+
+**Applies from:** PLAYER-001 (#7), PLAYER-002 (#8), dan task interaction M1.
+
+**Owner/source:** Pemilik task PLAYER-001, mengikuti issue #7 dan keputusan M1 di atas.
+
 ### 2026-10-01 — Networking dan batas authority
 
 **Decision:**
