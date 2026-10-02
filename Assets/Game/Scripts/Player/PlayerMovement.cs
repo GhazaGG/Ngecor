@@ -14,27 +14,53 @@ namespace Ngecor.Player
         [SerializeField, Min(0f)] private float _lookSensitivity = 0.1f;
 
         private CharacterController _characterController;
+        private Camera _playerCamera;
+        private bool _cursorLocked;
         private float _verticalVelocity;
         private float _cameraPitch;
 
         private void Awake()
         {
             _characterController = GetComponent<CharacterController>();
+            _playerCamera = GetComponentInChildren<Camera>(true);
             if (_cameraPivot != null)
                 _cameraPitch = Mathf.DeltaAngle(0f, _cameraPivot.localEulerAngles.x);
         }
 
+        private void Start()
+        {
+            if (_isLocalPlayer)
+                SetCursorLocked(true);
+        }
+
+        public Camera LocalCamera => _isLocalPlayer ? _playerCamera : null;
+
         public void SetLocalPlayer(bool isLocalPlayer)
         {
+            if (_isLocalPlayer == isLocalPlayer)
+                return;
+
             _isLocalPlayer = isLocalPlayer;
+            SetCursorLocked(isLocalPlayer);
+        }
+
+        private void OnDisable()
+        {
+            if (_isLocalPlayer)
+                SetCursorLocked(false);
         }
 
         private void Update()
         {
-            if (!_isLocalPlayer || _moveAction == null || _characterController == null)
+            if (!_isLocalPlayer || _characterController == null)
                 return;
 
-            if (_lookAction != null)
+            HandleCursorInput();
+
+            if (_moveAction == null)
+                return;
+
+            if (_lookAction != null && _cursorLocked)
             {
                 var look = _lookAction.action.ReadValue<Vector2>() * _lookSensitivity;
                 transform.Rotate(Vector3.up, look.x, Space.World);
@@ -57,6 +83,31 @@ namespace Ngecor.Player
 
             var movement = direction * _moveSpeed + Vector3.up * _verticalVelocity;
             _characterController.Move(movement * Time.deltaTime);
+        }
+
+        private void HandleCursorInput()
+        {
+            if (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
+            {
+                SetCursorLocked(false);
+                return;
+            }
+
+            if (!_cursorLocked && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
+                SetCursorLocked(true);
+        }
+
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (hasFocus && _isLocalPlayer && _cursorLocked)
+                SetCursorLocked(true);
+        }
+
+        private void SetCursorLocked(bool locked)
+        {
+            _cursorLocked = locked;
+            Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
+            Cursor.visible = !locked;
         }
     }
 }

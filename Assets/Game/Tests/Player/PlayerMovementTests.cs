@@ -16,6 +16,7 @@ namespace Ngecor.Player.Tests
         private GameObject _wall;
         private GameObject _ramp;
         private Transform _cameraPivot;
+        private Camera _camera;
         private InputActionAsset _actionAsset;
         private InputAction _moveAction;
         private InputAction _lookAction;
@@ -24,6 +25,9 @@ namespace Ngecor.Player.Tests
 
         public override void TearDown()
         {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+
             if (_player != null)
                 UnityEngine.Object.DestroyImmediate(_player);
 
@@ -75,6 +79,80 @@ namespace Ngecor.Player.Tests
             Assert.That(_lookAction.ReadValue<Vector2>().sqrMagnitude, Is.GreaterThan(0f), "Look action did not receive mouse delta.");
             Assert.That(Mathf.Abs(_player.transform.eulerAngles.y), Is.GreaterThan(0.1f));
             Assert.That(Mathf.DeltaAngle(0f, _cameraPivot.localEulerAngles.x), Is.LessThan(-0.1f));
+        }
+
+        [UnityTest]
+        public IEnumerator LocalPlayerCanReleaseAndRelockCursor()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
+            CreatePlayer();
+
+            yield return null;
+            Assert.That(GetPrivateField(typeof(Ngecor.Player.PlayerMovement),
+                _player.GetComponent<Ngecor.Player.PlayerMovement>(), "_cursorLocked"), Is.True);
+            Assert.That(Cursor.visible, Is.False);
+
+            Press(keyboard.escapeKey);
+            yield return null;
+            Assert.That(GetPrivateField(typeof(Ngecor.Player.PlayerMovement),
+                _player.GetComponent<Ngecor.Player.PlayerMovement>(), "_cursorLocked"), Is.False);
+            Assert.That(Cursor.visible, Is.True);
+
+            Release(keyboard.escapeKey);
+            yield return null;
+            Press(mouse.leftButton);
+            yield return null;
+            Assert.That(GetPrivateField(typeof(Ngecor.Player.PlayerMovement),
+                _player.GetComponent<Ngecor.Player.PlayerMovement>(), "_cursorLocked"), Is.True);
+            Assert.That(Cursor.visible, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator LocalPlayerCanReleaseCursorWithoutMoveAction()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement),
+                _player.GetComponent<Ngecor.Player.PlayerMovement>(), "_moveAction", null);
+
+            yield return null;
+            Press(keyboard.escapeKey);
+            yield return null;
+
+            Assert.That(GetPrivateField(typeof(Ngecor.Player.PlayerMovement),
+                _player.GetComponent<Ngecor.Player.PlayerMovement>(), "_cursorLocked"), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator LookInputIsIgnoredWhileCursorIsReleased()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
+            CreatePlayer();
+            yield return null;
+
+            Press(keyboard.escapeKey);
+            yield return null;
+            var yaw = _player.transform.rotation;
+            var pitch = _cameraPivot.localRotation;
+            Set(mouse.delta, new Vector2(25f, 20f));
+            yield return null;
+
+            Assert.That(Quaternion.Angle(yaw, _player.transform.rotation), Is.LessThan(0.01f));
+            Assert.That(Quaternion.Angle(pitch, _cameraPivot.localRotation), Is.LessThan(0.01f));
+        }
+
+        [Test]
+        public void LocalCameraIsAvailableOnlyForLocalPlayer()
+        {
+            CreatePlayer(false);
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+
+            Assert.That(movement.LocalCamera, Is.Null);
+
+            movement.SetLocalPlayer(true);
+            Assert.That(movement.LocalCamera, Is.SameAs(_camera));
         }
 
         [UnityTest]
@@ -232,6 +310,9 @@ namespace Ngecor.Player.Tests
             pivot.transform.SetParent(_player.transform, false);
             pivot.transform.localPosition = new Vector3(0f, 1.6f, 0f);
             _cameraPivot = pivot.transform;
+            var cameraObject = new GameObject("PlayerCamera");
+            cameraObject.transform.SetParent(_cameraPivot, false);
+            _camera = cameraObject.AddComponent<Camera>();
 
             var movement = _player.AddComponent<Ngecor.Player.PlayerMovement>();
             SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_moveAction", _moveReference);
@@ -256,6 +337,13 @@ namespace Ngecor.Player.Tests
             var field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"Missing {type.Name} field '{name}'.");
             field.SetValue(target, value);
+        }
+
+        private static object GetPrivateField(Type type, object target, string name)
+        {
+            var field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, $"Missing {type.Name} field '{name}'.");
+            return field.GetValue(target);
         }
 
         private static IEnumerator WaitForFixedFrames(int frameCount)
