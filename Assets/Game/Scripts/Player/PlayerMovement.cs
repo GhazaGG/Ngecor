@@ -11,7 +11,7 @@ namespace Ngecor.Player
         [SerializeField] private Transform _cameraPivot;
         [SerializeField] private bool _isLocalPlayer;
         [SerializeField, Min(0f)] private float _moveSpeed = 5f;
-        [SerializeField, Min(0f)] private float _pushStrength = 2f;
+        [SerializeField, Min(0f)] private float _pushStrength = 5f;
         [SerializeField, Min(0f)] private float _lookSensitivity = 0.1f;
 
         private CharacterController _characterController;
