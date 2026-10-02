@@ -19,6 +19,7 @@ Aturan ini berlaku tanpa pengecualian kecuali developer dan issue menyatakan lai
 9. Jangan menulis kode multiplayer yang membuat client menentukan state dunia (posisi objek fisika, hasil grab, jumlah material). Client hanya mengirim niat. Satu-satunya pengecualian: movement dan arah pandang player milik client itu sendiri.
 10. Jangan menyatakan "sudah dites" atau mencentang checklist jika belum dijalankan di Unity. Tulis apa yang belum dites.
 11. Jangan menulis kode networking (`NetworkBehaviour`, `NetworkObject`, RPC, `NetworkVariable`, atau API NGO lain) di luar tiket `NET-*`, atau tiket yang secara eksplisit memintanya. Fitur lain tetap offline; tiket NET-lah yang menyambungkannya ke jaringan.
+12. Jangan meng-commit plan, spec, atau checklist buatan tool AI (misalnya `docs/superpowers/`, `docs/<TIKET>-plan.md`). Simpan di luar repo. Catatan kerja ditulis di `.development-history/`; desain yang perlu disetujui diposting sebagai komentar di issue.
 
 ## Baca sebelum bekerja
 
