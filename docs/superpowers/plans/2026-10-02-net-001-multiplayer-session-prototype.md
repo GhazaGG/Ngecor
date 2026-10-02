@@ -169,25 +169,25 @@ git commit -m "feat: add SessionHUD for host and client connection controls"
 - Consumes: `SessionManager`, `SessionHUD`, `Player_Prototype.prefab`, `Playground.unity`
 - Produces: Playable multiplayer scene yang memenuhi seluruh Acceptance Criteria Issue #20.
 
-- [ ] **Step 1: Assemble Network Manager in `Playground.unity`**
+- [x] **Step 1: Assemble Network Manager in `Playground.unity`**
 - Pasang GameObject `[Network]` dengan komponen `NetworkManager`, `UnityTransport`, `SessionManager`, dan `SessionHUD`.
 - Pasang `Player_Prototype.prefab` ke field `NetworkManager.PlayerPrefab`.
 
-- [ ] **Step 2: Build Standalone Windows Executable for 2-Player Local Test**
-Buat build standalone Windows (`Build/Ngecor_Test.exe`) untuk mengetes Host + Client di 1 mesin:
+- [x] **Step 2: Build Standalone Windows Executable for 2-Player Local Test**
+Buat build standalone Windows (`Build/Windows/Ngecor.exe`) untuk mengetes Host + Client di 1 mesin:
 1. Jalankan Build standalone sebagai Host.
-2. Jalankan Unity Editor Play Mode sebagai Client yang bergabung ke `127.0.0.1`.
+2. Jalankan Client yang bergabung ke `127.0.0.1:7777`.
 3. Verifikasi:
    - Host berhasil berjalan.
    - Client berhasil join.
    - Kedua player capsule ter-spawn di scene Playground.
    - Client disconnect -> Host tetap berjalan normal tanpa crash.
 
-- [ ] **Step 3: Write development history report**
-Tulis laporan lengkap di `.development-history/2026-10-02-01-30-multiplayer-session-prototype.md` sesuai format standar di `AGENTS.md`.
+- [x] **Step 3: Write development history report**
+Tulis laporan lengkap di `.development-history/2026-10-02-14-15-multiplayer-session-prototype.md` sesuai format standar di `AGENTS.md`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 ```bash
-git add Assets/Game/Scenes/Playground.unity .development-history/2026-10-02-01-30-multiplayer-session-prototype.md
+git add Assets/Game/Scenes/Playground.unity Assets/Game/Scripts/Multiplayer/SessionManager.cs docs/superpowers/plans/2026-10-02-net-001-multiplayer-session-prototype.md .development-history/2026-10-02-14-15-multiplayer-session-prototype.md
 git commit -m "feat: wire multiplayer session into Playground and verify multi-client"
 ```

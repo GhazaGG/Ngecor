@@ -51,6 +51,70 @@ namespace Ngecor.Multiplayer
         {
             EnsureTransport();
             RegisterNetworkCallbacks();
+            CheckCommandLineArgs();
+        }
+
+        private void CheckCommandLineArgs()
+        {
+            string[] args = Environment.GetCommandLineArgs();
+            string mode = null;
+            string ip = _defaultAddress;
+            ushort port = _defaultPort;
+            float autoCloseSec = 0f;
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i].Equals("-mode", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                {
+                    mode = args[i + 1].ToLowerInvariant();
+                }
+                else if (args[i].Equals("-ip", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                {
+                    ip = args[i + 1];
+                }
+                else if (args[i].Equals("-port", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                {
+                    if (ushort.TryParse(args[i + 1], out var p)) port = p;
+                }
+                else if (args[i].Equals("-autoclose", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                {
+                    if (float.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var s)) autoCloseSec = s;
+                }
+            }
+
+            if (autoCloseSec > 0f)
+            {
+                StartCoroutine(AutoCloseRoutine(autoCloseSec));
+            }
+
+            if (mode == "host")
+            {
+                StartCoroutine(DelayedStartHost(ip, port));
+            }
+            else if (mode == "client")
+            {
+                StartCoroutine(DelayedStartClient(ip, port));
+            }
+        }
+
+        private System.Collections.IEnumerator DelayedStartHost(string ip, ushort port)
+        {
+            yield return null;
+            StartHostSession(ip, port);
+        }
+
+        private System.Collections.IEnumerator DelayedStartClient(string ip, ushort port)
+        {
+            yield return null;
+            StartClientSession(ip, port);
+        }
+
+        private System.Collections.IEnumerator AutoCloseRoutine(float delay)
+        {
+            yield return new WaitForSeconds(delay);
+            Debug.Log($"[SessionManager] AutoClose triggered after {delay}s.");
+            DisconnectSession();
+            Application.Quit();
         }
 
         private void OnDestroy()
@@ -80,6 +144,8 @@ namespace Ngecor.Multiplayer
             netManager.OnClientConnectedCallback += HandleClientConnected;
             netManager.OnClientDisconnectCallback += HandleClientDisconnected;
             netManager.OnServerStarted += HandleServerStarted;
+            netManager.NetworkConfig.ConnectionApproval = true;
+            netManager.ConnectionApprovalCallback = HandleConnectionApproval;
         }
 
         private void UnregisterNetworkCallbacks()
@@ -90,6 +156,19 @@ namespace Ngecor.Multiplayer
             netManager.OnClientConnectedCallback -= HandleClientConnected;
             netManager.OnClientDisconnectCallback -= HandleClientDisconnected;
             netManager.OnServerStarted -= HandleServerStarted;
+            if (netManager.ConnectionApprovalCallback == HandleConnectionApproval)
+            {
+                netManager.ConnectionApprovalCallback = null;
+            }
+        }
+
+        private void HandleConnectionApproval(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
+        {
+            response.Approved = true;
+            response.CreatePlayerObject = true;
+            float offset = (float)(request.ClientNetworkId % 4) * 2.0f;
+            response.Position = new Vector3(-2f + offset, 0.05f, 0f);
+            response.Rotation = Quaternion.identity;
         }
 
         public bool StartHostSession(string ip = null, ushort port = 0)
