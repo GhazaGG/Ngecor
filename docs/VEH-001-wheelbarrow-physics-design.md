@@ -10,7 +10,7 @@ Create a lightweight, playable wheelbarrow physics prototype for issue #13. The 
 - Keep the cargo cubes as independent Rigidbody objects so gravity and collisions can move them out of the tray.
 - Let the existing CharacterController player physically push dynamic Rigidbody objects on contact. Keep this behavior generic; do not reference the wheelbarrow type from player movement.
 - Use the existing Playground for the issue's manual test, adding only the wheelbarrow and nearby test cubes needed for that flow.
-- Tune the wheelbarrow mass through its Rigidbody and handling through collider layout and physics material values. Do not add a package or a general vehicle framework.
+- Tune the wheelbarrow mass through its Rigidbody and handling through collider layout. Do not add a package or a general vehicle framework.
 
 ## Explicitly deferred
 
@@ -21,7 +21,7 @@ Create a lightweight, playable wheelbarrow physics prototype for issue #13. The 
 ## Components and behavior
 
 1. `Wheelbarrow.prefab` owns one dynamic Rigidbody. Primitive colliders on the same root approximate the tray, handles, supports, and wheel contact shape. Keep the moving colliders primitive to match the performance budget.
-2. The Rigidbody mass, collider layout, and physics material are the prototype's tuning controls. No wheelbarrow-specific runtime script is needed unless Play Mode tuning proves these Inspector settings insufficient.
+2. The Rigidbody mass and collider layout are the prototype's tuning controls. No wheelbarrow-specific runtime script is needed unless Play Mode tuning proves these Inspector settings insufficient.
 3. Player contact transfers the player's horizontal movement into a push on a contacted dynamic Rigidbody. It does not change input maps, lock the player to the wheelbarrow, or alter where WASD is routed.
 4. Cargo remains separate from the wheelbarrow Rigidbody and is not parented or constrained to the tray. Three cubes can rest inside the tray under gravity; tipping the wheelbarrow allows them to fall naturally.
 5. The Playground test uses the existing ground and 20-degree ramp. The wheelbarrow is placed on the flat area, with three loose cubes available beside it for loading.
