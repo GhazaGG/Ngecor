@@ -2,7 +2,8 @@
   "name": "Ngecor.Interaction",
   "rootNamespace": "Ngecor.Interaction",
   "references": [
-    "Ngecor.Player"
+    "Ngecor.Player",
+    "Unity.InputSystem"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
