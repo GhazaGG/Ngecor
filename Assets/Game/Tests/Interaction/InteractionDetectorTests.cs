@@ -2,12 +2,14 @@ using System.Collections;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using Ngecor.Player;
 
 namespace Ngecor.Interaction.Tests
 {
     public class InteractionDetectorTests
     {
         private GameObject _playerObject;
+        private PlayerMovement _playerMovement;
         private InteractionDetector _detector;
         private GameObject _interactableObject;
         private GameObject _obstacleObject;
@@ -17,16 +19,36 @@ namespace Ngecor.Interaction.Tests
         {
             _playerObject = new GameObject("Player");
             _playerObject.transform.position = Vector3.zero;
-            _playerObject.transform.forward = Vector3.forward;
+            _playerObject.transform.rotation = Quaternion.identity;
+            _playerObject.SetActive(false);
 
+            var controller = _playerObject.AddComponent<CharacterController>();
+            controller.height = 1.8f;
+            controller.radius = 0.35f;
+            controller.center = new Vector3(0f, 0.9f, 0f);
+
+            var pivot = new GameObject("CameraPivot");
+            pivot.transform.SetParent(_playerObject.transform, false);
+            pivot.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+
+            var cameraObject = new GameObject("PlayerCamera");
+            cameraObject.transform.SetParent(pivot.transform, false);
+            cameraObject.AddComponent<Camera>();
+
+            _playerMovement = _playerObject.AddComponent<PlayerMovement>();
             _detector = _playerObject.AddComponent<InteractionDetector>();
-            _detector.SetLocalPlayer(true);
             _detector.MaxDistance = 3f;
+
+            _playerObject.SetActive(true);
+            _playerMovement.SetLocalPlayer(true);
         }
 
         [TearDown]
         public void TearDown()
         {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+
             if (_playerObject != null)
                 Object.DestroyImmediate(_playerObject);
             if (_interactableObject != null)
@@ -39,7 +61,7 @@ namespace Ngecor.Interaction.Tests
         public IEnumerator DetectsInteractableDirectlyInFront()
         {
             _interactableObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _interactableObject.transform.position = new Vector3(0f, 0f, 2f);
+            _interactableObject.transform.position = new Vector3(0f, 1.4f, 2f);
             var interactable = _interactableObject.AddComponent<InteractableObject>();
 
             Physics.SyncTransforms();
@@ -54,9 +76,10 @@ namespace Ngecor.Interaction.Tests
         public IEnumerator IgnoresInteractableBeyondMaxDistance()
         {
             _interactableObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _interactableObject.transform.position = new Vector3(0f, 0f, 5f);
+            _interactableObject.transform.position = new Vector3(0f, 1.4f, 5f);
             _interactableObject.AddComponent<InteractableObject>();
 
+            Physics.SyncTransforms();
             yield return null;
             _detector.Detect();
 
@@ -69,12 +92,13 @@ namespace Ngecor.Interaction.Tests
         {
             _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             _obstacleObject.name = "SolidWall";
-            _obstacleObject.transform.position = new Vector3(0f, 0f, 1.5f);
+            _obstacleObject.transform.position = new Vector3(0f, 1.4f, 1.5f);
 
             _interactableObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _interactableObject.transform.position = new Vector3(0f, 0f, 2.5f);
+            _interactableObject.transform.position = new Vector3(0f, 1.4f, 2.5f);
             _interactableObject.AddComponent<InteractableObject>();
 
+            Physics.SyncTransforms();
             yield return null;
             _detector.Detect();
 
@@ -95,7 +119,7 @@ namespace Ngecor.Interaction.Tests
         public IEnumerator DetectsParentInteractableFromChildCollider()
         {
             _interactableObject = new GameObject("ParentInteractable");
-            _interactableObject.transform.position = new Vector3(0f, 0f, 2f);
+            _interactableObject.transform.position = new Vector3(0f, 1.4f, 2f);
             var interactable = _interactableObject.AddComponent<InteractableObject>();
 
             var child = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -114,10 +138,10 @@ namespace Ngecor.Interaction.Tests
         {
             _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             _obstacleObject.GetComponent<Collider>().isTrigger = true;
-            _obstacleObject.transform.position = new Vector3(0f, 0f, 1.5f);
+            _obstacleObject.transform.position = new Vector3(0f, 1.4f, 1.5f);
 
             _interactableObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _interactableObject.transform.position = new Vector3(0f, 0f, 2.5f);
+            _interactableObject.transform.position = new Vector3(0f, 1.4f, 2.5f);
             var interactable = _interactableObject.AddComponent<InteractableObject>();
 
             Physics.SyncTransforms();
@@ -132,10 +156,11 @@ namespace Ngecor.Interaction.Tests
         public IEnumerator IgnoresInteractableWhenCanInteractIsFalse()
         {
             _interactableObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _interactableObject.transform.position = new Vector3(0f, 0f, 2f);
+            _interactableObject.transform.position = new Vector3(0f, 1.4f, 2f);
             var interactable = _interactableObject.AddComponent<InteractableObject>();
             interactable.SetInteractable(false);
 
+            Physics.SyncTransforms();
             yield return null;
             _detector.Detect();
 
@@ -147,11 +172,12 @@ namespace Ngecor.Interaction.Tests
         public IEnumerator NonLocalPlayerDoesNotDetect()
         {
             _interactableObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _interactableObject.transform.position = new Vector3(0f, 0f, 2f);
+            _interactableObject.transform.position = new Vector3(0f, 1.4f, 2f);
             _interactableObject.AddComponent<InteractableObject>();
 
-            _detector.SetLocalPlayer(false);
+            _playerMovement.SetLocalPlayer(false);
 
+            Physics.SyncTransforms();
             yield return null;
             _detector.Detect();
 

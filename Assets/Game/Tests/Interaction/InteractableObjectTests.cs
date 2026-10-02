@@ -33,15 +33,5 @@ namespace Ngecor.Interaction.Tests
 
             Assert.That(interactable.CanInteract(null), Is.False);
         }
-
-        [Test]
-        public void InteractableObject_SetPrompt_UpdatesInteractionPrompt()
-        {
-            _targetObject = new GameObject("TestInteractable");
-            var interactable = _targetObject.AddComponent<InteractableObject>();
-            interactable.SetPrompt("Pick up");
-
-            Assert.That(interactable.InteractionPrompt, Is.EqualTo("Pick up"));
-        }
     }
 }

@@ -13,7 +13,5 @@ namespace Ngecor.Interaction
         public bool CanInteract(GameObject interactor) => _canInteract;
 
         public void SetInteractable(bool canInteract) => _canInteract = canInteract;
-
-        public void SetPrompt(string prompt) => _prompt = prompt;
     }
 }
