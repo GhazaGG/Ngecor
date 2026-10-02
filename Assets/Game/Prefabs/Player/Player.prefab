@@ -225,6 +225,7 @@ MonoBehaviour:
   _moveAction: {fileID: 11400000, guid: f376be441368409409fedb4a09042b6b, type: 2}
   _lookAction: {fileID: 11400000, guid: 640bc3e258ae42e49baa2dfc5d6109ce, type: 2}
   _cameraPivot: {fileID: 8468392425559774994}
+  _isLocalPlayer: 0
   _moveSpeed: 5
   _lookSensitivity: 0.1
 --- !u!1 &7889076200833104320
@@ -252,7 +253,7 @@ Transform:
   m_GameObject: {fileID: 7889076200833104320}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.6, z: 0}
+  m_LocalPosition: {x: 0, y: 1.4, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
