@@ -293,7 +293,9 @@ namespace Ngecor.Interaction
             var targetPos = origin + direction * nearest;
             var targetRot = holdPoint.rotation;
 
-            // 3D Depenetration against overlapping world geometry (ramps, slopes, obstacles)
+            // 3D Depenetration via native PhysX (Physics.ComputePenetration):
+            // Memanfaatkan solver native PhysX untuk menghitung vektor pemisah normal collider dunia
+            // (seperti ramp miring, tanjakan, atau obstacle) agar objek meluncur mulus di atas permukaan tanpa alokasi GC.
             var heldColliders = held.Colliders;
             if (heldColliders != null && heldColliders.Length > 0)
             {
