@@ -47,3 +47,13 @@ PR #67 stays blocked, but the remaining work is narrow and has a concrete plan.
 - Proposed a way to stop the tuning loop: turn `slop_sederhana_1` into a gentle ramp of about 10° for the acceptance run, keep the 20° ramp as a stress test, and fix the done-definition (empty cart on flat ground, empty cart up the gentle ramp at the default strength, three cubes stable on flat ground, spill when tipped, clean Console). Change one parameter per trial and log each trial in the PR instead of in new reports.
 - Accepted friction 0.8/0.8 for the feet, since his data showed it was more stable.
 - Unity wasn't run; the geometry numbers come from the committed prefab. The 10° ramp idea and the strength range 5 to 6 are estimates.
+
+## Fourth review (same session)
+- RyoFPS pushed three more commits. Verified in the committed prefab and scene:
+  - wheel at y 0.1, z 0.914; legs at y 0.3 with scale y 0.5 and a track of ±0.65; handles raised to y 0.9; center of mass (0, 0.2, 0.45); mass 4; interpolation on
+  - `PushBar` removed, the stale `_pushStrength` 1.3 scene override removed, the asset renamed to `Wheelbarrow.prefab`, `slop_sederhana_1` removed
+  - friction 0.8/0.8 on the feet, as his data favored
+- The original 20° `Ramp` was turned into `Ramp_Gentle` (about 10°, scale (6, 0.3, 8), low end flush with the floor), instead of keeping the 20° ramp and making `slop_sederhana_1` a gentle one as I had suggested. I accepted that for AC #13 but required it to be documented.
+- Reported result: the empty cart reaches the ramp top at strength 5; the loaded cart doesn't, which he and I consider acceptable as a bonus.
+- Posted a fourth CHANGES_REQUESTED review with only reporting items: the PR description is stale (old center of mass, "pending" items, 33/33, no checked boxes), results on the final geometry for flat ground, three cubes, spill, and Console are missing, `Box_8` is still 1 kg (and moved again), and there are now 8 history reports. I said I'd approve without another code round once the description and results are in.
+- Unity wasn't run; geometry values come from the committed files, results from the author's report.
