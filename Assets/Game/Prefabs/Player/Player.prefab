@@ -106,6 +106,7 @@ GameObject:
   - component: {fileID: 7073097590044666596}
   - component: {fileID: 7415163370245125735}
   - component: {fileID: 1868023085897671051}
+  - component: {fileID: 9161093638709713885}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -228,6 +229,7 @@ MonoBehaviour:
   _cameraPivot: {fileID: 8468392425559774994}
   _isLocalPlayer: 0
   _moveSpeed: 5
+  _pushStrength: 5
   _lookSensitivity: 0.1
 --- !u!114 &1868023085897671051
 MonoBehaviour:
@@ -245,6 +247,22 @@ MonoBehaviour:
   _layerMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  _showDebugFeedback: 1
+--- !u!114 &9161093638709713885
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4296605569635645888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dcb2aba579927cb4b8de030e0c8c870b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.PlayerGrab
+  _holdPoint: {fileID: 0}
+  _maxGrabDistance: 3.5
+  _interactAction: {fileID: 11400000, guid: e498a79e02d1d024591697675bebe739, type: 2}
   _showDebugFeedback: 1
 --- !u!1 &7889076200833104320
 GameObject:

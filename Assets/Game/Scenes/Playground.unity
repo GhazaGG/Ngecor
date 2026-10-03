@@ -167,7 +167,6 @@ GameObject:
   - component: {fileID: 344580244}
   - component: {fileID: 344580243}
   - component: {fileID: 344580242}
-  - component: {fileID: 344580246}
   - component: {fileID: 344580247}
   m_Layer: 0
   m_Name: Box_1
@@ -296,20 +295,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 344580240}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!114 &344580246
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 344580240}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a0b956dff59f294490d2673afb0b1d0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.InteractableObject
-  _prompt: Box_1
-  _canInteract: 1
 --- !u!114 &344580247
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1740,11 +1725,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1176333449}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a0b956dff59f294490d2673afb0b1d0, type: 3}
+  m_Script: {fileID: 11500000, guid: 9e0dfcc53e6c3a24b91871e53d3a6fbc, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.InteractableObject
-  _prompt: Box_3
-  _canInteract: 1
+  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.GrabbableObject
+  _prompt: Grab
+  _canGrab: 1
 --- !u!1 &1237576662
 GameObject:
   m_ObjectHideFlags: 0
@@ -1944,32 +1929,8 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 4296605569635645888, guid: b6319a2c9002c86499618c43173904d8, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1309160378}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: b6319a2c9002c86499618c43173904d8, type: 3}
---- !u!1 &1309160377 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 4296605569635645888, guid: b6319a2c9002c86499618c43173904d8, type: 3}
-  m_PrefabInstance: {fileID: 1280121266}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &1309160378
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1309160377}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dcb2aba579927cb4b8de030e0c8c870b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.PlayerGrab
-  _holdPoint: {fileID: 0}
-  _maxGrabDistance: 3.5
-  _interactAction: {fileID: 0}
-  _showDebugFeedback: 1
 --- !u!1 &1351861876
 GameObject:
   m_ObjectHideFlags: 0

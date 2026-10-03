@@ -283,6 +283,10 @@ namespace Ngecor.Interaction
                     continue;                       // abaikan player sendiri dan objek yang dibawa
                 nearest = Mathf.Min(nearest, _holdHits[i].distance);
             }
+
+            var minDistance = Mathf.Min(0.35f, distance);
+            nearest = Mathf.Clamp(nearest, minDistance, distance);
+
             return origin + direction * nearest;
         }
 
