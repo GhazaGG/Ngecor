@@ -250,6 +250,41 @@ namespace Ngecor.Player.Tests
         }
 
         [UnityTest]
+        public IEnumerator ContactPushHasSimilarDisplacementAtDifferentFrameRates()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(size: 1.5f);
+            body.mass = 5f;
+            body.useGravity = false;
+            body.constraints = RigidbodyConstraints.FreezePositionY | RigidbodyConstraints.FreezeRotation;
+            var startingPosition = body.position;
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(30, 30);
+            var displacementAt30Fps = body.position.z - startingPosition.z;
+
+            Release(keyboard.wKey);
+            yield return null;
+            ResetPlayer();
+            body.position = startingPosition;
+            body.linearVelocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+            Physics.SyncTransforms();
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(120, 120);
+            var displacementAt120Fps = body.position.z - startingPosition.z;
+
+            Assert.That(displacementAt30Fps, Is.GreaterThan(0.1f));
+            Assert.That(displacementAt120Fps, Is.GreaterThan(0.1f));
+            var averageDisplacement = (displacementAt30Fps + displacementAt120Fps) * 0.5f;
+            Assert.That(Mathf.Abs(displacementAt30Fps - displacementAt120Fps) / averageDisplacement,
+                Is.LessThan(0.2f),
+                $"Push displacement differed at 30 FPS ({displacementAt30Fps:F3} m) and 120 FPS ({displacementAt120Fps:F3} m).");
+        }
+
+        [UnityTest]
         public IEnumerator ContactDoesNotMoveKinematicRigidbody()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
@@ -286,6 +321,7 @@ namespace Ngecor.Player.Tests
             CreatePlayer();
             var body = CreatePushTarget(size: 1f, position: TestOrigin + new Vector3(0f, 0.5f, 0f));
             _player.transform.position = TestOrigin + Vector3.up;
+            Physics.SyncTransforms();
             var startingPosition = body.position;
 
             Press(keyboard.wKey);
@@ -426,10 +462,10 @@ namespace Ngecor.Player.Tests
             return field.GetValue(target);
         }
 
-        private static IEnumerator WaitForFixedFrames(int frameCount)
+        private static IEnumerator WaitForFixedFrames(int frameCount, int framerate = 60)
         {
             var previousCaptureFramerate = Time.captureFramerate;
-            Time.captureFramerate = 60;
+            Time.captureFramerate = framerate;
             try
             {
                 for (var i = 0; i < frameCount; i++)

@@ -19,7 +19,7 @@ Tujuan dokumen ini adalah mencegah AI atau anggota tim mengisi celah desain deng
 | Lokasi project Unity | Root repo: `Assets/`, `Packages/`, `ProjectSettings/` sejajar dengan `docs/` | Keputusan pemilik proyek, 2026-10-01 |
 | Git ignore dan LFS | Pola di `.gitignore` dan `.gitattributes` (gambar, model, audio, video, font, `.dll`/`.so`, `.zip` lewat LFS; YAML Unity sebagai teks LF). Visible Meta Files dan Force Text aktif | SETUP-002/003 |
 | Platform, input, kamera | Windows PC, online co-op satu PC per pemain, keyboard + mouse, Input System package, first-person | Keputusan pemilik proyek, 2026-10-01 |
-| Networking | Netcode for GameObjects 2.x + Unity Transport, mode host | Keputusan pemilik proyek, 2026-10-01 |
+| Networking | Netcode for GameObjects 2.x (`com.unity.netcode.gameobjects: 2.13.3`) + Unity Transport (`com.unity.transport: 2.7.4`), mode host | Keputusan pemilik proyek, 2026-10-01; dipasang & dikunci NET-001 (#20) |
 | Struktur proyek nyata | Scene awal `Assets/Game/Scenes/Playground.unity` (satu-satunya scene di Build Settings); URP, volume profile, dan input actions di `Assets/Game/Settings/` | SETUP-001 |
 | Material bulk | Tipe + jumlah unit integer di container dunia; transfer hanya lewat tuang/sekop fisik; tumpahan menjadi pile; aduk manual dasar, mixer upgrade. Lihat [kontrak material bulk](#2026-10-02--kontrak-material-bulk) | Keputusan pemilik proyek, 2026-10-02 |
 
@@ -29,7 +29,6 @@ Baris di atas adalah arah produk, **bukan bukti fitur sudah ada atau semua rinci
 
 | Topik | Kapan harus jelas | Yang perlu dicatat |
 | --- | --- | --- |
-| Versi NGO dan Unity Transport | Saat install di NET-001 (#20) | Versi verified di Package Manager untuk 6000.3.25f1 |
 | Relay/Lobby | Saat tim perlu join lewat internet tanpa VPN | Layanan yang dipakai dan batas biaya |
 | Binding input minimum | PLAYER-001 (#7) | Tombol untuk move, look, interact, throw |
 
@@ -134,7 +133,7 @@ Owner/source: orang atau link keputusan
 ### 2026-10-01 — Networking dan batas authority
 
 **Decision:**
-- Package: Netcode for GameObjects (NGO) 2.x + Unity Transport, mode host (salah satu pemain menjadi host). Versi persis adalah versi verified di Package Manager untuk 6000.3.25f1, dipasang dan dicatat di sini oleh NET-001 (#20). Jangan memasangnya lebih awal.
+- Package: Netcode for GameObjects (NGO) 2.x (`com.unity.netcode.gameobjects: 2.13.3`) + Unity Transport (`com.unity.transport: 2.7.4`), mode host (salah satu pemain menjadi host). Versi verified di Package Manager untuk 6000.3.25f1, dipasang dan dikunci oleh NET-001 (#20).
 - Koneksi M3: LAN atau direct IP. Developer di lokasi berbeda boleh memakai VPN mesh (mis. Tailscale/ZeroTier) di luar repo. Relay/Lobby (Unity Gaming Services) ditunda sampai tim perlu join lewat internet tanpa VPN.
 - Authority:
   - **Host menentukan:** posisi dan state objek fisika, hasil grab/drop/throw, jumlah dan keadaan material, state proyek.
@@ -154,7 +153,7 @@ Owner/source: orang atau link keputusan
 
 **Decision:**
 - Material bulk (sand, cement, concrete) disimpan sebagai **tipe + jumlah unit integer** di container yang ada di dunia. Player tidak pernah menyimpan jumlah material.
-- **Container** punya kapasitas, satu tipe material, dan visual level isi. Bucket, shovel, pile, spot aduk, mixer, dan construction target memakai **satu komponen container yang sama** (dibuat pertama di MAT-002 #16). Spot aduk dan mixer adalah container multi-bahan.
+- **Container** punya kapasitas, satu tipe material, dan visual level isi. Bucket, shovel, pile, spot aduk, mixer, dan construction target memakai **satu komponen container yang sama** (dibuat di MAT-005 #62; MAT-002 #16 adalah pemakai pertamanya untuk sand pile dan bucket). Spot aduk dan mixer adalah container multi-bahan.
 - **Transfer hanya lewat aksi fisik:** tuang dari container yang dipegang atau scoop/dump dengan shovel, di dekat receiver. Unit berpindah dengan laju yang dapat dituning dan selalu kekal (keluar = masuk). Receiver menentukan tipe yang diterimanya.
 - **Tumpah:** container yang miring melewati sudut yang dapat dituning kehilangan isi per detik. Isi yang tumpah menjadi **pile** di tanah (container tanpa Rigidbody) dan digabung ke pile tipe sama dalam radius yang dapat dituning. Pile bisa disekop lagi.
 - **Sak semen** tetap benda diskret dan berubah menjadi N unit cement saat masuk spot aduk atau mixer.
@@ -168,7 +167,7 @@ Owner/source: orang atau link keputusan
 
 **Revisit:** Wheelbarrow sebagai container bulk (mengangkut concrete langsung di bak) setelah playtest logistik M2. Jumlah pile di scene jika Profiler menunjukkan beban.
 
-**Applies from:** MAT-002 (#16), MAT-004 (#54), MIX-003 (#55), BUILD-002 (#19), MIX-002 (#45), MIX-001 (#17).
+**Applies from:** MAT-005 (#62), MAT-002 (#16), MAT-004 (#54), MIX-003 (#55), BUILD-002 (#19), MIX-002 (#45), MIX-001 (#17).
 
 **Owner/source:** Keputusan pemilik proyek dalam sesi diskusi desain 2026-10-02.
 
