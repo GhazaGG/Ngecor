@@ -15,6 +15,7 @@ namespace Ngecor.Interaction.Tests
         private PlayerGrab _playerGrab;
         private GameObject _targetObject1;
         private GameObject _targetObject2;
+        private GameObject _obstacleObject;
         private InputActionAsset _actionAsset;
         private InputAction _interactAction;
         private InputActionReference _interactReference;
@@ -72,6 +73,8 @@ namespace Ngecor.Interaction.Tests
                 Object.DestroyImmediate(_targetObject1);
             if (_targetObject2 != null)
                 Object.DestroyImmediate(_targetObject2);
+            if (_obstacleObject != null)
+                Object.DestroyImmediate(_obstacleObject);
             if (_interactReference != null)
                 Object.DestroyImmediate(_interactReference);
             if (_actionAsset != null)
@@ -242,10 +245,17 @@ namespace Ngecor.Interaction.Tests
             Assert.That(rb.isKinematic, Is.True);
             Assert.That(rb.useGravity, Is.False);
 
-            _playerGrab.ExecuteDrop();
+            Assert.That(_playerGrab.ExecuteDrop(), Is.True);
 
             Assert.That(rb.isKinematic, Is.False);
             Assert.That(rb.useGravity, Is.True);
+            Assert.That(_playerGrab.IsCarrying, Is.False);
+            Assert.That(_playerGrab.CarriedObject, Is.Null);
+            Assert.That(grabbable.IsHeld, Is.False);
+            Assert.That(grabbable.CurrentHolder, Is.Null);
+            Assert.That(_targetObject1, Is.Not.Null);
+            Assert.That(Physics.GetIgnoreCollision(
+                _playerObject.GetComponent<Collider>(), grabbable.Colliders[0]), Is.False);
         }
 
         [UnityTest]
@@ -297,12 +307,46 @@ namespace Ngecor.Interaction.Tests
         }
 
         [UnityTest]
+        public IEnumerator Drop_WithEmptyHandsAndAfterRelease_IsSafeAndIdempotent()
+        {
+            Assert.That(_playerGrab.RequestDrop(), Is.False);
+            Assert.That(_playerGrab.ExecuteDrop(), Is.False);
+            Assert.That(_playerGrab.IsCarrying, Is.False);
+            Assert.That(_playerGrab.CarriedObject, Is.Null);
+
+            _targetObject1 = CreateGrabbable("TargetRepeatedDrop", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            var body = grabbable.Rigidbody;
+            var playerCollider = _playerObject.GetComponent<Collider>();
+            var targetCollider = grabbable.Colliders[0];
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(_playerGrab.ExecuteGrab(grabbable), Is.True);
+            Assert.That(_playerGrab.RequestDrop(), Is.True);
+            Assert.That(_playerGrab.RequestDrop(), Is.False);
+            Assert.That(_playerGrab.ExecuteDrop(), Is.False);
+            Assert.That(_playerGrab.IsCarrying, Is.False);
+            Assert.That(_playerGrab.CarriedObject, Is.Null);
+            Assert.That(grabbable.IsHeld, Is.False);
+            Assert.That(grabbable.CurrentHolder, Is.Null);
+            Assert.That(body.isKinematic, Is.False);
+            Assert.That(body.useGravity, Is.True);
+            Assert.That(Physics.GetIgnoreCollision(playerCollider, targetCollider), Is.False);
+            Assert.That(_targetObject1, Is.Not.Null);
+        }
+
+        [UnityTest]
         public IEnumerator CarriedObject_ObstructedByWall_DoesNotPenetrateAndReturnsWhenWallRemoved()
         {
-            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var wall = _obstacleObject;
             wall.name = "Wall";
             wall.transform.position = new Vector3(0f, 1.4f, 0.8f);
             wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+            wall.layer = 2;
+            _playerMovement.LocalCamera.transform.position += Vector3.forward * 0.3f;
 
             _targetObject1 = CreateGrabbable("TargetWall", new Vector3(0f, 1.4f, 2f)).gameObject;
             var grabbable = _targetObject1.GetComponent<GrabbableObject>();
@@ -310,23 +354,92 @@ namespace Ngecor.Interaction.Tests
             Physics.SyncTransforms();
             yield return null;
 
-            _playerGrab.ExecuteGrab(grabbable);
+            var overlapBuffer = new Collider[8];
+            var startOverlapCount = Physics.OverlapSphereNonAlloc(
+                _playerMovement.LocalCamera.transform.position, 0.5f, overlapBuffer,
+                ~0, QueryTriggerInteraction.Ignore);
+            Assert.That(startOverlapCount, Is.GreaterThan(0), "Test setup must overlap the obstruction probe origin.");
+
+            Assert.That(_playerGrab.ExecuteGrab(grabbable), Is.True, "Expected wall test object to be grabbed.");
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+            Assert.That(_playerMovement.LocalCamera, Is.Not.Null);
             yield return null;
 
-            var camera = _playerMovement.LocalCamera;
-            float distToCamera = Vector3.Distance(_targetObject1.transform.position, camera.transform.position);
-            float wallDistToCamera = Vector3.Distance(wall.transform.position, camera.transform.position);
+            var targetCollider = grabbable.Colliders[0];
+            var wallCollider = wall.GetComponent<Collider>();
+            bool penetratesWall = Physics.ComputePenetration(
+                targetCollider,
+                targetCollider.transform.position,
+                targetCollider.transform.rotation,
+                wallCollider,
+                wallCollider.transform.position,
+                wallCollider.transform.rotation,
+                out var penetrationDirection,
+                out var penetrationDistance);
 
-            Assert.That(distToCamera, Is.LessThan(wallDistToCamera), "Carried object penetrated wall!");
+            Assert.That(!penetratesWall || penetrationDistance < 0.001f, Is.True,
+                $"Carried object penetrated wall! overlap={penetratesWall}, direction={penetrationDirection}, depth={penetrationDistance}; object={targetCollider.bounds}, wall={wallCollider.bounds}");
 
             // Remove wall and verify return to hold point
             Object.DestroyImmediate(wall);
+            _obstacleObject = null;
             Physics.SyncTransforms();
             yield return null;
 
             var holdPoint = _playerGrab.HoldPoint;
             float distToHoldPoint = Vector3.Distance(_targetObject1.transform.position, holdPoint.position);
             Assert.That(distToHoldPoint, Is.LessThan(0.05f), "Carried object did not return to hold point after wall removal!");
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteDrop_NearObstacle_ReleasesObjectAndRestoresPhysics()
+        {
+            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wall.name = "DropWall";
+            _obstacleObject = wall;
+            wall.transform.position = new Vector3(0f, 1.4f, 0.8f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+            wall.layer = 2;
+
+            _targetObject1 = CreateGrabbable("TargetDropNearWall", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            var body = grabbable.Rigidbody;
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(_playerGrab.ExecuteGrab(grabbable), Is.True);
+            yield return null;
+
+            Assert.That(_playerGrab.CarriedObject, Is.SameAs(grabbable));
+            var wallCollider = wall.GetComponent<Collider>();
+            var carriedCollider = grabbable.Colliders[0];
+            bool overlapsWallAfterDrop = Physics.ComputePenetration(
+                carriedCollider,
+                carriedCollider.transform.position,
+                carriedCollider.transform.rotation,
+                wallCollider,
+                wallCollider.transform.position,
+                wallCollider.transform.rotation,
+                out _,
+                out var penetrationDepth);
+            Assert.That(!overlapsWallAfterDrop || penetrationDepth < 0.001f, Is.True,
+                $"Dropped object overlaps wall; penetration depth={penetrationDepth}.");
+            Assert.That(_playerGrab.ExecuteDrop(), Is.True);
+            Assert.That(_playerGrab.IsCarrying, Is.False);
+            Assert.That(_playerGrab.CarriedObject, Is.Null);
+            Assert.That(grabbable.IsHeld, Is.False);
+            Assert.That(grabbable.CurrentHolder, Is.Null);
+            Assert.That(body.isKinematic, Is.False);
+            Assert.That(body.useGravity, Is.True);
+            Assert.That(_targetObject1, Is.Not.Null);
+
+            Physics.SyncTransforms();
+            yield return new WaitForFixedUpdate();
+
+            Assert.That(_targetObject1, Is.Not.Null);
+            Assert.That(body.isKinematic, Is.False);
+            Assert.That(body.useGravity, Is.True);
         }
 
         [UnityTest]
