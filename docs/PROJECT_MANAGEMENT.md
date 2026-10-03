@@ -133,6 +133,7 @@ Gunakan prefix berikut:
 - `NET-xxx`
 - `GAME-xxx`
 - `LEVEL-xxx`
+- `TOOL-xxx`
 - `UI-xxx`
 - `BUG-xxx`
 
