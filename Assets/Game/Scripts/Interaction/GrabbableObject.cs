@@ -17,7 +17,7 @@ namespace Ngecor.Interaction
         public GameObject CurrentHolder { get; private set; }
 
         public Rigidbody Rigidbody => _rigidbody != null ? _rigidbody : (_rigidbody = GetComponent<Rigidbody>());
-        public Collider[] Colliders => _colliders != null ? _colliders : (_colliders = GetComponentsInChildren<Collider>());
+        public Collider[] Colliders => (_colliders != null && _colliders.Length > 0) ? _colliders : (_colliders = GetComponentsInChildren<Collider>());
 
         private void Awake()
         {

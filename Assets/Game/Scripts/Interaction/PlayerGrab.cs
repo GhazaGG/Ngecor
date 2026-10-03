@@ -242,6 +242,8 @@ namespace Ngecor.Interaction
                 var target = _carriedObject;
                 _carriedObject = null;
 
+                DepenetrateOnDrop(target);
+
                 SetPlayerCollisionIgnored(target, false);
 
                 var rb = target.Rigidbody;
@@ -250,17 +252,146 @@ namespace Ngecor.Interaction
                     rb.isKinematic = _savedWasKinematic;
                     rb.useGravity = _savedUseGravity;
 
-                    if (_characterController == null)
-                        _characterController = GetComponent<CharacterController>();
-
-                    if (_characterController != null)
+                    if (!rb.isKinematic)
                     {
-                        Vector3 ccVel = _characterController.velocity;
-                        rb.linearVelocity = new Vector3(ccVel.x, 0f, ccVel.z);
+                        if (_characterController == null)
+                            _characterController = GetComponent<CharacterController>();
+
+                        if (_characterController != null)
+                        {
+                            Vector3 ccVel = _characterController.velocity;
+                            rb.linearVelocity = new Vector3(ccVel.x, 0f, ccVel.z);
+                        }
                     }
                 }
 
                 target.OnRelease();
+            }
+        }
+
+        private void DepenetrateOnDrop(GrabbableObject target)
+        {
+            if (target == null)
+                return;
+
+            var targetColliders = target.Colliders;
+            if (targetColliders == null || targetColliders.Length == 0)
+                return;
+
+            if (_playerColliders == null || _playerColliders.Length == 0)
+                _playerColliders = GetComponentsInChildren<Collider>();
+
+            for (var iter = 0; iter < 4; iter++)
+            {
+                var resolved = false;
+
+                // 1. Periksa overlap obstacle dunia di sekitar target
+                var overlapCount = Physics.OverlapSphereNonAlloc(target.transform.position, _carriedRadius + 0.5f, _holdColliders,
+                    ~0, QueryTriggerInteraction.Ignore);
+
+                // 2. Lepaskan penetrasi terhadap player capsule
+                if (_playerColliders != null)
+                {
+                    foreach (var pCol in _playerColliders)
+                    {
+                        if (pCol == null || pCol.isTrigger) continue;
+                        foreach (var tCol in targetColliders)
+                        {
+                            if (tCol == null || tCol.isTrigger) continue;
+
+                            if (Physics.ComputePenetration(
+                                tCol, tCol.transform.position, tCol.transform.rotation,
+                                pCol, pCol.transform.position, pCol.transform.rotation,
+                                out Vector3 pDir, out float pDist))
+                            {
+                                if (pDist > 0.001f)
+                                {
+                                    // Cek apakah dorongan pDir akan menabrak obstacle
+                                    Vector3 candidatePos = target.transform.position + pDir * (pDist + 0.01f);
+                                    Collider blockingObstacle = null;
+                                    Vector3 obstacleDepenNormal = Vector3.zero;
+
+                                    for (var i = 0; i < overlapCount; i++)
+                                    {
+                                        var obsCol = _holdColliders[i];
+                                        if (obsCol == null || obsCol.isTrigger
+                                            || obsCol.transform.IsChildOf(transform)
+                                            || obsCol.transform.IsChildOf(target.transform))
+                                            continue;
+
+                                        Vector3 candidateColPos = candidatePos + (tCol.transform.position - target.transform.position);
+                                        if (Physics.ComputePenetration(
+                                            tCol, candidateColPos, tCol.transform.rotation,
+                                            obsCol, obsCol.transform.position, obsCol.transform.rotation,
+                                            out Vector3 oDir, out float oDist) && oDist > 0.001f)
+                                        {
+                                            blockingObstacle = obsCol;
+                                            obstacleDepenNormal = oDir;
+                                            break;
+                                        }
+                                    }
+
+                                    if (blockingObstacle != null)
+                                    {
+                                        // Terjepit antara player dan obstacle: geser menyamping di sepanjang permukaan obstacle
+                                        Vector3 sideways = Vector3.Cross(obstacleDepenNormal, Vector3.up);
+                                        if (sideways.sqrMagnitude < 0.01f)
+                                            sideways = transform.right;
+                                        else
+                                            sideways.Normalize();
+
+                                        Vector3 fromPlayer = target.transform.position - transform.position;
+                                        if (Vector3.Dot(fromPlayer, sideways) < 0f)
+                                            sideways = -sideways;
+
+                                        target.transform.position += sideways * (_carriedRadius + pDist + 0.02f);
+                                    }
+                                    else
+                                    {
+                                        target.transform.position = candidatePos;
+                                    }
+
+                                    Physics.SyncTransforms();
+                                    resolved = true;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Lepaskan penetrasi terhadap obstacle dunia (dinding/ramp) agar tidak menembus
+                overlapCount = Physics.OverlapSphereNonAlloc(target.transform.position, _carriedRadius + 0.5f, _holdColliders,
+                    ~0, QueryTriggerInteraction.Ignore);
+
+                for (var i = 0; i < overlapCount; i++)
+                {
+                    var obstacleCol = _holdColliders[i];
+                    if (obstacleCol == null || obstacleCol.isTrigger
+                        || obstacleCol.transform.IsChildOf(transform)
+                        || obstacleCol.transform.IsChildOf(target.transform))
+                        continue;
+
+                    foreach (var tCol in targetColliders)
+                    {
+                        if (tCol == null || tCol.isTrigger) continue;
+
+                        if (Physics.ComputePenetration(
+                            tCol, tCol.transform.position, tCol.transform.rotation,
+                            obstacleCol, obstacleCol.transform.position, obstacleCol.transform.rotation,
+                            out Vector3 depenDir, out float depenDist))
+                        {
+                            if (depenDist > 0.001f)
+                            {
+                                target.transform.position += depenDir * (depenDist + 0.002f);
+                                Physics.SyncTransforms();
+                                resolved = true;
+                            }
+                        }
+                    }
+                }
+
+                if (!resolved)
+                    break;
             }
         }
 
@@ -284,10 +415,12 @@ namespace Ngecor.Interaction
                     || collider.transform.IsChildOf(transform)
                     || collider.transform.IsChildOf(held.transform))
                     continue;                       // abaikan player sendiri dan objek yang dibawa
-                nearest = Mathf.Min(nearest, _holdHits[i].distance);
+
+                if (_holdHits[i].distance > 0.0001f)
+                    nearest = Mathf.Min(nearest, _holdHits[i].distance);
             }
 
-            var minDistance = Mathf.Min(camera.nearClipPlane + _carriedRadius + 0.05f, distance);
+            var minDistance = Mathf.Min(camera.nearClipPlane + 0.05f, distance);
             nearest = Mathf.Clamp(nearest, minDistance, distance);
 
             var targetPos = origin + direction * nearest;
@@ -299,6 +432,9 @@ namespace Ngecor.Interaction
             var heldColliders = held.Colliders;
             if (heldColliders != null && heldColliders.Length > 0)
             {
+                var heldRootPos = held.transform.position;
+                var invHeldRot = Quaternion.Inverse(held.transform.rotation);
+
                 for (var iter = 0; iter < 3; iter++)
                 {
                     var overlapCount = Physics.OverlapSphereNonAlloc(targetPos, _carriedRadius + 0.2f, _holdColliders,
@@ -318,8 +454,13 @@ namespace Ngecor.Interaction
                             if (heldCol == null || heldCol.isTrigger)
                                 continue;
 
+                            var relativeRot = invHeldRot * heldCol.transform.rotation;
+                            var relativePos = invHeldRot * (heldCol.transform.position - heldRootPos);
+                            var colPos = targetPos + targetRot * relativePos;
+                            var colRot = targetRot * relativeRot;
+
                             if (Physics.ComputePenetration(
-                                heldCol, targetPos, targetRot,
+                                heldCol, colPos, colRot,
                                 obstacleCol, obstacleCol.transform.position, obstacleCol.transform.rotation,
                                 out Vector3 depenDir, out float depenDist))
                             {
@@ -337,7 +478,9 @@ namespace Ngecor.Interaction
                 }
             }
 
-            // Pastikan objek tidak pernah berada di belakang kamera atau menembus near-clip plane
+            // Pastikan objek tidak pernah berada di belakang kamera atau menembus near-clip plane.
+            // Catatan: Klem forwardDist memprioritaskan keterlihatan pada viewport kamera di atas pemisahan dunia
+            // (trade-off yang disengaja agar objek tidak terpotong near-clip saat player menempel erat ke dinding vertikal).
             var toTarget = targetPos - origin;
             var forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
             if (forwardDist < minDistance)
