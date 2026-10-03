@@ -39,3 +39,11 @@ PR #67 stays blocked, but the remaining work is narrow and has a concrete plan.
 ## Unresolved issues or follow-up work
 - #14 and #46: a target-speed push (bounded force) and a mass convention.
 - Whether the owner formally confirmed deferring controlled descent to VEH-002 hasn't been recorded in the issues yet.
+
+## Third review (same session)
+- RyoFPS pushed `d401357`, which changed several things at once: wheel position, leg height and width, handle length, a new empty `PushBar` object, and the center of mass (z 0.45, now saved in the prefab). It added a seventh history report. He had also asked whether the local wheel position (z 1.422) or the reviewed one (z 0.914) should stay, and I answered with a PR comment: restore 0.914, because the wheel at 1.422 sticks about 0.55 m out in front of the tray, and the center of mass would otherwise have to sit near the tray front.
+- Computed from the prefab: leg bottoms went from +0.05 (17.5 cm above the wheel bottom at -0.125) to -0.455 (23 cm below the wheel bottom at -0.225). The cart now stands on its legs with the wheel lifted. That fits the reported wobble on the ramp, the sideways tipping, and the cargo spills.
+- Posted a third CHANGES_REQUESTED review. Must Fix: restore leg height (legs at least 0.15 m above the wheel bottom) and the wheel at z 0.914; remove or explain the empty `PushBar`, revert the stale `_pushStrength` 1.3 scene override, rename the asset file to `Wheelbarrow.prefab`, and resolve `slop_sederhana_1`.
+- Proposed a way to stop the tuning loop: turn `slop_sederhana_1` into a gentle ramp of about 10° for the acceptance run, keep the 20° ramp as a stress test, and fix the done-definition (empty cart on flat ground, empty cart up the gentle ramp at the default strength, three cubes stable on flat ground, spill when tipped, clean Console). Change one parameter per trial and log each trial in the PR instead of in new reports.
+- Accepted friction 0.8/0.8 for the feet, since his data showed it was more stable.
+- Unity wasn't run; the geometry numbers come from the committed prefab. The 10° ramp idea and the strength range 5 to 6 are estimates.
