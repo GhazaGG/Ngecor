@@ -52,6 +52,12 @@ namespace Ngecor.Interaction
             _playerColliders = GetComponentsInChildren<Collider>();
         }
 
+        private void OnEnable()
+        {
+            if (_interactAction != null && _interactAction.action != null)
+                _interactAction.action.Enable();
+        }
+
         private void Update()
         {
             if (_playerMovement == null)
@@ -63,6 +69,9 @@ namespace Ngecor.Interaction
 
             if (_interactAction == null || _interactAction.action == null)
                 return;
+
+            if (!_interactAction.action.enabled)
+                _interactAction.action.Enable();
 
             if (_interactAction.action.WasPressedThisFrame())
             {
