@@ -657,5 +657,58 @@ namespace Ngecor.Interaction.Tests
             Assert.That(rb.linearVelocity.z, Is.GreaterThan(5f), "Should have forward throw velocity");
             Assert.That(rb.linearVelocity.x, Is.GreaterThan(0.1f), "Should inherit player horizontal X velocity");
         }
+
+        [UnityTest]
+        public IEnumerator ThrowInput_WhenCursorAlreadyLocked_TriggersThrow()
+        {
+            var mouse = InputSystem.AddDevice<Mouse>();
+            _targetObject1 = CreateGrabbable("TargetThrowInput", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var target = _targetObject1.GetComponent<GrabbableObject>();
+
+            _playerGrab.ExecuteGrab(target);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+            Assert.That(_playerMovement.IsCursorLocked, Is.True);
+
+            Press(mouse.leftButton);
+            yield return null;
+
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Pressing LMB with cursor locked should throw carried object");
+        }
+
+        [UnityTest]
+        public IEnumerator ThrowInput_WhenClickReLocksCursor_DoesNotTriggerThrow()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
+            _targetObject1 = CreateGrabbable("TargetRelockGuard", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var target = _targetObject1.GetComponent<GrabbableObject>();
+
+            _playerGrab.ExecuteGrab(target);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            // Unlock cursor via Escape
+            Press(keyboard.escapeKey);
+            yield return null;
+            Assert.That(_playerMovement.IsCursorLocked, Is.False);
+
+            Release(keyboard.escapeKey);
+            yield return null;
+
+            // Click LMB to re-lock cursor: MUST NOT THROW
+            Press(mouse.leftButton);
+            yield return null;
+
+            Assert.That(_playerMovement.IsCursorLocked, Is.True);
+            Assert.That(_playerGrab.IsCarrying, Is.True, "LMB click that relocked cursor must NOT throw carried object");
+
+            Release(mouse.leftButton);
+            yield return null;
+
+            // Next click when cursor was ALREADY locked: SHOULD THROW
+            Press(mouse.leftButton);
+            yield return null;
+
+            Assert.That(_playerGrab.IsCarrying, Is.False, "LMB click after cursor was locked should throw carried object");
+        }
     }
 }

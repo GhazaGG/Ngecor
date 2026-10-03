@@ -13,6 +13,7 @@ namespace Ngecor.Interaction
         [SerializeField] private Transform _holdPoint;
         [SerializeField, Min(0.1f)] private float _maxGrabDistance = 3.5f;
         [SerializeField] private InputActionReference _interactAction;
+        [SerializeField] private InputActionReference _throwAction;
         [SerializeField, Min(0f)] private float _throwForce = 10f;
         [SerializeField] private bool _showDebugFeedback = true;
 
@@ -46,6 +47,12 @@ namespace Ngecor.Interaction
             set => _interactAction = value;
         }
 
+        public InputActionReference ThrowAction
+        {
+            get => _throwAction;
+            set => _throwAction = value;
+        }
+
         public float ThrowForce
         {
             get => _throwForce;
@@ -64,6 +71,9 @@ namespace Ngecor.Interaction
         {
             if (_interactAction != null && _interactAction.action != null)
                 _interactAction.action.Enable();
+
+            if (_throwAction != null && _throwAction.action != null)
+                _throwAction.action.Enable();
         }
 
         private void Update()
@@ -75,18 +85,43 @@ namespace Ngecor.Interaction
             if (_playerMovement == null || _playerMovement.LocalCamera == null)
                 return;
 
-            if (_interactAction == null || _interactAction.action == null)
-                return;
-
-            if (!_interactAction.action.enabled)
-                _interactAction.action.Enable();
-
-            if (_interactAction.action.WasPressedThisFrame())
+            // Handle Interact Input (Grab / Drop)
+            if (_interactAction != null && _interactAction.action != null)
             {
-                if (IsCarrying)
-                    RequestDrop();
-                else
-                    RequestGrab();
+                if (!_interactAction.action.enabled)
+                    _interactAction.action.Enable();
+
+                if (_interactAction.action.WasPressedThisFrame())
+                {
+                    if (IsCarrying)
+                        RequestDrop();
+                    else
+                        RequestGrab();
+                }
+            }
+
+            // Handle Throw Input (Attack action / LMB)
+            // Guard: throw is only accepted if the cursor was ALREADY locked prior to this frame's click.
+            // A click that re-locks the cursor must NOT trigger a throw.
+            bool canProcessThrow = _playerMovement.IsCursorLocked && !_playerMovement.CursorRelockedThisFrame;
+            if (IsCarrying && canProcessThrow)
+            {
+                bool throwPressed = false;
+                if (_throwAction != null && _throwAction.action != null)
+                {
+                    if (!_throwAction.action.enabled)
+                        _throwAction.action.Enable();
+                    throwPressed = _throwAction.action.WasPressedThisFrame();
+                }
+                else if (Mouse.current != null)
+                {
+                    throwPressed = Mouse.current.leftButton.wasPressedThisFrame;
+                }
+
+                if (throwPressed)
+                {
+                    RequestThrow();
+                }
             }
         }
 
