@@ -167,7 +167,7 @@ GameObject:
   - component: {fileID: 344580244}
   - component: {fileID: 344580243}
   - component: {fileID: 344580242}
-  - component: {fileID: 344580246}
+  - component: {fileID: 344580247}
   m_Layer: 0
   m_Name: Box_1
   m_TagString: Untagged
@@ -295,7 +295,7 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 344580240}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!114 &344580246
+--- !u!114 &344580247
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -304,11 +304,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 344580240}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a0b956dff59f294490d2673afb0b1d0, type: 3}
+  m_Script: {fileID: 11500000, guid: 9e0dfcc53e6c3a24b91871e53d3a6fbc, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.InteractableObject
-  _prompt: Box_1
-  _canInteract: 1
+  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.GrabbableObject
+  _prompt: Grab
+  _canGrab: 1
 --- !u!1 &363028050
 GameObject:
   m_ObjectHideFlags: 0
@@ -1725,11 +1725,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1176333449}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a0b956dff59f294490d2673afb0b1d0, type: 3}
+  m_Script: {fileID: 11500000, guid: 9e0dfcc53e6c3a24b91871e53d3a6fbc, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.InteractableObject
-  _prompt: Box_3
-  _canInteract: 1
+  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.GrabbableObject
+  _prompt: Grab
+  _canGrab: 1
 --- !u!1 &1237576662
 GameObject:
   m_ObjectHideFlags: 0
