@@ -57,3 +57,8 @@ PR #67 stays blocked, but the remaining work is narrow and has a concrete plan.
 - Reported result: the empty cart reaches the ramp top at strength 5; the loaded cart doesn't, which he and I consider acceptable as a bonus.
 - Posted a fourth CHANGES_REQUESTED review with only reporting items: the PR description is stale (old center of mass, "pending" items, 33/33, no checked boxes), results on the final geometry for flat ground, three cubes, spill, and Console are missing, `Box_8` is still 1 kg (and moved again), and there are now 8 history reports. I said I'd approve without another code round once the description and results are in.
 - Unity wasn't run; geometry values come from the committed files, results from the author's report.
+
+## Approval (same session)
+- RyoFPS updated the PR description (final geometry, the `Ramp_Gentle` change, `Box_8`, per-case results, `Closes #13`) and pushed `9d7e030`, which only sets `Box_8` to 30 kg. `git merge-tree` showed no conflicts with `main`, which now contains INT-002.
+- Approved PR #67; GitHub shows APPROVED/CLEAN.
+- Non-blocking notes: the PlayMode suite wasn't rerun after the last sync, the gameplay results are developer-reported so the owner should play the wheelbarrow once before closing #13, and #14/#46 should handle load-dependent pushing.
