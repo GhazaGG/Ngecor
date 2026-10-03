@@ -1,12 +1,13 @@
 using System.Collections;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.TestTools;
 using Ngecor.Player;
 
 namespace Ngecor.Interaction.Tests
 {
-    public class PlayerGrabTests
+    public class PlayerGrabTests : InputTestFixture
     {
         private GameObject _playerObject;
         private PlayerMovement _playerMovement;
@@ -14,10 +15,23 @@ namespace Ngecor.Interaction.Tests
         private PlayerGrab _playerGrab;
         private GameObject _targetObject1;
         private GameObject _targetObject2;
+        private InputActionAsset _actionAsset;
+        private InputAction _interactAction;
+        private InputActionReference _interactReference;
 
         [SetUp]
-        public void SetUp()
+        public override void Setup()
         {
+            base.Setup();
+
+            _actionAsset = ScriptableObject.CreateInstance<InputActionAsset>();
+            var playerMap = new InputActionMap("Player");
+            _actionAsset.AddActionMap(playerMap);
+            _interactAction = playerMap.AddAction("Interact", InputActionType.Button);
+            _interactAction.AddBinding("<Keyboard>/e");
+            playerMap.Enable();
+            _interactReference = InputActionReference.Create(_interactAction);
+
             _playerObject = new GameObject("Player");
             _playerObject.transform.position = Vector3.zero;
             _playerObject.transform.rotation = Quaternion.identity;
@@ -40,13 +54,14 @@ namespace Ngecor.Interaction.Tests
             _detector = _playerObject.AddComponent<InteractionDetector>();
             _detector.MaxDistance = 3f;
             _playerGrab = _playerObject.AddComponent<PlayerGrab>();
+            _playerGrab.InteractAction = _interactReference;
 
             _playerObject.SetActive(true);
             _playerMovement.SetLocalPlayer(true);
         }
 
         [TearDown]
-        public void TearDown()
+        public override void TearDown()
         {
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
@@ -57,6 +72,12 @@ namespace Ngecor.Interaction.Tests
                 Object.DestroyImmediate(_targetObject1);
             if (_targetObject2 != null)
                 Object.DestroyImmediate(_targetObject2);
+            if (_interactReference != null)
+                Object.DestroyImmediate(_interactReference);
+            if (_actionAsset != null)
+                Object.DestroyImmediate(_actionAsset);
+
+            base.TearDown();
         }
 
         private GrabbableObject CreateGrabbable(string name, Vector3 position)
@@ -274,6 +295,96 @@ namespace Ngecor.Interaction.Tests
             Assert.That(_playerGrab.IsCarrying, Is.True);
             Assert.That(_playerGrab.CarriedObject, Is.EqualTo(grabbable2));
         }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_ObstructedByWall_DoesNotPenetrateAndReturnsWhenWallRemoved()
+        {
+            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wall.name = "Wall";
+            wall.transform.position = new Vector3(0f, 1.4f, 0.8f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+
+            _targetObject1 = CreateGrabbable("TargetWall", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            var camera = _playerMovement.LocalCamera;
+            float distToCamera = Vector3.Distance(_targetObject1.transform.position, camera.transform.position);
+            float wallDistToCamera = Vector3.Distance(wall.transform.position, camera.transform.position);
+
+            Assert.That(distToCamera, Is.LessThan(wallDistToCamera), "Carried object penetrated wall!");
+
+            // Remove wall and verify return to hold point
+            Object.DestroyImmediate(wall);
+            Physics.SyncTransforms();
+            yield return null;
+
+            var holdPoint = _playerGrab.HoldPoint;
+            float distToHoldPoint = Vector3.Distance(_targetObject1.transform.position, holdPoint.position);
+            Assert.That(distToHoldPoint, Is.LessThan(0.05f), "Carried object did not return to hold point after wall removal!");
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteDrop_WhilePlayerMoving_InheritsHorizontalVelocity()
+        {
+            _targetObject1 = CreateGrabbable("TargetMovingDrop", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            var controller = _playerObject.GetComponent<CharacterController>();
+            controller.Move(new Vector3(5f, 0f, 0f) * Time.deltaTime);
+
+            _playerGrab.ExecuteDrop();
+
+            var rb = grabbable.Rigidbody;
+            Assert.That(rb.linearVelocity.x, Is.GreaterThan(0.1f), $"Expected horizontal velocity > 0, got {rb.linearVelocity}");
+            Assert.That(rb.linearVelocity.y, Is.EqualTo(0f), "Vertical velocity should be zero (horizontal only)");
+        }
+
+        [UnityTest]
+        public IEnumerator InteractInput_TriggersGrabAndDrop()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            _targetObject1 = CreateGrabbable("TargetInput", new Vector3(0f, 1.4f, 2f)).gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+
+            Press(keyboard.eKey);
+            yield return null;
+
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Pressing interact did not grab object.");
+
+            Release(keyboard.eKey);
+            yield return null;
+
+            Press(keyboard.eKey);
+            yield return null;
+
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Pressing interact did not drop object.");
+        }
+
+        [UnityTest]
+        public IEnumerator Update_WithoutInteractAction_DoesNotProcessInput()
+        {
+            _playerGrab.InteractAction = null;
+            _targetObject1 = CreateGrabbable("TargetNoInput", new Vector3(0f, 1.4f, 2f)).gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+
+            yield return null;
+            Assert.That(_playerGrab.IsCarrying, Is.False);
+        }
     }
 }
-

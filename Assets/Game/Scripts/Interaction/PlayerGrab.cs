@@ -5,6 +5,7 @@ using Ngecor.Player;
 namespace Ngecor.Interaction
 {
     [DisallowMultipleComponent]
+    [RequireComponent(typeof(CharacterController))]
     [RequireComponent(typeof(PlayerMovement))]
     [RequireComponent(typeof(InteractionDetector))]
     public class PlayerGrab : MonoBehaviour
@@ -14,6 +15,10 @@ namespace Ngecor.Interaction
         [SerializeField] private InputActionReference _interactAction;
         [SerializeField] private bool _showDebugFeedback = true;
 
+        private readonly RaycastHit[] _holdHits = new RaycastHit[8];
+        private float _carriedRadius = 0.25f;
+
+        private CharacterController _characterController;
         private PlayerMovement _playerMovement;
         private InteractionDetector _detector;
         private GrabbableObject _carriedObject;
@@ -33,10 +38,17 @@ namespace Ngecor.Interaction
             set => _maxGrabDistance = Mathf.Max(0.1f, value);
         }
 
+        public InputActionReference InteractAction
+        {
+            get => _interactAction;
+            set => _interactAction = value;
+        }
+
         private void Awake()
         {
             _playerMovement = GetComponent<PlayerMovement>();
             _detector = GetComponent<InteractionDetector>();
+            _characterController = GetComponent<CharacterController>();
             _playerColliders = GetComponentsInChildren<Collider>();
         }
 
@@ -49,17 +61,10 @@ namespace Ngecor.Interaction
             if (_playerMovement == null || _playerMovement.LocalCamera == null)
                 return;
 
-            bool interactTriggered = false;
-            if (_interactAction != null && _interactAction.action != null)
-            {
-                interactTriggered = _interactAction.action.WasPressedThisFrame();
-            }
-            else if (Keyboard.current != null)
-            {
-                interactTriggered = Keyboard.current.eKey.wasPressedThisFrame;
-            }
+            if (_interactAction == null || _interactAction.action == null)
+                return;
 
-            if (interactTriggered)
+            if (_interactAction.action.WasPressedThisFrame())
             {
                 if (IsCarrying)
                     RequestDrop();
@@ -84,7 +89,7 @@ namespace Ngecor.Interaction
             {
                 string objectName = _carriedObject != null ? _carriedObject.gameObject.name : "Object";
                 GUI.Box(new Rect(Screen.width / 2f - 120f, Screen.height / 2f + 75f, 240f, 30f),
-                    $"[Carrying]: {objectName} (Press E to drop)");
+                    $"[Carrying]: {objectName} (Drop)");
             }
         }
 
@@ -97,17 +102,19 @@ namespace Ngecor.Interaction
                 return;
             }
 
+            if (_playerMovement == null)
+                _playerMovement = GetComponent<PlayerMovement>();
+
+            var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+            if (camera == null)
+                return;
+
             var holdPoint = HoldPoint;
             if (holdPoint != null && _carriedObject != null)
             {
-                var rb = _carriedObject.Rigidbody;
-                if (rb != null)
-                {
-                    rb.position = holdPoint.position;
-                    rb.rotation = holdPoint.rotation;
-                }
-                _carriedObject.transform.position = holdPoint.position;
-                _carriedObject.transform.rotation = holdPoint.rotation;
+                Vector3 targetPos = ResolveHoldPosition(holdPoint, camera, _carriedObject);
+                Quaternion targetRot = holdPoint.rotation;
+                _carriedObject.transform.SetPositionAndRotation(targetPos, targetRot);
             }
         }
 
@@ -175,6 +182,23 @@ namespace Ngecor.Interaction
         {
             _carriedObject = target;
 
+            var colliders = target.Colliders;
+            if (colliders != null && colliders.Length > 0)
+            {
+                Bounds b = colliders[0].bounds;
+                for (int i = 1; i < colliders.Length; i++)
+                {
+                    if (colliders[i] != null)
+                        b.Encapsulate(colliders[i].bounds);
+                }
+                Vector3 extents = b.extents;
+                _carriedRadius = Mathf.Clamp(Mathf.Max(extents.x, extents.y, extents.z), 0.05f, 0.5f);
+            }
+            else
+            {
+                _carriedRadius = 0.25f;
+            }
+
             var rb = target.Rigidbody;
             if (rb != null)
             {
@@ -191,13 +215,13 @@ namespace Ngecor.Interaction
             var holdPoint = HoldPoint;
             if (holdPoint != null)
             {
-                if (rb != null)
-                {
-                    rb.position = holdPoint.position;
-                    rb.rotation = holdPoint.rotation;
-                }
-                target.transform.position = holdPoint.position;
-                target.transform.rotation = holdPoint.rotation;
+                if (_playerMovement == null)
+                    _playerMovement = GetComponent<PlayerMovement>();
+                var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+
+                Vector3 targetPos = camera != null ? ResolveHoldPosition(holdPoint, camera, target) : holdPoint.position;
+                Quaternion targetRot = holdPoint.rotation;
+                target.transform.SetPositionAndRotation(targetPos, targetRot);
             }
         }
 
@@ -215,10 +239,42 @@ namespace Ngecor.Interaction
                 {
                     rb.isKinematic = _savedWasKinematic;
                     rb.useGravity = _savedUseGravity;
+
+                    if (_characterController == null)
+                        _characterController = GetComponent<CharacterController>();
+
+                    if (_characterController != null)
+                    {
+                        Vector3 ccVel = _characterController.velocity;
+                        rb.linearVelocity = new Vector3(ccVel.x, 0f, ccVel.z);
+                    }
                 }
 
                 target.OnRelease();
             }
+        }
+
+        private Vector3 ResolveHoldPosition(Transform holdPoint, Camera camera, GrabbableObject held)
+        {
+            var origin = camera.transform.position;
+            var toHold = holdPoint.position - origin;
+            var distance = toHold.magnitude;
+            if (distance < 0.01f)
+                return holdPoint.position;
+
+            var direction = toHold / distance;
+            var count = Physics.SphereCastNonAlloc(origin, _carriedRadius, direction, _holdHits,
+                distance, ~0, QueryTriggerInteraction.Ignore);
+
+            var nearest = distance;
+            for (var i = 0; i < count; i++)
+            {
+                var collider = _holdHits[i].collider;
+                if (collider == null || collider.transform.IsChildOf(transform) || collider.transform.IsChildOf(held.transform))
+                    continue;                       // abaikan player sendiri dan objek yang dibawa
+                nearest = Mathf.Min(nearest, _holdHits[i].distance);
+            }
+            return origin + direction * nearest;
         }
 
         private void SetPlayerCollisionIgnored(GrabbableObject target, bool ignore)
