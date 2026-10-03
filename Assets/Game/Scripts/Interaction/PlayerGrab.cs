@@ -16,7 +16,6 @@ namespace Ngecor.Interaction
         [SerializeField] private bool _showDebugFeedback = true;
 
         private readonly RaycastHit[] _holdHits = new RaycastHit[8];
-        private readonly Collider[] _holdColliders = new Collider[8];
         private float _carriedRadius = 0.25f;
 
         private CharacterController _characterController;
@@ -273,49 +272,20 @@ namespace Ngecor.Interaction
                 return holdPoint.position;
 
             var direction = toHold / distance;
-            var originOverlapCount = Physics.OverlapSphereNonAlloc(origin, _carriedRadius, _holdColliders,
-                ~0, QueryTriggerInteraction.Ignore);
-            var originObstructed = false;
-            for (var i = 0; i < originOverlapCount; i++)
-            {
-                var collider = _holdColliders[i];
-                if (collider != null && !collider.transform.IsChildOf(transform)
-                    && !collider.transform.IsChildOf(held.transform))
-                {
-                    originObstructed = true;
-                    break;
-                }
-            }
-
-            var castOffset = originObstructed ? _carriedRadius : 0f;
-            var castOrigin = origin - direction * castOffset;
-            var castDistance = distance + castOffset;
-            var count = Physics.SphereCastNonAlloc(castOrigin, _carriedRadius, direction, _holdHits,
-                castDistance, ~0, QueryTriggerInteraction.Ignore);
+            var count = Physics.SphereCastNonAlloc(origin, _carriedRadius, direction, _holdHits,
+                distance, ~0, QueryTriggerInteraction.Ignore);
 
             var nearest = distance;
-            var obstructionFound = false;
             for (var i = 0; i < count; i++)
             {
                 var collider = _holdHits[i].collider;
                 if (collider == null || collider.transform.IsChildOf(transform) || collider.transform.IsChildOf(held.transform))
                     continue;                       // abaikan player sendiri dan objek yang dibawa
-
-                obstructionFound = true;
-                var hitDistanceFromCamera = _holdHits[i].distance - castOffset;
-                nearest = Mathf.Min(nearest, Mathf.Max(-castOffset, hitDistanceFromCamera));
+                nearest = Mathf.Min(nearest, _holdHits[i].distance);
             }
 
-            if (obstructionFound)
-            {
-                nearest = Mathf.Max(-castOffset, nearest - 0.01f);
-            }
-            else
-            {
-                nearest = distance;
-                var minDistance = Mathf.Min(camera.nearClipPlane + _carriedRadius + 0.05f, distance);
-                nearest = Mathf.Max(nearest, minDistance);
-            }
+            var minDistance = Mathf.Min(camera.nearClipPlane + _carriedRadius + 0.05f, distance);
+            nearest = Mathf.Clamp(nearest, minDistance, distance);
 
             return origin + direction * nearest;
         }

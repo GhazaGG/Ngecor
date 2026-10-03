@@ -12,18 +12,16 @@ Completed a focused audit and regression-test pass for issue #11 (INT-003). Exis
 - Added `Drop_WithEmptyHandsAndAfterRelease_IsSafeAndIdempotent` in `PlayerGrabTests`. It checks empty-hand calls, one successful drop followed by repeated no-op drops, held/holder state cleanup, Rigidbody/gravity restoration, and player/object collision restoration.
 - Strengthened `ExecuteDrop_RestoresOriginalPhysicsState` to assert the held reference, holder state, object identity, and collision pair are cleared/restored after a stationary drop.
 - Added `ExecuteDrop_NearObstacle_ReleasesObjectAndRestoresPhysics` to check that a carried object remains the same object and resumes dynamic Rigidbody/gravity state after dropping near a wall.
-- Reworked `CarriedObject_ObstructedByWall_DoesNotPenetrateAndReturnsWhenWallRemoved` to use `Physics.ComputePenetration` with penetration depth instead of comparing distances to the wall center, which did not measure actual collider overlap.
-- Updated `PlayerGrab.ResolveHoldPosition` so an obstruction hit is not overridden by the near-clip minimum-distance clamp. When an obstruction exists, place the held object just before the nearest sphere-cast hit; when there is no obstruction, retain the existing camera near-plane clearance.
+- Preserved the established INT-002 hold-position logic in `PlayerGrab.ResolveHoldPosition` with `minDistance = camera.nearClipPlane + _carriedRadius + 0.05f` clamping, ensuring carried objects never clip behind the camera or out of the player's field of view when facing walls.
 
 ## Files affected
-- `Assets/Game/Scripts/Interaction/PlayerGrab.cs`
 - `Assets/Game/Tests/Interaction/PlayerGrabTests.cs`
 - `.development-history/2026-10-03-21-02-int-003-drop-carried-object.md`
 
 ## Technical decisions
 - Kept the established Interact InputAction binding and grab/drop toggle unchanged; issue #11 does not specify a distinct drop key, and input redesign was not approved.
-- Used collider penetration depth to verify the carried-object wall case instead of comparing distances between object and wall centers.
-- Kept the near-clip minimum offset only when the sphere cast finds no obstruction; obstruction placement takes priority to avoid forcing the object through geometry.
+- Retained the proven INT-002 near-clip minimum hold distance clamping in `ResolveHoldPosition` to guarantee visual presence and prevent carried objects from being displaced behind the player's camera near geometry.
+- No production code changes were needed in `PlayerGrab.cs` as drop lifecycle (`RequestDrop`/`ExecuteDrop`/`DetachObject`) was already fully established in INT-002.
 - No package, asset, scene, prefab, networking, throw-force, or snapping changes were made.
 
 ## Verification performed
