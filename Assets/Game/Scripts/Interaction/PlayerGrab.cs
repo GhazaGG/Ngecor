@@ -16,6 +16,7 @@ namespace Ngecor.Interaction
         [SerializeField] private bool _showDebugFeedback = true;
 
         private readonly RaycastHit[] _holdHits = new RaycastHit[8];
+        private readonly Collider[] _holdColliders = new Collider[16];
         private float _carriedRadius = 0.25f;
 
         private CharacterController _characterController;
@@ -279,7 +280,9 @@ namespace Ngecor.Interaction
             for (var i = 0; i < count; i++)
             {
                 var collider = _holdHits[i].collider;
-                if (collider == null || collider.transform.IsChildOf(transform) || collider.transform.IsChildOf(held.transform))
+                if (collider == null || collider.isTrigger
+                    || collider.transform.IsChildOf(transform)
+                    || collider.transform.IsChildOf(held.transform))
                     continue;                       // abaikan player sendiri dan objek yang dibawa
                 nearest = Mathf.Min(nearest, _holdHits[i].distance);
             }
@@ -287,7 +290,60 @@ namespace Ngecor.Interaction
             var minDistance = Mathf.Min(camera.nearClipPlane + _carriedRadius + 0.05f, distance);
             nearest = Mathf.Clamp(nearest, minDistance, distance);
 
-            return origin + direction * nearest;
+            var targetPos = origin + direction * nearest;
+            var targetRot = holdPoint.rotation;
+
+            // 3D Depenetration against overlapping world geometry (ramps, slopes, obstacles)
+            var heldColliders = held.Colliders;
+            if (heldColliders != null && heldColliders.Length > 0)
+            {
+                for (var iter = 0; iter < 3; iter++)
+                {
+                    var overlapCount = Physics.OverlapSphereNonAlloc(targetPos, _carriedRadius + 0.2f, _holdColliders,
+                        ~0, QueryTriggerInteraction.Ignore);
+
+                    var resolvedAny = false;
+                    for (var i = 0; i < overlapCount; i++)
+                    {
+                        var obstacleCol = _holdColliders[i];
+                        if (obstacleCol == null || obstacleCol.isTrigger
+                            || obstacleCol.transform.IsChildOf(transform)
+                            || obstacleCol.transform.IsChildOf(held.transform))
+                            continue;
+
+                        foreach (var heldCol in heldColliders)
+                        {
+                            if (heldCol == null || heldCol.isTrigger)
+                                continue;
+
+                            if (Physics.ComputePenetration(
+                                heldCol, targetPos, targetRot,
+                                obstacleCol, obstacleCol.transform.position, obstacleCol.transform.rotation,
+                                out Vector3 depenDir, out float depenDist))
+                            {
+                                if (depenDist > 0.001f)
+                                {
+                                    targetPos += depenDir * (depenDist + 0.005f);
+                                    resolvedAny = true;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!resolvedAny)
+                        break;
+                }
+            }
+
+            // Pastikan objek tidak pernah berada di belakang kamera atau menembus near-clip plane
+            var toTarget = targetPos - origin;
+            var forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
+            if (forwardDist < minDistance)
+            {
+                targetPos += camera.transform.forward * (minDistance - forwardDist);
+            }
+
+            return targetPos;
         }
 
         private void SetPlayerCollisionIgnored(GrabbableObject target, bool ignore)

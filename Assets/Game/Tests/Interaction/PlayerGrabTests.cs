@@ -370,6 +370,39 @@ namespace Ngecor.Interaction.Tests
         }
 
         [UnityTest]
+        public IEnumerator CarriedObject_ObstructedByRamp_DoesNotPenetrateRamp()
+        {
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var ramp = _obstacleObject;
+            ramp.name = "TestRamp";
+            ramp.transform.position = new Vector3(0f, 1.15f, 1.2f);
+            ramp.transform.rotation = Quaternion.Euler(20f, 0f, 0f);
+            ramp.transform.localScale = new Vector3(4f, 0.3f, 4f);
+
+            _targetObject1 = CreateGrabbable("TargetRampBox", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            var boxCollider = _targetObject1.GetComponent<Collider>();
+            var rampCollider = ramp.GetComponent<Collider>();
+
+            bool penetrating = Physics.ComputePenetration(
+                boxCollider, _targetObject1.transform.position, _targetObject1.transform.rotation,
+                rampCollider, ramp.transform.position, ramp.transform.rotation,
+                out Vector3 depenDir, out float depenDist);
+
+            Assert.That(penetrating && depenDist > 0.01f, Is.False,
+                $"Carried object penetrated ramp by {depenDist}m!");
+
+            var camera = _playerMovement.LocalCamera;
+            float forwardDist = Vector3.Dot(_targetObject1.transform.position - camera.transform.position, camera.transform.forward);
+            Assert.That(forwardDist, Is.GreaterThan(camera.nearClipPlane),
+                "Carried object fell behind camera or near-clip plane!");
+        }
+
+        [UnityTest]
         public IEnumerator ExecuteDrop_NearObstacle_ReleasesObjectAndRestoresPhysics()
         {
             var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
