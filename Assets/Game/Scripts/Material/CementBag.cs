@@ -40,16 +40,16 @@ namespace Ngecor.Material
         private Mesh _mesh;
         private Vector3[] _baseVertices;
         private Vector3[] _vertices;
-        private Vector2 _noiseSeed;
+        private float[] _noise;
 
         private void Awake()
         {
             _body = GetComponent<Rigidbody>();
             _body.maxDepenetrationVelocity = _maxDepenetrationSpeed;
             var box = GetComponent<BoxCollider>();
-            // Rigidbody.centerOfMass memakai posisi + rotasi transform, tanpa scale.
+            // Rigidbody.centerOfMass memakai posisi + rotasi transform, tanpa scale
+            // (terukur di Unity 6000.3: offset (1,0,0) pada scale 0.5 tetap 1 m di world).
             _halfExtents = Vector3.Scale(box.size, transform.lossyScale) * 0.5f;
-            _noiseSeed = new Vector2(Random.value * 100f, Random.value * 100f);
             BuildMesh(box);
             _fill = LocalDown();
             Apply();
@@ -73,7 +73,7 @@ namespace Ngecor.Material
 
         private void OnCollisionEnter(Collision collision)
         {
-            if (collision.relativeVelocity.magnitude < _impactSpeed)
+            if (collision.contactCount == 0 || collision.relativeVelocity.magnitude < _impactSpeed)
                 return;
 
             // Isi bubuk berubah bentuk dan menelan energi: putaran teredam, tidak ada lompatan balik.
@@ -132,6 +132,15 @@ namespace Ngecor.Material
                 }
             }
 
+            // Noise permukaan tetap per bag; dihitung sekali, bukan di setiap DeformMesh.
+            var seed = new Vector2(Random.value * 100f, Random.value * 100f);
+            _noise = new float[_baseVertices.Length];
+            for (int i = 0; i < _noise.Length; i++)
+            {
+                var p = _baseVertices[i];
+                _noise[i] = Mathf.PerlinNoise(seed.x + p.x * 4f + p.y * 3f, seed.y + p.z * 4f + p.y * 5f) - 0.5f;
+            }
+
             _mesh = new Mesh { name = "CementBag (runtime)" };
             _mesh.MarkDynamic();
             _mesh.vertices = _baseVertices;
@@ -153,7 +162,7 @@ namespace Ngecor.Material
                 var p = _baseVertices[i];
                 float u = Mathf.Clamp(p.x * 2f, -1f, 1f);
                 float w = Mathf.Clamp(p.z * 2f, -1f, 1f);
-                float noise = Mathf.PerlinNoise(_noiseSeed.x + p.x * 4f + p.y * 3f, _noiseSeed.y + p.z * 4f + p.y * 5f) - 0.5f;
+                float noise = _noise[i];
 
                 float thickness = Mathf.Lerp(_endThickness, 1f, 1f - Mathf.Abs(u * u * u))
                                   * Mathf.Lerp(_sideThickness, 1f, 1f - w * w * w * w);
