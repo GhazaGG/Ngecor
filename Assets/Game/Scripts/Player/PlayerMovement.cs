@@ -6,12 +6,16 @@ namespace Ngecor.Player
     [RequireComponent(typeof(CharacterController))]
     public sealed class PlayerMovement : MonoBehaviour
     {
+        private const float PushResponseTime = 0.2f;
+        private const float FullSpeedPushMass = 5f;
+        private const float StepProbeGroundClearance = 0.02f;
+
         [SerializeField] private InputActionReference _moveAction;
         [SerializeField] private InputActionReference _lookAction;
         [SerializeField] private Transform _cameraPivot;
         [SerializeField] private bool _isLocalPlayer;
         [SerializeField, Min(0f)] private float _moveSpeed = 5f;
-        [SerializeField, Min(0f)] private float _pushStrength = 5f;
+        [SerializeField, Min(0f)] private float _maxPushForce = 300f;
         [SerializeField, Min(0f)] private float _lookSensitivity = 0.1f;
 
         private CharacterController _characterController;
@@ -19,6 +23,8 @@ namespace Ngecor.Player
         private bool _cursorLocked;
         private float _verticalVelocity;
         private float _cameraPitch;
+        private float _remainingPushImpulse;
+        private readonly RaycastHit[] _stepProbeHits = new RaycastHit[8];
 
         private void Awake()
         {
@@ -77,29 +83,114 @@ namespace Ngecor.Player
             var direction = transform.right * input.x + transform.forward * input.y;
             direction.y = 0f;
 
+            var deltaTime = Time.deltaTime;
             if (_characterController.isGrounded && _verticalVelocity < 0f)
                 _verticalVelocity = -2f;
             else
-                _verticalVelocity += Physics.gravity.y * Time.deltaTime;
+                _verticalVelocity += Physics.gravity.y * deltaTime;
 
             var movement = direction * _moveSpeed + Vector3.up * _verticalVelocity;
-            _characterController.Move(movement * Time.deltaTime);
+            _remainingPushImpulse = _maxPushForce * deltaTime;
+
+            var stepOffset = _characterController.stepOffset;
+            var horizontalDistance = direction.magnitude * _moveSpeed * deltaTime;
+            if (ShouldBlockStepOverDynamicBody(direction, horizontalDistance))
+                _characterController.stepOffset = 0f;
+
+            _characterController.Move(movement * deltaTime);
+            _characterController.stepOffset = stepOffset;
+        }
+
+        private bool ShouldBlockStepOverDynamicBody(Vector3 movementDirection, float movementDistance)
+        {
+            if (!_characterController.isGrounded || _characterController.stepOffset <= 0f ||
+                movementDirection.sqrMagnitude <= Mathf.Epsilon || movementDistance <= 0f)
+                return false;
+
+            var scale = transform.lossyScale;
+            var radius = _characterController.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+            var height = _characterController.height * Mathf.Abs(scale.y);
+            var capsuleCenter = transform.TransformPoint(_characterController.center) +
+                                Vector3.up * StepProbeGroundClearance;
+            var verticalSegment = Mathf.Max(0f, height * 0.5f - radius);
+            var lowerSphereCenter = capsuleCenter - Vector3.up * verticalSegment;
+            var upperSphereCenter = capsuleCenter + Vector3.up * verticalSegment;
+            var hitCount = Physics.CapsuleCastNonAlloc(
+                lowerSphereCenter,
+                upperSphereCenter,
+                radius,
+                movementDirection.normalized,
+                _stepProbeHits,
+                movementDistance + _characterController.skinWidth,
+                Physics.DefaultRaycastLayers,
+                QueryTriggerInteraction.Ignore);
+            var maximumStepHeight = _characterController.bounds.min.y + _characterController.stepOffset;
+
+            for (var i = 0; i < hitCount; i++)
+            {
+                var collider = _stepProbeHits[i].collider;
+                if (collider == null || collider.transform == transform || collider.transform.IsChildOf(transform))
+                    continue;
+
+                var body = _stepProbeHits[i].rigidbody;
+                if (body != null && !body.isKinematic && collider.bounds.max.y <= maximumStepHeight)
+                    return true;
+            }
+
+            return false;
         }
 
         private void OnControllerColliderHit(ControllerColliderHit hit)
         {
             var body = hit.rigidbody;
-            if (body == null || body.isKinematic || hit.moveDirection.y < -0.3f)
+            if (body == null || body.isKinematic || hit.moveDirection.y < -0.3f || _remainingPushImpulse <= 0f)
                 return;
 
             var pushDirection = Vector3.ProjectOnPlane(hit.moveDirection, Vector3.up);
             if (pushDirection.sqrMagnitude <= Mathf.Epsilon)
                 return;
 
-            body.AddForceAtPosition(
-                pushDirection.normalized * _moveSpeed * _pushStrength * Time.deltaTime,
-                hit.point,
-                ForceMode.Impulse);
+            pushDirection.Normalize();
+            var deltaTime = Time.deltaTime;
+            var currentSpeed = Vector3.Dot(body.GetPointVelocity(hit.point), pushDirection);
+            var pushForce = CalculatePushForce(
+                body.mass,
+                CalculatePushTargetSpeed(body.mass, _moveSpeed),
+                currentSpeed,
+                deltaTime,
+                PushResponseTime,
+                _maxPushForce);
+            var impulse = Mathf.Min(pushForce * deltaTime, _remainingPushImpulse);
+            if (impulse <= 0f)
+                return;
+
+            body.AddForceAtPosition(pushDirection * impulse, hit.point, ForceMode.Impulse);
+            _remainingPushImpulse -= impulse;
+        }
+
+        public static float CalculatePushTargetSpeed(float mass, float moveSpeed)
+        {
+            if (mass <= 0f || moveSpeed <= 0f)
+                return 0f;
+
+            var speedScale = Mathf.Min(1f, Mathf.Sqrt(FullSpeedPushMass / mass));
+            return moveSpeed * speedScale;
+        }
+
+        public static float CalculatePushForce(
+            float mass,
+            float targetSpeed,
+            float currentSpeed,
+            float deltaTime,
+            float responseTime,
+            float maxForce)
+        {
+            if (mass <= 0f || targetSpeed <= currentSpeed || deltaTime <= 0f || responseTime <= 0f || maxForce <= 0f)
+                return 0f;
+
+            var response = 1f - Mathf.Exp(-deltaTime / responseTime);
+            var requiredForce = mass * (targetSpeed - currentSpeed) * response / deltaTime;
+            return Mathf.Min(requiredForce, maxForce);
         }
 
         private void HandleCursorInput()

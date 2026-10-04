@@ -246,7 +246,119 @@ namespace Ngecor.Player.Tests
             yield return WaitForFixedFrames(30);
 
             Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.1f));
-            Assert.That(body.linearVelocity.magnitude, Is.LessThan(3f));
+            Assert.That(body.linearVelocity.magnitude, Is.LessThanOrEqualTo(5.05f));
+        }
+
+        [UnityTest]
+        public IEnumerator ContactPushMoves25KgBodyMoreSlowlyThanPlayer()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(size: 1.5f);
+            body.mass = 25f;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+            var startingPosition = body.position;
+            var maxSpeed = 0f;
+
+            Press(keyboard.wKey);
+            var previousCaptureFramerate = Time.captureFramerate;
+            Time.captureFramerate = 60;
+            try
+            {
+                for (var i = 0; i < 120; i++)
+                {
+                    yield return null;
+                    maxSpeed = Mathf.Max(maxSpeed, body.linearVelocity.z);
+                }
+            }
+            finally
+            {
+                Time.captureFramerate = previousCaptureFramerate;
+            }
+
+            Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.1f),
+                "A 25 kg body should move under a sustained player push.");
+            Assert.That(maxSpeed, Is.LessThanOrEqualTo(2.3f),
+                "A 25 kg body should stay well below the player's 5 m/s walking speed.");
+        }
+
+        [UnityTest]
+        public IEnumerator PlayerPushesLowDynamicRigidbodyInsteadOfSteppingOntoIt()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(size: 0.18f);
+            body.mass = 25f;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+            Physics.SyncTransforms();
+            var startingPosition = body.position;
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(30);
+
+            Assert.That(_player.transform.position.y, Is.LessThan(0.1f),
+                "The player should stay on the ground instead of stepping onto the low sack.");
+            Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.05f),
+                "The low sack should be pushed forward when it blocks the player's path.");
+        }
+
+        [UnityTest]
+        public IEnumerator ContactPushDoesNotAccelerate1KgBodyPastWalkingSpeed()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(size: 1.5f);
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+            var startingPosition = body.position;
+            var maxSpeed = 0f;
+
+            Press(keyboard.wKey);
+            var previousCaptureFramerate = Time.captureFramerate;
+            Time.captureFramerate = 60;
+            try
+            {
+                for (var i = 0; i < 120; i++)
+                {
+                    yield return null;
+                    maxSpeed = Mathf.Max(maxSpeed, body.linearVelocity.z);
+                }
+            }
+            finally
+            {
+                Time.captureFramerate = previousCaptureFramerate;
+            }
+
+            Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.1f),
+                "A light body should move under a sustained player push.");
+            Assert.That(maxSpeed, Is.LessThanOrEqualTo(5.05f),
+                "A light body must not outrun the player's 5 m/s walking speed.");
+        }
+
+        [Test]
+        public void PushForceScalesWithMassAndRespectsTheHumanForceLimit()
+        {
+            var lightForce = InvokePushForceCalculator(1f, 5f, 0f, 0.02f, 0.2f, 300f);
+            var heavyForce = InvokePushForceCalculator(25f, 5f, 0f, 0.02f, 0.2f, 300f);
+            var nearlyAtTargetForce = InvokePushForceCalculator(1f, 5f, 4.9f, 0.02f, 0.2f, 300f);
+            var atTargetForce = InvokePushForceCalculator(1f, 5f, 5f, 0.02f, 0.2f, 300f);
+
+            Assert.That(lightForce, Is.EqualTo(23.79f).Within(0.02f));
+            Assert.That(heavyForce, Is.EqualTo(300f));
+            Assert.That(nearlyAtTargetForce, Is.LessThan(lightForce));
+            Assert.That(atTargetForce, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void PushTargetSpeedDecreasesWithMassAndNeverExceedsWalkingSpeed()
+        {
+            var oneKgTarget = InvokePushTargetSpeedCalculator(1f, 5f);
+            var fiveKgTarget = InvokePushTargetSpeedCalculator(5f, 5f);
+            var twentyFiveKgTarget = InvokePushTargetSpeedCalculator(25f, 5f);
+
+            Assert.That(oneKgTarget, Is.EqualTo(5f));
+            Assert.That(fiveKgTarget, Is.EqualTo(5f));
+            Assert.That(twentyFiveKgTarget, Is.EqualTo(5f * Mathf.Sqrt(0.2f)).Within(0.001f));
+            Assert.That(twentyFiveKgTarget, Is.LessThan(fiveKgTarget));
         }
 
         [UnityTest]
@@ -460,6 +572,31 @@ namespace Ngecor.Player.Tests
             var field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"Missing {type.Name} field '{name}'.");
             return field.GetValue(target);
+        }
+
+        private static float InvokePushForceCalculator(
+            float mass,
+            float targetSpeed,
+            float currentSpeed,
+            float deltaTime,
+            float responseTime,
+            float maxForce)
+        {
+            var method = typeof(Ngecor.Player.PlayerMovement).GetMethod(
+                "CalculatePushForce", BindingFlags.Public | BindingFlags.Static);
+            Assert.That(method, Is.Not.Null, "The pure push force calculation is not available.");
+            return (float)method.Invoke(null, new object[]
+            {
+                mass, targetSpeed, currentSpeed, deltaTime, responseTime, maxForce
+            });
+        }
+
+        private static float InvokePushTargetSpeedCalculator(float mass, float moveSpeed)
+        {
+            var method = typeof(Ngecor.Player.PlayerMovement).GetMethod(
+                "CalculatePushTargetSpeed", BindingFlags.Public | BindingFlags.Static);
+            Assert.That(method, Is.Not.Null, "The pure push target speed calculation is not available.");
+            return (float)method.Invoke(null, new object[] { mass, moveSpeed });
         }
 
         private static IEnumerator WaitForFixedFrames(int frameCount, int framerate = 60)
