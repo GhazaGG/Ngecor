@@ -1,7 +1,11 @@
 {
   "name": "Ngecor.Material",
   "rootNamespace": "Ngecor.Material",
-  "references": [],
+  "references": [
+    "Ngecor.Interaction",
+    "Ngecor.Player",
+    "Unity.InputSystem"
+  ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,
