@@ -16,6 +16,7 @@ namespace Ngecor.Player.Tests
         private GameObject _wall;
         private GameObject _ramp;
         private GameObject _pushTarget;
+        private GameObject _stepProbeIgnoredColliders;
         private Transform _cameraPivot;
         private Camera _camera;
         private InputActionAsset _actionAsset;
@@ -43,6 +44,9 @@ namespace Ngecor.Player.Tests
 
             if (_pushTarget != null)
                 UnityEngine.Object.DestroyImmediate(_pushTarget);
+
+            if (_stepProbeIgnoredColliders != null)
+                UnityEngine.Object.DestroyImmediate(_stepProbeIgnoredColliders);
 
             if (_moveReference != null)
                 UnityEngine.Object.DestroyImmediate(_moveReference);
@@ -352,6 +356,52 @@ namespace Ngecor.Player.Tests
             Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
                 Vector3.forward, 1f), Is.False,
                 "The step probe should skip a low dynamic collider excluded from the player's collisions.");
+        }
+
+        [UnityTest]
+        public IEnumerator StepProbeRetriesWhenIgnoredCollidersFillHitBuffer()
+        {
+            const int ignoredColliderCount = 12;
+            CreatePlayer();
+            CreatePushTarget(size: 0.18f);
+            var controller = _player.GetComponent<CharacterController>();
+            _stepProbeIgnoredColliders = new GameObject("StepProbeIgnoredColliders");
+            Collider firstIgnoredCollider = null;
+
+            for (var i = 0; i < ignoredColliderCount; i++)
+            {
+                var ignoredObject = new GameObject($"StepProbeIgnored{i}");
+                ignoredObject.transform.SetParent(_stepProbeIgnoredColliders.transform);
+                ignoredObject.transform.position = TestOrigin + new Vector3(
+                    ((i % 3) - 1) * 0.15f,
+                    0.1f + (i / 3) * 0.1f,
+                    0.65f);
+                var collider = ignoredObject.AddComponent<BoxCollider>();
+                collider.size = Vector3.one * 0.08f;
+                Physics.IgnoreCollision(controller, collider, true);
+
+                if (i == 0)
+                    firstIgnoredCollider = collider;
+            }
+
+            Physics.SyncTransforms();
+            yield return WaitForFixedFrames(1);
+
+            Assert.That(Physics.GetIgnoreCollision(controller, firstIgnoredCollider), Is.True);
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
+                Vector3.forward, 1f), Is.True,
+                "The probe should retry a saturated query so a valid dynamic blocker is not hidden by ignored colliders.");
+
+            var cachedHits = (RaycastHit[])GetPrivateField(typeof(Ngecor.Player.PlayerMovement),
+                movement, "_stepProbeHits");
+            Assert.That(cachedHits.Length, Is.GreaterThan(8),
+                "The cached result buffer should grow only after the original capacity is exhausted.");
+            Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
+                Vector3.forward, 1f), Is.True);
+            Assert.That(GetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_stepProbeHits"),
+                Is.SameAs(cachedHits),
+                "The grown result buffer should be reused once it has enough capacity.");
         }
 
         [UnityTest]

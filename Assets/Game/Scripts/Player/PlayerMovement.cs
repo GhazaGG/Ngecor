@@ -26,7 +26,7 @@ namespace Ngecor.Player
         private float _cameraPitch;
         private float _remainingPushImpulse;
         private readonly HashSet<Rigidbody> _pushedBodies = new HashSet<Rigidbody>();
-        private readonly RaycastHit[] _stepProbeHits = new RaycastHit[8];
+        private RaycastHit[] _stepProbeHits = new RaycastHit[8];
 
         private void Awake()
         {
@@ -118,15 +118,24 @@ namespace Ngecor.Player
             var verticalSegment = Mathf.Max(0f, height * 0.5f - radius);
             var lowerSphereCenter = capsuleCenter - Vector3.up * verticalSegment;
             var upperSphereCenter = capsuleCenter + Vector3.up * verticalSegment;
-            var hitCount = Physics.CapsuleCastNonAlloc(
-                lowerSphereCenter,
-                upperSphereCenter,
-                radius,
-                movementDirection.normalized,
-                _stepProbeHits,
-                movementDistance + _characterController.skinWidth,
-                Physics.AllLayers,
-                QueryTriggerInteraction.Ignore);
+            int hitCount;
+            while (true)
+            {
+                hitCount = Physics.CapsuleCastNonAlloc(
+                    lowerSphereCenter,
+                    upperSphereCenter,
+                    radius,
+                    movementDirection.normalized,
+                    _stepProbeHits,
+                    movementDistance + _characterController.skinWidth,
+                    Physics.AllLayers,
+                    QueryTriggerInteraction.Ignore);
+                if (hitCount < _stepProbeHits.Length)
+                    break;
+
+                System.Array.Resize(ref _stepProbeHits, _stepProbeHits.Length * 2);
+            }
+
             var maximumStepHeight = _characterController.bounds.min.y + _characterController.stepOffset;
 
             for (var i = 0; i < hitCount; i++)
