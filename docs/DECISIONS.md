@@ -215,6 +215,23 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Keputusan Team Lead (didelegasikan oleh pemilik proyek), 2026-10-03.
 
+### 2026-10-04 — Tali masuk MVP sebagai penambat
+
+**Decision:**
+- Tali (rope) termasuk peralatan awal vertical slice Rumah Pak Ujang, dikerjakan di TOOL-001 (#81).
+- Bentuk MVP adalah **penambat**: tali mengikat dua titik ikat (dua benda fisika, atau satu benda dan satu pos tetap) dan membatasi jarak maksimum keduanya. Saat longgar tidak memberi gaya. Digambar sebagai garis, bukan simulasi tali berantai.
+- Mengikat dan melepas memakai tombol Interact yang sudah ada, tanpa binding baru.
+- Katrol, mengangkat beban dengan tali, memutus tali, jaring muatan, menyelamatkan player, dan menarik crane **tidak** masuk MVP.
+- Prioritas P2 di M5: tali tidak wajib untuk menyelesaikan satu contract dan tidak memblokir LEVEL-001. Core loop didahulukan.
+
+**Reason:** Tali adalah alat improvisasi di konsep game dan disebut sebagai peralatan awal slice. Penambat jarak maksimum memenuhi fungsi paling berguna (menahan pickup atau gerobak yang menggelinding, menarik benda) dengan satu joint per tali, jauh lebih murah dan lebih stabil daripada tali berantai di PhysX. Alat ini membawa risiko baru yang sesuai prinsip inti: benda yang diikat saling menarik, sehingga pickup yang mundur bisa menyeret gerobak atau merobohkan scaffolding, dan semuanya bisa diperbaiki dengan melepas ikatan.
+
+**Revisit:** Setelah playtest M5. Katrol untuk logistik vertikal adalah kandidat berikutnya jika tali terbukti menyenangkan. Jika joint dengan rasio massa besar (pickup dan sak) terus tidak stabil, pertimbangkan batas massa pada titik ikat.
+
+**Applies from:** TOOL-001 (#81).
+
+**Owner/source:** Keputusan pemilik proyek, 2026-10-04 ("masuk MVP"). Lingkup MVP ditentukan Team Lead.
+
 ## Anggaran performa
 
 Angka di bawah adalah titik awal. Ubah lewat PR setelah ada data Profiler, jangan diubah karena satu fitur sulit memenuhinya.
