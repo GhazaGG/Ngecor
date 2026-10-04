@@ -23,6 +23,7 @@ namespace Ngecor.Construction
         private Quaternion _restRotation;
         private float _wobbleTime;
         private bool _wobbling;
+        private bool _impactWobble;
         private bool _impactWarning;
         private bool _broken;
 
@@ -47,8 +48,11 @@ namespace Ngecor.Construction
             }
 
             bool overloaded = payloadMass >= _wobbleThreshold;
-            if (!_wobbling && (overloaded || _impactWarning))
-                StartWobble();
+            bool impactWarning = _impactWarning;
+            _impactWarning = false;
+
+            if (!_wobbling && (overloaded || impactWarning))
+                StartWobble(impactWarning && !overloaded);
 
             if (!_wobbling)
                 return;
@@ -57,13 +61,13 @@ namespace Ngecor.Construction
             float sway = Mathf.Sin(_wobbleTime * 9f) * _wobbleTorque;
             _body.AddTorque(transform.forward * sway + transform.right * sway * 0.35f, ForceMode.Acceleration);
 
-            if (_wobbleTime >= _wobbleDuration)
+            if (overloaded && _wobbleTime >= _wobbleDuration)
             {
                 BreakIntoParts();
                 return;
             }
 
-            if (!overloaded && !_impactWarning)
+            if (!overloaded && (!_impactWobble || _wobbleTime >= _wobbleDuration))
                 CalmDown();
         }
 
@@ -145,9 +149,10 @@ namespace Ngecor.Construction
                 _impactWarning = true;
         }
 
-        private void StartWobble()
+        private void StartWobble(bool impactWobble)
         {
             _wobbling = true;
+            _impactWobble = impactWobble;
             _wobbleTime = 0f;
             _body.isKinematic = false;
             _body.WakeUp();
@@ -156,6 +161,7 @@ namespace Ngecor.Construction
         private void CalmDown()
         {
             _wobbling = false;
+            _impactWobble = false;
             _wobbleTime = 0f;
             _body.isKinematic = true;
             _body.position = _restPosition;
