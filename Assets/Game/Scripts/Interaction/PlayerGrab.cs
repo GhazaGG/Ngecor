@@ -13,6 +13,8 @@ namespace Ngecor.Interaction
         [SerializeField] private Transform _holdPoint;
         [SerializeField, Min(0.1f)] private float _maxGrabDistance = 3.5f;
         [SerializeField] private InputActionReference _interactAction;
+        [SerializeField] private InputActionReference _throwAction;
+        [SerializeField, Min(0f)] private float _throwForce = 10f;
         [SerializeField] private bool _showDebugFeedback = true;
 
         private readonly RaycastHit[] _holdHits = new RaycastHit[8];
@@ -45,18 +47,24 @@ namespace Ngecor.Interaction
             set => _interactAction = value;
         }
 
+        public InputActionReference ThrowAction
+        {
+            get => _throwAction;
+            set => _throwAction = value;
+        }
+
+        public float ThrowForce
+        {
+            get => _throwForce;
+            set => _throwForce = Mathf.Max(0f, value);
+        }
+
         private void Awake()
         {
             _playerMovement = GetComponent<PlayerMovement>();
             _detector = GetComponent<InteractionDetector>();
             _characterController = GetComponent<CharacterController>();
             _playerColliders = GetComponentsInChildren<Collider>();
-        }
-
-        private void OnEnable()
-        {
-            if (_interactAction != null && _interactAction.action != null)
-                _interactAction.action.Enable();
         }
 
         private void Update()
@@ -68,18 +76,25 @@ namespace Ngecor.Interaction
             if (_playerMovement == null || _playerMovement.LocalCamera == null)
                 return;
 
-            if (_interactAction == null || _interactAction.action == null)
-                return;
-
-            if (!_interactAction.action.enabled)
-                _interactAction.action.Enable();
-
-            if (_interactAction.action.WasPressedThisFrame())
+            // Handle Interact Input (Grab / Drop)
+            if (_interactAction != null && _interactAction.action != null && _interactAction.action.WasPressedThisFrame())
             {
                 if (IsCarrying)
                     RequestDrop();
                 else
                     RequestGrab();
+            }
+
+            // Handle Throw Input (Attack action / LMB)
+            // Guard: throw is only accepted if the cursor was ALREADY locked prior to this frame's click.
+            // A click that re-locks the cursor must NOT trigger a throw.
+            bool canProcessThrow = _playerMovement.IsCursorLocked && !_playerMovement.CursorRelockedThisFrame;
+            if (IsCarrying && canProcessThrow)
+            {
+                if (_throwAction != null && _throwAction.action != null && _throwAction.action.WasPressedThisFrame())
+                {
+                    RequestThrow();
+                }
             }
         }
 
@@ -185,6 +200,38 @@ namespace Ngecor.Interaction
                 return false;
 
             DetachObject();
+            return true;
+        }
+
+        public bool RequestThrow()
+        {
+            // Offline M1: Direct local execution.
+            // NET-002/003: Will route throw intent to host.
+            return ExecuteThrow();
+        }
+
+        public bool ExecuteThrow()
+        {
+            if (!IsCarrying)
+                return false;
+
+            var target = _carriedObject;
+            var rb = target.Rigidbody;
+
+            if (_playerMovement == null)
+                _playerMovement = GetComponent<PlayerMovement>();
+
+            var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+            Vector3 throwDir = camera != null ? camera.transform.forward : transform.forward;
+
+            DetachObject();
+
+            if (rb != null && !rb.isKinematic)
+            {
+                Vector3 impulseVelocity = throwDir * (_throwForce / Mathf.Max(0.0001f, rb.mass));
+                rb.linearVelocity += impulseVelocity;
+            }
+
             return true;
         }
 

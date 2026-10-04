@@ -19,6 +19,8 @@ namespace Ngecor.Interaction.Tests
         private InputActionAsset _actionAsset;
         private InputAction _interactAction;
         private InputActionReference _interactReference;
+        private InputAction _throwAction;
+        private InputActionReference _throwReference;
 
         [SetUp]
         public override void Setup()
@@ -30,8 +32,11 @@ namespace Ngecor.Interaction.Tests
             _actionAsset.AddActionMap(playerMap);
             _interactAction = playerMap.AddAction("Interact", InputActionType.Button);
             _interactAction.AddBinding("<Keyboard>/e");
+            _throwAction = playerMap.AddAction("Attack", InputActionType.Button);
+            _throwAction.AddBinding("<Mouse>/leftButton");
             playerMap.Enable();
             _interactReference = InputActionReference.Create(_interactAction);
+            _throwReference = InputActionReference.Create(_throwAction);
 
             _playerObject = new GameObject("Player");
             _playerObject.transform.position = Vector3.zero;
@@ -56,6 +61,7 @@ namespace Ngecor.Interaction.Tests
             _detector.MaxDistance = 3f;
             _playerGrab = _playerObject.AddComponent<PlayerGrab>();
             _playerGrab.InteractAction = _interactReference;
+            _playerGrab.ThrowAction = _throwReference;
 
             _playerObject.SetActive(true);
             _playerMovement.SetLocalPlayer(true);
@@ -77,6 +83,8 @@ namespace Ngecor.Interaction.Tests
                 Object.DestroyImmediate(_obstacleObject);
             if (_interactReference != null)
                 Object.DestroyImmediate(_interactReference);
+            if (_throwReference != null)
+                Object.DestroyImmediate(_throwReference);
             if (_actionAsset != null)
                 Object.DestroyImmediate(_actionAsset);
 
@@ -578,6 +586,155 @@ namespace Ngecor.Interaction.Tests
 
             yield return null;
             Assert.That(_playerGrab.IsCarrying, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteThrow_WithCarriedObject_AppliesImpulseInLookDirection()
+        {
+            _targetObject1 = CreateGrabbable("LightProp", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var target = _targetObject1.GetComponent<GrabbableObject>();
+            target.Rigidbody.mass = 1f;
+
+            _playerGrab.ExecuteGrab(target);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            bool thrown = _playerGrab.ExecuteThrow();
+            Assert.That(thrown, Is.True);
+            Assert.That(_playerGrab.IsCarrying, Is.False);
+            Assert.That(target.Rigidbody.isKinematic, Is.False);
+            Assert.That(target.Rigidbody.useGravity, Is.True);
+
+            // Default throw force is 10N·s, so 1kg object should achieve forward velocity ~10m/s
+            Assert.That(target.Rigidbody.linearVelocity.z, Is.GreaterThan(5f));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteThrow_HeavyObjectVsLightObject_HeavyObjectTravelsFarShorter()
+        {
+            _targetObject1 = CreateGrabbable("Light1kg", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var light = _targetObject1.GetComponent<GrabbableObject>();
+            light.Rigidbody.mass = 1f;
+
+            _playerGrab.ExecuteGrab(light);
+            _playerGrab.ExecuteThrow();
+            float lightSpeed = light.Rigidbody.linearVelocity.magnitude;
+
+            _targetObject2 = CreateGrabbable("Heavy25kg", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var heavy = _targetObject2.GetComponent<GrabbableObject>();
+            heavy.Rigidbody.mass = 25f;
+
+            _playerGrab.ExecuteGrab(heavy);
+            _playerGrab.ExecuteThrow();
+            float heavySpeed = heavy.Rigidbody.linearVelocity.magnitude;
+
+            // 25kg cement bag should receive ~1/25 of the velocity change
+            Assert.That(heavySpeed, Is.GreaterThan(0.01f), "Heavy object should still receive some velocity");
+            Assert.That(lightSpeed, Is.GreaterThan(heavySpeed * 15f),
+                $"Light speed ({lightSpeed}) should be substantially greater than heavy speed ({heavySpeed})");
+            yield return null;
+        }
+
+        [Test]
+        public void ExecuteThrow_WithEmptyHands_ReturnsFalseWithoutErrors()
+        {
+            Assert.That(_playerGrab.IsCarrying, Is.False);
+            bool result = _playerGrab.ExecuteThrow();
+            Assert.That(result, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteThrow_WhileMoving_InheritsPlayerHorizontalVelocity()
+        {
+            _targetObject1 = CreateGrabbable("MovingThrowTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var target = _targetObject1.GetComponent<GrabbableObject>();
+            target.Rigidbody.mass = 1f;
+
+            _playerGrab.ExecuteGrab(target);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            // Simulate character moving horizontally along X
+            var controller = _playerObject.GetComponent<CharacterController>();
+            controller.Move(new Vector3(4f, 0f, 0f) * Time.deltaTime);
+            yield return null;
+
+            _playerGrab.ExecuteThrow();
+
+            var rb = target.Rigidbody;
+            // Should have positive Z velocity from throw impulse and inherited positive X velocity from player motion
+            Assert.That(rb.linearVelocity.z, Is.GreaterThan(5f), "Should have forward throw velocity");
+            Assert.That(rb.linearVelocity.x, Is.GreaterThan(0.1f), "Should inherit player horizontal X velocity");
+        }
+
+        [UnityTest]
+        public IEnumerator ThrowInput_WhenCursorAlreadyLocked_TriggersThrow()
+        {
+            var mouse = InputSystem.AddDevice<Mouse>();
+            _targetObject1 = CreateGrabbable("TargetThrowInput", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var target = _targetObject1.GetComponent<GrabbableObject>();
+
+            _playerGrab.ExecuteGrab(target);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+            Assert.That(_playerMovement.IsCursorLocked, Is.True);
+
+            Press(mouse.leftButton);
+            yield return null;
+
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Pressing LMB with cursor locked should throw carried object");
+        }
+
+        [UnityTest]
+        public IEnumerator ThrowInput_WhenClickReLocksCursor_DoesNotTriggerThrow()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
+            _targetObject1 = CreateGrabbable("TargetRelockGuard", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var target = _targetObject1.GetComponent<GrabbableObject>();
+
+            _playerGrab.ExecuteGrab(target);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            // Unlock cursor via Escape
+            Press(keyboard.escapeKey);
+            yield return null;
+            Assert.That(_playerMovement.IsCursorLocked, Is.False);
+
+            Release(keyboard.escapeKey);
+            yield return null;
+
+            // Click LMB to re-lock cursor: MUST NOT THROW
+            Press(mouse.leftButton);
+            yield return null;
+
+            Assert.That(_playerMovement.IsCursorLocked, Is.True);
+            Assert.That(_playerGrab.IsCarrying, Is.True, "LMB click that relocked cursor must NOT throw carried object");
+
+            Release(mouse.leftButton);
+            yield return null;
+
+            // Next click when cursor was ALREADY locked: SHOULD THROW
+            Press(mouse.leftButton);
+            yield return null;
+
+            Assert.That(_playerGrab.IsCarrying, Is.False, "LMB click after cursor was locked should throw carried object");
+        }
+
+        [UnityTest]
+        public IEnumerator Update_WithoutThrowAction_DoesNotProcessThrowInput()
+        {
+            var mouse = InputSystem.AddDevice<Mouse>();
+            _playerGrab.ThrowAction = null;
+            _targetObject1 = CreateGrabbable("TargetNoThrowInput", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var target = _targetObject1.GetComponent<GrabbableObject>();
+
+            _playerGrab.ExecuteGrab(target);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+            Assert.That(_playerMovement.IsCursorLocked, Is.True);
+
+            Press(mouse.leftButton);
+            yield return null;
+
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Without ThrowAction, pressing LMB must not throw carried object (no hardcoded fallback)");
         }
     }
 }

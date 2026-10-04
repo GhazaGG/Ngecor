@@ -113,6 +113,37 @@ namespace Ngecor.Player.Tests
         }
 
         [UnityTest]
+        public IEnumerator CursorRelock_SetsCursorRelockedThisFrame_ForSingleFrame()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
+            CreatePlayer();
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+
+            yield return null;
+            Assert.That(movement.IsCursorLocked, Is.True);
+            Assert.That(movement.CursorRelockedThisFrame, Is.False);
+
+            Press(keyboard.escapeKey);
+            yield return null;
+            Assert.That(movement.IsCursorLocked, Is.False);
+            Assert.That(movement.CursorRelockedThisFrame, Is.False);
+
+            Release(keyboard.escapeKey);
+            yield return null;
+
+            Press(mouse.leftButton);
+            yield return null;
+
+            Assert.That(movement.IsCursorLocked, Is.True);
+            Assert.That(movement.CursorRelockedThisFrame, Is.True);
+
+            yield return null;
+            Assert.That(movement.IsCursorLocked, Is.True);
+            Assert.That(movement.CursorRelockedThisFrame, Is.False);
+        }
+
+        [UnityTest]
         public IEnumerator LocalPlayerCanReleaseCursorWithoutMoveAction()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
