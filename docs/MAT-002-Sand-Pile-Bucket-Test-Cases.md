@@ -13,6 +13,7 @@ Checklist ini untuk kamu jalankan di Unity pada implementasi sekarang. Semua has
 | Prefab bucket | Satu tipe material, kapasitas dapat dituning, memakai container MAT-005 dan generic grab INT-002. |
 | Carry dan drop bucket | Menggunakan sistem interaction yang sudah ada; cek penggunaan prefab bucket dengan sistem tersebut. |
 | Tuang eksplisit ke receiver dekat | Bucket harus sedang dipegang; unit bucket berkurang sebanyak kenaikan receiver. |
+| Pemilihan receiver saat trigger overlap | Root receiver terdekat dipilih pada setiap permintaan tuang. Jarak kuadrat minimum sama persis membatalkan tuang; receiver terdekat penuh/menolak Sand tidak menyebabkan fallback. |
 | Receiver menolak Sand | Tidak ada unit hilang karena percobaan transfer yang ditolak. |
 | Kehilangan isi saat bucket miring | Menggunakan aturan tumpah MAT-005; uji saat jatuh dan, setelah tersedia, saat dilempar. |
 | Binding Pour | Usulan tahan `R`, dicatat di `docs/DECISIONS.md`, terpisah dari Interact `E` dan Throw klik kiri. |
@@ -299,6 +300,24 @@ Simpan screenshot/rekaman dan angka sebelum/sesudah pada kolom bukti. Untuk tran
 
 **Rekaman / keterbacaan butiran / angka sebelum-sesudah:** ______________________________
 
+### TC-MAT002-15 - Dua trigger overlap: target terdekat, pergantian, dan pembatalan
+
+**Setup:** Pada salinan dev scene, duplikat receiver melalui Unity Editor menjadi receiver A dan B yang menerima Sand, kosong, dengan capacity 100 dan spill rate 0. Letakkan root keduanya pada ketinggian yang sama. Perbesar child Pour Trigger seperlunya agar seluruh collider bucket tetap di dalam kedua trigger selama percobaan. Jauhkan trigger lain. Reset bucket Sand 12 dan receiver kosong sebelum setiap percobaan; jaga root bucket tegak.
+
+**Langkah:**
+
+1. Grab bucket dengan E, masuk area overlap, dan tempatkan root bucket lebih dekat ke root A daripada B. Catat posisi root dan jumlah awal. Tahan R sebentar, lalu lepaskan dan Pause untuk membaca angka.
+2. Reset. Tahan R sambil bergeser di dalam area overlap sampai root bucket lebih dekat ke B. Lepaskan R dan Pause; bandingkan jumlah sebelum/sesudah pergantian. Jangan habiskan sumber sebelum berpindah.
+3. Reset. Untuk jarak sama persis, grab bucket dan berhenti bergerak, lalu Pause. Catat posisi root bucket `(x,y,z)`. Atur root A ke `(x-0.75,y-0.75,z)` dan B ke `(x+0.75,y-0.75,z)` lewat Inspector saat Pause. Resume tanpa menggerakkan kamera/player, tahan R, lalu Pause untuk memeriksa target dan jumlah. Pastikan posisi aktual masih menghasilkan jarak kuadrat minimum yang **persis sama**. Jika posisi bucket bergeser, catat aspek pembatalan jarak sama sebagai NOT VERIFIED. Ulangi dengan receiver C yang lebih jauh tetapi trigger-nya ikut overlap.
+4. Reset. Buat receiver yang paling dekat penuh sejak awal, sementara yang lebih jauh kosong dan menerima Sand. Tahan R selama 1 detik. Ulangi dengan receiver terdekat hanya menerima Cement, sedangkan yang lebih jauh menerima Sand.
+5. Reset. Mulai transfer ke receiver terdekat, lalu keluar dari seluruh trigger sambil R tetap ditahan. Lepas R dan catat angka sesudah beberapa physics tick, lalu 0.5 detik kemudian.
+
+**Expected:** A menerima unit pada langkah 1 dan B tetap kosong. Pada langkah 2 permintaan berikutnya memilih B, A berhenti bertambah, dan feedback mengikuti B setelah transfer positif. Jumlah bucket + semua receiver tetap kekal. Pada langkah 3 tidak ada transfer atau feedback tuang baru, termasuk ketika C tersedia; butiran lama boleh menyelesaikan umur hidupnya. Pada langkah 4 bucket tidak berkurang dan receiver yang lebih jauh tetap kosong: tidak ada fallback karena kapasitas atau tipe. Pada langkah 5 transfer berhenti dan model kembali netral. Pemilihan memakai jarak root container, bukan jarak collider, arah pandang, atau urutan registrasi. Pembatalan hanya berlaku pada jarak kuadrat minimum yang persis sama.
+
+**Status:** NOT VERIFIED
+
+**Posisi/jarak root / jumlah A-B-C sebelum-sesudah / target dan feedback / rekaman:** ______________________________
+
 ## 5. Ringkasan hasil
 
 | Kasus | Status awal | Angka/observasi dan referensi bukti |
@@ -317,6 +336,7 @@ Simpan screenshot/rekaman dan angka sebelum/sesudah pada kolom bukti. Untuk tran
 | TC-12 Drop miring | NOT VERIFIED | |
 | TC-13 Throw miring, bersyarat | NOT VERIFIED | |
 | TC-14 Animasi miring dan pasir jatuh | NOT VERIFIED | |
+| TC-15 Receiver overlap, target, dan pembatalan | NOT VERIFIED | |
 
 ### Pemetaan acceptance criteria #16
 
@@ -324,7 +344,7 @@ Simpan screenshot/rekaman dan angka sebelum/sesudah pada kolom bukti. Untuk tran
 | --- | --- |
 | Pile memakai MAT-005, Sand, jumlah dapat dituning, visual mound, tanpa Rigidbody | TC-01, TC-02, TC-03 |
 | Bucket container satu tipe, kapasitas tunable, generic grab | TC-01, TC-04, TC-05 |
-| Tuang saat dipegang dekat receiver; penolakan tanpa unit hilang | TC-06, TC-07, TC-08, TC-09, TC-10 |
+| Tuang saat dipegang dekat receiver; penolakan tanpa unit hilang | TC-06, TC-07, TC-08, TC-09, TC-10, TC-15 |
 | Bucket jatuh/lempar miring kehilangan isi via MAT-005 | TC-11, TC-12; TC-13 setelah dependency tersedia |
 | Binding tuang dicatat dan tidak bentrok | TC-01, TC-05, TC-07; runtime throw setelah tersedia |
 
@@ -335,6 +355,8 @@ Simpan screenshot/rekaman dan angka sebelum/sesudah pada kolom bukti. Untuk tran
 ## 6. Bukti otomatis yang sudah tersedia
 
 Run pada 2026-10-04 sekitar 04:04 WIB menghasilkan **22/22 Passed**, process exit code 0, pada `Logs/Mat002PrefabPlayModeResults.xml`. Run tambahan setelah animasi dipasang, sekitar 15:32 WIB, menghasilkan **25/25 Passed**, process exit code 0, pada `Logs/BucketPourAnimationResults.xml`. Tiga tes tambahan memeriksa pose/emisi/cancel dan konservasi jumlah, transfer yang ditolak/penuh/kosong, serta feedback unit terakhir. Render dari tes tersedia di `Logs/BucketPourAnimation-Pouring.png` dan `Logs/BucketPourAnimation-Stopped.png`; butiran saat tuang dan pose netral setelah berhenti sudah diperiksa secara visual. **Tes tersebut memicu adapter melalui API, bukan keyboard R. Semua hasil manual pada checklist ini tetap NOT VERIFIED sampai kamu menjalankannya.**
+
+Run perbaikan review PR #86 pada 2026-10-04 **18:49:13-18:49:50 WIB** memakai Unity **6000.3.25f1**, graphics Direct3D 12 aktif, dan seluruh `Ngecor.Material.Tests`: **32/32 Passed**, process exit code **0**, tanpa failed, skipped, atau inconclusive. Hasil aktual ada di `Logs/Mat002ReviewFixFinalResults.xml`; log di `Logs/Mat002ReviewFixFinalTests.log`; exit code di `Logs/Mat002ReviewFixFinalExitCode.txt`. Tujuh regression test tambahan mencakup capture dua PNG ke folder unik yang semula tidak ada, urutan registrasi receiver, jarak minimum sama persis termasuk receiver ketiga, tanpa fallback dari receiver penuh/menolak Sand, pergantian target setelah bucket bergerak, unregister/cancel, dan referensi null/destroyed/bucket sendiri. Jarak yang hampir sama tetapi berbeda juga diperiksa. PNG tuang/berhenti pada path di atas dibuat ulang dan diperiksa secara visual. Folder unik milik regression capture sudah dibersihkan. **TC-MAT002-15 dan input keyboard/manual feel tetap NOT VERIFIED; hasil otomatis tidak menggantikan review gameplay.**
 
 ## Sumber
 

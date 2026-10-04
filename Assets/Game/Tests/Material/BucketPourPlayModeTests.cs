@@ -94,6 +94,187 @@ namespace Ngecor.Material.Tests
         }
 
         [UnityTest]
+        public IEnumerator NearestReceiverWinsWithEitherRegistrationOrderAndFartherTie()
+        {
+            var source = CreateBucket();
+            var nearest = CreateReceiver(MaterialType.Sand);
+            var farther = CreateReceiver(MaterialType.Sand);
+            var otherFarther = CreateReceiver(MaterialType.Sand);
+            nearest.transform.position = Vector3.right * 0.25f;
+            farther.transform.position = Vector3.right * 0.5f;
+            otherFarther.transform.position = Vector3.left * 0.5f;
+            var action = source.GetComponent<BucketPourAction>();
+
+            for (var order = 0; order < 2; order++)
+            {
+                action.UnregisterNearbyReceiver(nearest);
+                action.UnregisterNearbyReceiver(farther);
+                action.UnregisterNearbyReceiver(otherFarther);
+                action.RegisterNearbyReceiver(order == 0 ? farther : nearest);
+                action.RegisterNearbyReceiver(otherFarther);
+                action.RegisterNearbyReceiver(order == 0 ? nearest : farther);
+                var previousUnits = nearest.TotalUnits;
+                Assert.That(action.RequestPour(), Is.True);
+                Assert.That(action.PourReceiver, Is.SameAs(nearest));
+                yield return new WaitForSeconds(0.2f);
+
+                Assert.That(nearest.TotalUnits, Is.GreaterThan(previousUnits));
+                Assert.That(farther.TotalUnits, Is.Zero);
+                Assert.That(otherFarther.TotalUnits, Is.Zero);
+                Assert.That(source.TotalUnits + nearest.TotalUnits, Is.EqualTo(10));
+            }
+
+            // Very close unequal distances must not be treated as an exact tie.
+            nearest.transform.position = Vector3.right * 0.49999997f;
+            Assert.That(action.RequestPour(), Is.True);
+            Assert.That(action.PourReceiver, Is.SameAs(nearest));
+        }
+
+        [UnityTest]
+        public IEnumerator TiedNearestReceiversCancelTransferAndFeedbackEvenWithFartherReceiver()
+        {
+            var source = CreateBucket();
+            var first = CreateReceiver(MaterialType.Sand);
+            first.transform.position = Vector3.left * 0.5f;
+            var action = source.GetComponent<BucketPourAction>();
+            action.RegisterNearbyReceiver(first);
+            Assert.That(action.RequestPour(), Is.True);
+            yield return new WaitForSeconds(0.2f);
+            Assert.That(action.IsPouring, Is.True);
+
+            var second = CreateReceiver(MaterialType.Sand);
+            second.transform.position = Vector3.right * 0.5f;
+            action.RegisterNearbyReceiver(second);
+            Assert.That(action.RequestPour(), Is.False);
+            Assert.That(action.PourReceiver, Is.Null);
+            Assert.That(action.IsPouring, Is.False);
+
+            var farther = CreateReceiver(MaterialType.Sand);
+            farther.transform.position = Vector3.right;
+            action.RegisterNearbyReceiver(farther);
+            var sourceUnits = source.TotalUnits;
+            var firstUnits = first.TotalUnits;
+            Assert.That(action.RequestPour(), Is.False);
+            yield return new WaitForSeconds(0.3f);
+
+            Assert.That(action.PourReceiver, Is.Null);
+            Assert.That(action.IsPouring, Is.False);
+            Assert.That(source.TotalUnits, Is.EqualTo(sourceUnits));
+            Assert.That(first.TotalUnits, Is.EqualTo(firstUnits));
+            Assert.That(second.TotalUnits, Is.Zero);
+            Assert.That(farther.TotalUnits, Is.Zero);
+        }
+
+        [UnityTest]
+        public IEnumerator FullNearestReceiverDoesNotFallBackOrRemoveSourceUnits()
+        {
+            var source = CreateBucket();
+            var nearest = CreateReceiver(MaterialType.Sand);
+            nearest.transform.position = Vector3.right * 0.5f;
+            nearest.AddUnits(MaterialType.Sand, nearest.Capacity);
+            var farther = CreateReceiver(MaterialType.Sand);
+            farther.transform.position = Vector3.right;
+            var action = source.GetComponent<BucketPourAction>();
+            action.RegisterNearbyReceiver(farther);
+            action.RegisterNearbyReceiver(nearest);
+            Assert.That(action.RequestPour(), Is.True);
+            Assert.That(action.PourReceiver, Is.SameAs(nearest));
+            yield return new WaitForSeconds(0.3f);
+
+            Assert.That(source.TotalUnits, Is.EqualTo(10));
+            Assert.That(nearest.TotalUnits, Is.EqualTo(nearest.Capacity));
+            Assert.That(farther.TotalUnits, Is.Zero);
+            Assert.That(action.IsPouring, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator RejectingNearestReceiverDoesNotFallBackOrRemoveSourceUnits()
+        {
+            var source = CreateBucket();
+            var nearest = CreateReceiver(MaterialType.Cement);
+            nearest.transform.position = Vector3.right * 0.5f;
+            var farther = CreateReceiver(MaterialType.Sand);
+            farther.transform.position = Vector3.right;
+            var action = source.GetComponent<BucketPourAction>();
+            action.RegisterNearbyReceiver(farther);
+            action.RegisterNearbyReceiver(nearest);
+            Assert.That(action.RequestPour(), Is.True);
+            Assert.That(action.PourReceiver, Is.SameAs(nearest));
+            yield return new WaitForSeconds(0.3f);
+
+            Assert.That(source.TotalUnits, Is.EqualTo(10));
+            Assert.That(nearest.TotalUnits, Is.Zero);
+            Assert.That(farther.TotalUnits, Is.Zero);
+            Assert.That(action.IsPouring, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator MovingBucketSelectsNewTargetAndUnregisterStopsTransfer()
+        {
+            var source = CreateBucket();
+            source.transform.position = Vector3.left * 0.25f;
+            var first = CreateReceiver(MaterialType.Sand);
+            first.transform.position = Vector3.left * 0.5f;
+            var second = CreateReceiver(MaterialType.Sand);
+            second.transform.position = Vector3.right * 0.5f;
+            Physics.SyncTransforms();
+            yield return new WaitForFixedUpdate();
+
+            var action = source.GetComponent<BucketPourAction>();
+            Assert.That(action.RequestPour(), Is.True);
+            Assert.That(action.PourReceiver, Is.SameAs(first));
+            yield return new WaitForSeconds(0.2f);
+            Assert.That(first.TotalUnits, Is.GreaterThan(0));
+            Assert.That(second.TotalUnits, Is.Zero);
+            Assert.That(action.IsPouring, Is.True);
+
+            source.transform.position = Vector3.right * 0.25f;
+            Physics.SyncTransforms();
+            Assert.That(action.RequestPour(), Is.True);
+            Assert.That(action.PourReceiver, Is.SameAs(second));
+            Assert.That(action.IsPouring, Is.False);
+            var firstUnits = first.TotalUnits;
+            yield return new WaitForSeconds(0.2f);
+            Assert.That(first.TotalUnits, Is.EqualTo(firstUnits));
+            Assert.That(second.TotalUnits, Is.GreaterThan(0));
+            Assert.That(source.TotalUnits + first.TotalUnits + second.TotalUnits, Is.EqualTo(10));
+
+            action.UnregisterNearbyReceiver(second);
+            Assert.That(action.PourReceiver, Is.Null);
+            Assert.That(action.IsPouring, Is.False);
+            var sourceUnits = source.TotalUnits;
+            var secondUnits = second.TotalUnits;
+            yield return new WaitForSeconds(0.3f);
+            Assert.That(source.TotalUnits, Is.EqualTo(sourceUnits));
+            Assert.That(first.TotalUnits, Is.EqualTo(firstUnits));
+            Assert.That(second.TotalUnits, Is.EqualTo(secondUnits));
+        }
+
+        [UnityTest]
+        public IEnumerator NullDestroyedAndSourceReceiversAreIgnored()
+        {
+            var source = CreateBucket();
+            var destroyed = CreateReceiver(MaterialType.Sand);
+            var receiver = CreateReceiver(MaterialType.Sand);
+            receiver.transform.position = Vector3.right;
+            var action = source.GetComponent<BucketPourAction>();
+            action.RegisterNearbyReceiver(null);
+            action.RegisterNearbyReceiver(source);
+            action.RegisterNearbyReceiver(destroyed);
+            action.RegisterNearbyReceiver(receiver);
+            // Keep the trigger alive so it cannot unregister the destroyed component.
+            Object.Destroy(destroyed);
+            yield return null;
+            Assert.That(destroyed == null, Is.True);
+
+            Assert.That(action.RequestPour(), Is.True);
+            Assert.That(action.PourReceiver, Is.SameAs(receiver));
+            yield return new WaitForSeconds(0.2f);
+            Assert.That(receiver.TotalUnits, Is.GreaterThan(0));
+            Assert.That(source.TotalUnits + receiver.TotalUnits, Is.EqualTo(10));
+        }
+
+        [UnityTest]
         public IEnumerator PourInputRequiresCarriedBucketAndStopsWhenReleased()
         {
             var source = CreateBucket();

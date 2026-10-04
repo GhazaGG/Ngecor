@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using Ngecor.Interaction;
 using NUnit.Framework;
 using UnityEditor;
@@ -247,10 +248,48 @@ namespace Ngecor.Material.Tests
             return container;
         }
 
-        private void CapturePourPreview(string name)
+        [UnityTest]
+        public IEnumerator PourPreviewCreatesMissingDirectoryAndCanCaptureAgain()
+        {
+            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
+                Assert.Ignore("Screenshot regression requires an active graphics device.");
+
+            CreateHeldPourBucket();
+            CreatePourReceiver(MaterialType.Sand, 100);
+            yield return null;
+
+            var directory = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Logs",
+                "PourPreview-" + System.Guid.NewGuid().ToString("N"));
+            try
+            {
+                Assert.That(Directory.Exists(directory), Is.False);
+                CapturePourPreview("First", directory);
+                Assert.That(Directory.Exists(directory), Is.True);
+                var first = File.ReadAllBytes(Path.Combine(directory, "First.png"));
+                Assert.That(first.Length, Is.GreaterThan(8));
+                Assert.That(first[0], Is.EqualTo(137));
+                Assert.That(System.Text.Encoding.ASCII.GetString(first, 1, 3), Is.EqualTo("PNG"));
+
+                CapturePourPreview("Second", directory);
+                var second = File.ReadAllBytes(Path.Combine(directory, "Second.png"));
+                Assert.That(second.Length, Is.GreaterThan(8));
+                Assert.That(second[0], Is.EqualTo(137));
+                Assert.That(System.Text.Encoding.ASCII.GetString(second, 1, 3), Is.EqualTo("PNG"));
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                    Directory.Delete(directory, true);
+            }
+        }
+
+        private void CapturePourPreview(string name, string directory = null)
         {
             if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Null)
                 return;
+
+            directory = directory ?? Path.Combine(Path.GetDirectoryName(Application.dataPath), "Logs");
+            Directory.CreateDirectory(directory);
             var cameraObject = new GameObject("Preview Camera");
             var camera = cameraObject.AddComponent<Camera>();
             camera.enabled = false;
@@ -275,7 +314,7 @@ namespace Ngecor.Material.Tests
             var pixels = new Texture2D(960, 720, TextureFormat.RGBA32, false);
             pixels.ReadPixels(new Rect(0, 0, 960, 720), 0, 0);
             pixels.Apply();
-            System.IO.File.WriteAllBytes("Logs/" + name + ".png", pixels.EncodeToPNG());
+            File.WriteAllBytes(Path.Combine(directory, name + ".png"), pixels.EncodeToPNG());
             RenderTexture.active = previous;
             target.Release();
             Object.Destroy(target);

@@ -68,13 +68,28 @@ namespace Ngecor.Material
 
         private BulkMaterialContainer GetNearbyReceiver()
         {
+            BulkMaterialContainer nearest = null;
+            var nearestDistanceSquared = float.PositiveInfinity;
+            var tied = false;
+            var bucketPosition = transform.position;
             foreach (var receiver in _nearbyReceivers)
             {
-                if (receiver != null && receiver != _source)
-                    return receiver;
+                if (receiver == null || receiver == _source)
+                    continue;
+
+                var distanceSquared = (receiver.transform.position - bucketPosition).sqrMagnitude;
+                if (distanceSquared < nearestDistanceSquared)
+                {
+                    nearest = receiver;
+                    nearestDistanceSquared = distanceSquared;
+                    tied = false;
+                }
+                else if (distanceSquared == nearestDistanceSquared)
+                    tied = true;
             }
 
-            return null;
+            // Only an exact tie at the minimum distance cancels the request.
+            return tied ? null : nearest;
         }
 
         private void FixedUpdate()
