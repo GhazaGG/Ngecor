@@ -112,6 +112,24 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Pemilik task PLAYER-001, mengikuti issue #7 dan keputusan M1 di atas.
 
+### 2026-10-04 — Usulan binding tuang bucket
+
+**Proposal:** Tambahkan action `Pour` dengan binding tahan tombol `R` saat membawa bucket. Input ini hanya meminta container bucket menuang ketika berada di trigger receiver. Interact tetap `E`, sedangkan Throw tetap tombol kiri mouse pada action `Attack`.
+
+**Reason:** Tuang perlu aksi eksplisit dan tidak boleh berjalan hanya karena bucket menyentuh receiver. `R` tidak bentrok dengan binding minimum M1 yang sudah tercatat.
+
+**Status:** Usulan MAT-002 (#16), menunggu review PR dan playtest feel.
+
+**Source:** Handoff MAT-002 dari Team Lead, 2026-10-04.
+
+### 2026-10-04 — Feedback tuang bucket sederhana
+
+**Decision:** MAT-002 mendapat feedback tuang sederhana sesuai permintaan pemilik proyek: child model bucket miring dan butiran pasir terlihat menuju receiver saat transfer berlangsung. Efek berhenti saat intent dibatalkan, dan selesai dengan ekor singkat setelah transfer terakhir.
+
+**Batas:** Jumlah tetap dikelola `BulkMaterialContainer`. Pose animasi tidak menambah rotasi root Rigidbody supaya aturan tumpah tidak mengurangi unit dua kali. Partikel hanya visual, maksimal 32 aktif per bucket, tanpa Rigidbody atau collision per butir. Tuang bebas dan pile tanah tetap pada MAT-004 (#54); animasi gundukan membal dan VFX final belum termasuk.
+
+**Source:** Permintaan pemilik proyek dalam percakapan 2026-10-04: "bisa kamu execute pembuatan animasinya? sederhana dulu juga gapapa. asal ada keliatan pasir jatuh saat bucket miring".
+
 ### 2026-10-02 — Player mendorong objek fisika lewat kontak
 
 **Decision:**

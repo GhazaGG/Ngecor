@@ -2,7 +2,9 @@
   "name": "Ngecor.Material.Tests",
   "rootNamespace": "Ngecor.Material.Tests",
   "references": [
-    "Ngecor.Material"
+    "Ngecor.Material",
+    "Ngecor.Interaction",
+    "Ngecor.Player"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
