@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -735,6 +736,94 @@ namespace Ngecor.Interaction.Tests
             yield return null;
 
             Assert.That(_playerGrab.IsCarrying, Is.True, "Without ThrowAction, pressing LMB must not throw carried object (no hardcoded fallback)");
+        }
+
+        [UnityTest]
+        public IEnumerator ThrowInput_AfterRelock_WhenMovementUpdatesBeforeGrab_ThrowsCarriedObject()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
+            _targetObject1 = CreateGrabbable("TargetOrderMoveFirst", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var target = _targetObject1.GetComponent<GrabbableObject>();
+
+            // Disable components before grabbing so OnDisable does not trigger ExecuteDrop
+            _playerMovement.enabled = false;
+            _playerGrab.enabled = false;
+
+            _playerGrab.ExecuteGrab(target);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            var moveUpdate = typeof(PlayerMovement).GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance);
+            var grabUpdate = typeof(PlayerGrab).GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            // Unlock cursor via Escape
+            Press(keyboard.escapeKey);
+            yield return null;
+            moveUpdate.Invoke(_playerMovement, null);
+            grabUpdate.Invoke(_playerGrab, null);
+            Assert.That(_playerMovement.IsCursorLocked, Is.False);
+            Release(keyboard.escapeKey);
+
+            // Frame N: Click LMB to relock cursor
+            Press(mouse.leftButton);
+            yield return null;
+            moveUpdate.Invoke(_playerMovement, null);
+            grabUpdate.Invoke(_playerGrab, null);
+            Assert.That(_playerMovement.IsCursorLocked, Is.True);
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Relock click must NOT throw carried object");
+            Release(mouse.leftButton);
+
+            // Frame N+1: Click LMB to throw, running Movement before Grab
+            Press(mouse.leftButton);
+            yield return null;
+            moveUpdate.Invoke(_playerMovement, null);
+            grabUpdate.Invoke(_playerGrab, null);
+
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Throw click must throw object when Movement updates before Grab");
+        }
+
+        [UnityTest]
+        public IEnumerator ThrowInput_AfterRelock_WhenGrabUpdatesBeforeMovement_ThrowsCarriedObject()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
+            _targetObject1 = CreateGrabbable("TargetOrderGrabFirst", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var target = _targetObject1.GetComponent<GrabbableObject>();
+
+            // Disable components before grabbing so OnDisable does not trigger ExecuteDrop
+            _playerMovement.enabled = false;
+            _playerGrab.enabled = false;
+
+            _playerGrab.ExecuteGrab(target);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            var moveUpdate = typeof(PlayerMovement).GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance);
+            var grabUpdate = typeof(PlayerGrab).GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            // Unlock cursor via Escape
+            Press(keyboard.escapeKey);
+            yield return null;
+            moveUpdate.Invoke(_playerMovement, null);
+            grabUpdate.Invoke(_playerGrab, null);
+            Assert.That(_playerMovement.IsCursorLocked, Is.False);
+            Release(keyboard.escapeKey);
+
+            // Frame N: Click LMB to relock cursor (test with Grab first during relock)
+            Press(mouse.leftButton);
+            yield return null;
+            grabUpdate.Invoke(_playerGrab, null);
+            moveUpdate.Invoke(_playerMovement, null);
+            Assert.That(_playerMovement.IsCursorLocked, Is.True);
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Relock click must NOT throw carried object even if Grab runs first");
+            Release(mouse.leftButton);
+
+            // Frame N+1: Click LMB to throw, running Grab BEFORE Movement
+            Press(mouse.leftButton);
+            yield return null;
+            grabUpdate.Invoke(_playerGrab, null);
+            moveUpdate.Invoke(_playerMovement, null);
+
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Throw click must throw object even when Grab updates before Movement");
         }
     }
 }

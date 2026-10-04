@@ -34,9 +34,11 @@ namespace Ngecor.Player
                 SetCursorLocked(true);
         }
 
+        private int _cursorRelockedFrame = -1;
+
         public Camera LocalCamera => _isLocalPlayer ? _playerCamera : null;
         public bool IsCursorLocked => _cursorLocked;
-        public bool CursorRelockedThisFrame { get; private set; }
+        public bool CursorRelockedThisFrame => _cursorRelockedFrame == Time.frameCount;
 
         public void SetLocalPlayer(bool isLocalPlayer)
         {
@@ -57,8 +59,6 @@ namespace Ngecor.Player
         {
             if (!_isLocalPlayer || _characterController == null)
                 return;
-
-            CursorRelockedThisFrame = false;
 
             HandleCursorInput();
 
@@ -117,7 +117,7 @@ namespace Ngecor.Player
             if (!_cursorLocked && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             {
                 SetCursorLocked(true);
-                CursorRelockedThisFrame = true;
+                _cursorRelockedFrame = Time.frameCount;
             }
         }
 

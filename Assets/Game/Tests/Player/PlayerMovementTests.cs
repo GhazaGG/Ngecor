@@ -144,6 +144,36 @@ namespace Ngecor.Player.Tests
         }
 
         [UnityTest]
+        public IEnumerator CursorRelock_BecomesFalseImmediatelyOnNextFrame_BeforeUpdate()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
+            CreatePlayer();
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+
+            yield return null;
+            Press(keyboard.escapeKey);
+            yield return null;
+            Release(keyboard.escapeKey);
+            yield return null;
+
+            // Relock on frame N
+            Press(mouse.leftButton);
+            yield return null;
+            Assert.That(movement.IsCursorLocked, Is.True);
+            Assert.That(movement.CursorRelockedThisFrame, Is.True);
+            Release(mouse.leftButton);
+
+            // Disable component so Update does not run on frame N+1
+            movement.enabled = false;
+            yield return null;
+
+            // On frame N+1, CursorRelockedThisFrame must be false immediately even before Update runs
+            Assert.That(movement.CursorRelockedThisFrame, Is.False,
+                "CursorRelockedThisFrame must be false on subsequent frame even before Update runs.");
+        }
+
+        [UnityTest]
         public IEnumerator LocalPlayerCanReleaseCursorWithoutMoveAction()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
