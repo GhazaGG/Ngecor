@@ -67,15 +67,6 @@ namespace Ngecor.Interaction
             _playerColliders = GetComponentsInChildren<Collider>();
         }
 
-        private void OnEnable()
-        {
-            if (_interactAction != null && _interactAction.action != null)
-                _interactAction.action.Enable();
-
-            if (_throwAction != null && _throwAction.action != null)
-                _throwAction.action.Enable();
-        }
-
         private void Update()
         {
             if (_playerMovement == null)
@@ -86,18 +77,12 @@ namespace Ngecor.Interaction
                 return;
 
             // Handle Interact Input (Grab / Drop)
-            if (_interactAction != null && _interactAction.action != null)
+            if (_interactAction != null && _interactAction.action != null && _interactAction.action.WasPressedThisFrame())
             {
-                if (!_interactAction.action.enabled)
-                    _interactAction.action.Enable();
-
-                if (_interactAction.action.WasPressedThisFrame())
-                {
-                    if (IsCarrying)
-                        RequestDrop();
-                    else
-                        RequestGrab();
-                }
+                if (IsCarrying)
+                    RequestDrop();
+                else
+                    RequestGrab();
             }
 
             // Handle Throw Input (Attack action / LMB)
@@ -106,19 +91,7 @@ namespace Ngecor.Interaction
             bool canProcessThrow = _playerMovement.IsCursorLocked && !_playerMovement.CursorRelockedThisFrame;
             if (IsCarrying && canProcessThrow)
             {
-                bool throwPressed = false;
-                if (_throwAction != null && _throwAction.action != null)
-                {
-                    if (!_throwAction.action.enabled)
-                        _throwAction.action.Enable();
-                    throwPressed = _throwAction.action.WasPressedThisFrame();
-                }
-                else if (Mouse.current != null)
-                {
-                    throwPressed = Mouse.current.leftButton.wasPressedThisFrame;
-                }
-
-                if (throwPressed)
+                if (_throwAction != null && _throwAction.action != null && _throwAction.action.WasPressedThisFrame())
                 {
                     RequestThrow();
                 }

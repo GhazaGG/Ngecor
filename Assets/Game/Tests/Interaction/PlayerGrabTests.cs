@@ -19,6 +19,8 @@ namespace Ngecor.Interaction.Tests
         private InputActionAsset _actionAsset;
         private InputAction _interactAction;
         private InputActionReference _interactReference;
+        private InputAction _throwAction;
+        private InputActionReference _throwReference;
 
         [SetUp]
         public override void Setup()
@@ -30,8 +32,11 @@ namespace Ngecor.Interaction.Tests
             _actionAsset.AddActionMap(playerMap);
             _interactAction = playerMap.AddAction("Interact", InputActionType.Button);
             _interactAction.AddBinding("<Keyboard>/e");
+            _throwAction = playerMap.AddAction("Attack", InputActionType.Button);
+            _throwAction.AddBinding("<Mouse>/leftButton");
             playerMap.Enable();
             _interactReference = InputActionReference.Create(_interactAction);
+            _throwReference = InputActionReference.Create(_throwAction);
 
             _playerObject = new GameObject("Player");
             _playerObject.transform.position = Vector3.zero;
@@ -56,6 +61,7 @@ namespace Ngecor.Interaction.Tests
             _detector.MaxDistance = 3f;
             _playerGrab = _playerObject.AddComponent<PlayerGrab>();
             _playerGrab.InteractAction = _interactReference;
+            _playerGrab.ThrowAction = _throwReference;
 
             _playerObject.SetActive(true);
             _playerMovement.SetLocalPlayer(true);
@@ -77,6 +83,8 @@ namespace Ngecor.Interaction.Tests
                 Object.DestroyImmediate(_obstacleObject);
             if (_interactReference != null)
                 Object.DestroyImmediate(_interactReference);
+            if (_throwReference != null)
+                Object.DestroyImmediate(_throwReference);
             if (_actionAsset != null)
                 Object.DestroyImmediate(_actionAsset);
 
@@ -709,6 +717,24 @@ namespace Ngecor.Interaction.Tests
             yield return null;
 
             Assert.That(_playerGrab.IsCarrying, Is.False, "LMB click after cursor was locked should throw carried object");
+        }
+
+        [UnityTest]
+        public IEnumerator Update_WithoutThrowAction_DoesNotProcessThrowInput()
+        {
+            var mouse = InputSystem.AddDevice<Mouse>();
+            _playerGrab.ThrowAction = null;
+            _targetObject1 = CreateGrabbable("TargetNoThrowInput", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var target = _targetObject1.GetComponent<GrabbableObject>();
+
+            _playerGrab.ExecuteGrab(target);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+            Assert.That(_playerMovement.IsCursorLocked, Is.True);
+
+            Press(mouse.leftButton);
+            yield return null;
+
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Without ThrowAction, pressing LMB must not throw carried object (no hardcoded fallback)");
         }
     }
 }
