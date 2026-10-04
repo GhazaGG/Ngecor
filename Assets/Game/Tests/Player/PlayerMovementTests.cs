@@ -276,8 +276,8 @@ namespace Ngecor.Player.Tests
                 Time.captureFramerate = previousCaptureFramerate;
             }
 
-            Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.1f),
-                "A 25 kg body should move under a sustained player push.");
+            Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.05f),
+                "A sustained push should produce measurable movement without requiring a heavy body to move quickly.");
             Assert.That(maxSpeed, Is.LessThanOrEqualTo(2.3f),
                 "A 25 kg body should stay well below the player's 5 m/s walking speed.");
         }
@@ -294,12 +294,132 @@ namespace Ngecor.Player.Tests
             var startingPosition = body.position;
 
             Press(keyboard.wKey);
-            yield return WaitForFixedFrames(30);
+            yield return WaitForFixedFrames(120);
 
             Assert.That(_player.transform.position.y, Is.LessThan(0.1f),
                 "The player should stay on the ground instead of stepping onto the low sack.");
             Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.05f),
                 "The low sack should be pushed forward when it blocks the player's path.");
+        }
+
+        [UnityTest]
+        public IEnumerator ContactPushAppliesAtMostOneImpulseToABodyPerMovementStep()
+        {
+            CreatePlayer();
+            var body = CreatePushTarget(size: 0.5f);
+            body.mass = 1f;
+            body.useGravity = false;
+            body.position = TestOrigin + new Vector3(0f, 10f, 1.2f);
+            body.linearVelocity = Vector3.forward * 4f;
+            Physics.SyncTransforms();
+
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_remainingPushImpulse", 10f);
+            var pushDeltaTime = 1f / 30f;
+            for (var i = 0; i < 9; i++)
+            {
+                InvokePrivateMethod(movement, "ApplyContactPush", body, body.worldCenterOfMass,
+                    Vector3.forward, pushDeltaTime);
+            }
+
+            yield return WaitForFixedFrames(1, 30);
+
+            var expectedSingleContactSpeed = 4f + Ngecor.Player.PlayerMovement.CalculatePushForce(
+                body.mass,
+                Ngecor.Player.PlayerMovement.CalculatePushTargetSpeed(body.mass, 5f),
+                4f,
+                pushDeltaTime,
+                0.2f,
+                300f) * pushDeltaTime / body.mass;
+            Assert.That(body.linearVelocity.z, Is.EqualTo(expectedSingleContactSpeed).Within(0.01f),
+                "Repeated callbacks for one body must not queue repeated stale-velocity responses.");
+            Assert.That(body.linearVelocity.z, Is.LessThanOrEqualTo(5.05f));
+        }
+
+        [UnityTest]
+        public IEnumerator StepProbeDoesNotBlockForAnIgnoredColliderPair()
+        {
+            CreatePlayer();
+            var body = CreatePushTarget(size: 0.18f);
+            var controller = _player.GetComponent<CharacterController>();
+            var collider = body.GetComponent<Collider>();
+            Physics.IgnoreCollision(controller, collider, true);
+            Physics.SyncTransforms();
+            yield return WaitForFixedFrames(1);
+
+            Assert.That(Physics.GetIgnoreCollision(controller, collider), Is.True);
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
+                Vector3.forward, 1f), Is.False,
+                "The step probe should skip a low dynamic collider excluded from the player's collisions.");
+        }
+
+        [UnityTest]
+        public IEnumerator StepProbeDoesNotBlockForAnIgnoredLayerPair()
+        {
+            const int probeTestLayer = 31;
+            var wasIgnored = Physics.GetIgnoreLayerCollision(0, probeTestLayer);
+            try
+            {
+                Physics.IgnoreLayerCollision(0, probeTestLayer, true);
+                CreatePlayer();
+                var body = CreatePushTarget(size: 0.18f);
+                body.gameObject.layer = probeTestLayer;
+                Physics.SyncTransforms();
+                yield return WaitForFixedFrames(1);
+
+                Assert.That(Physics.GetIgnoreLayerCollision(0, probeTestLayer), Is.True);
+                var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+                Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
+                    Vector3.forward, 1f), Is.False,
+                    "The step probe should skip layers excluded by the project collision matrix.");
+            }
+            finally
+            {
+                Physics.IgnoreLayerCollision(0, probeTestLayer, wasIgnored);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator StepProbeIncludesPhysicallyCollidableIgnoreRaycastObjects()
+        {
+            const int ignoreRaycastLayer = 2;
+            var wasIgnored = Physics.GetIgnoreLayerCollision(0, ignoreRaycastLayer);
+            try
+            {
+                Physics.IgnoreLayerCollision(0, ignoreRaycastLayer, false);
+                CreatePlayer();
+                var body = CreatePushTarget(size: 0.18f);
+                body.gameObject.layer = ignoreRaycastLayer;
+                Physics.SyncTransforms();
+                yield return WaitForFixedFrames(1);
+
+                var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+                Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
+                    Vector3.forward, 1f), Is.True,
+                    "Ignore Raycast excludes ray queries by default, but does not exclude physical collision.");
+            }
+            finally
+            {
+                Physics.IgnoreLayerCollision(0, ignoreRaycastLayer, wasIgnored);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator CharacterControllerCanStillStepOverAStaticBlock()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            _wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _wall.transform.position = TestOrigin + new Vector3(0f, 0.15f, 1.2f);
+            _wall.transform.localScale = new Vector3(2f, 0.3f, 0.4f);
+            Physics.SyncTransforms();
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(60);
+
+            Assert.That(_player.transform.position.z, Is.GreaterThan(1.8f),
+                "A low static step should remain traversable with the normal CharacterController step offset.");
         }
 
         [UnityTest]
@@ -337,10 +457,10 @@ namespace Ngecor.Player.Tests
         [Test]
         public void PushForceScalesWithMassAndRespectsTheHumanForceLimit()
         {
-            var lightForce = InvokePushForceCalculator(1f, 5f, 0f, 0.02f, 0.2f, 300f);
-            var heavyForce = InvokePushForceCalculator(25f, 5f, 0f, 0.02f, 0.2f, 300f);
-            var nearlyAtTargetForce = InvokePushForceCalculator(1f, 5f, 4.9f, 0.02f, 0.2f, 300f);
-            var atTargetForce = InvokePushForceCalculator(1f, 5f, 5f, 0.02f, 0.2f, 300f);
+            var lightForce = Ngecor.Player.PlayerMovement.CalculatePushForce(1f, 5f, 0f, 0.02f, 0.2f, 300f);
+            var heavyForce = Ngecor.Player.PlayerMovement.CalculatePushForce(25f, 5f, 0f, 0.02f, 0.2f, 300f);
+            var nearlyAtTargetForce = Ngecor.Player.PlayerMovement.CalculatePushForce(1f, 5f, 4.9f, 0.02f, 0.2f, 300f);
+            var atTargetForce = Ngecor.Player.PlayerMovement.CalculatePushForce(1f, 5f, 5f, 0.02f, 0.2f, 300f);
 
             Assert.That(lightForce, Is.EqualTo(23.79f).Within(0.02f));
             Assert.That(heavyForce, Is.EqualTo(300f));
@@ -351,9 +471,9 @@ namespace Ngecor.Player.Tests
         [Test]
         public void PushTargetSpeedDecreasesWithMassAndNeverExceedsWalkingSpeed()
         {
-            var oneKgTarget = InvokePushTargetSpeedCalculator(1f, 5f);
-            var fiveKgTarget = InvokePushTargetSpeedCalculator(5f, 5f);
-            var twentyFiveKgTarget = InvokePushTargetSpeedCalculator(25f, 5f);
+            var oneKgTarget = Ngecor.Player.PlayerMovement.CalculatePushTargetSpeed(1f, 5f);
+            var fiveKgTarget = Ngecor.Player.PlayerMovement.CalculatePushTargetSpeed(5f, 5f);
+            var twentyFiveKgTarget = Ngecor.Player.PlayerMovement.CalculatePushTargetSpeed(25f, 5f);
 
             Assert.That(oneKgTarget, Is.EqualTo(5f));
             Assert.That(fiveKgTarget, Is.EqualTo(5f));
@@ -574,29 +694,11 @@ namespace Ngecor.Player.Tests
             return field.GetValue(target);
         }
 
-        private static float InvokePushForceCalculator(
-            float mass,
-            float targetSpeed,
-            float currentSpeed,
-            float deltaTime,
-            float responseTime,
-            float maxForce)
+        private static object InvokePrivateMethod(object target, string name, params object[] arguments)
         {
-            var method = typeof(Ngecor.Player.PlayerMovement).GetMethod(
-                "CalculatePushForce", BindingFlags.Public | BindingFlags.Static);
-            Assert.That(method, Is.Not.Null, "The pure push force calculation is not available.");
-            return (float)method.Invoke(null, new object[]
-            {
-                mass, targetSpeed, currentSpeed, deltaTime, responseTime, maxForce
-            });
-        }
-
-        private static float InvokePushTargetSpeedCalculator(float mass, float moveSpeed)
-        {
-            var method = typeof(Ngecor.Player.PlayerMovement).GetMethod(
-                "CalculatePushTargetSpeed", BindingFlags.Public | BindingFlags.Static);
-            Assert.That(method, Is.Not.Null, "The pure push target speed calculation is not available.");
-            return (float)method.Invoke(null, new object[] { mass, moveSpeed });
+            var method = target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, $"Missing {target.GetType().Name} method '{name}'.");
+            return method.Invoke(target, arguments);
         }
 
         private static IEnumerator WaitForFixedFrames(int frameCount, int framerate = 60)

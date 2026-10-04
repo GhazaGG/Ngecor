@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -24,6 +25,7 @@ namespace Ngecor.Player
         private float _verticalVelocity;
         private float _cameraPitch;
         private float _remainingPushImpulse;
+        private readonly HashSet<Rigidbody> _pushedBodies = new HashSet<Rigidbody>();
         private readonly RaycastHit[] _stepProbeHits = new RaycastHit[8];
 
         private void Awake()
@@ -91,6 +93,7 @@ namespace Ngecor.Player
 
             var movement = direction * _moveSpeed + Vector3.up * _verticalVelocity;
             _remainingPushImpulse = _maxPushForce * deltaTime;
+            _pushedBodies.Clear();
 
             var stepOffset = _characterController.stepOffset;
             var horizontalDistance = direction.magnitude * _moveSpeed * deltaTime;
@@ -122,7 +125,7 @@ namespace Ngecor.Player
                 movementDirection.normalized,
                 _stepProbeHits,
                 movementDistance + _characterController.skinWidth,
-                Physics.DefaultRaycastLayers,
+                Physics.AllLayers,
                 QueryTriggerInteraction.Ignore);
             var maximumStepHeight = _characterController.bounds.min.y + _characterController.stepOffset;
 
@@ -130,6 +133,9 @@ namespace Ngecor.Player
             {
                 var collider = _stepProbeHits[i].collider;
                 if (collider == null || collider.transform == transform || collider.transform.IsChildOf(transform))
+                    continue;
+                if (Physics.GetIgnoreLayerCollision(gameObject.layer, collider.gameObject.layer) ||
+                    Physics.GetIgnoreCollision(_characterController, collider))
                     continue;
 
                 var body = _stepProbeHits[i].rigidbody;
@@ -142,17 +148,27 @@ namespace Ngecor.Player
 
         private void OnControllerColliderHit(ControllerColliderHit hit)
         {
-            var body = hit.rigidbody;
-            if (body == null || body.isKinematic || hit.moveDirection.y < -0.3f || _remainingPushImpulse <= 0f)
+            if (hit.moveDirection.y < -0.3f)
                 return;
 
             var pushDirection = Vector3.ProjectOnPlane(hit.moveDirection, Vector3.up);
             if (pushDirection.sqrMagnitude <= Mathf.Epsilon)
                 return;
 
+            ApplyContactPush(hit.rigidbody, hit.point, pushDirection, Time.deltaTime);
+        }
+
+        private void ApplyContactPush(Rigidbody body, Vector3 point, Vector3 pushDirection, float deltaTime)
+        {
+            if (body == null || body.isKinematic || _remainingPushImpulse <= 0f || _pushedBodies.Contains(body))
+                return;
+
+            pushDirection = Vector3.ProjectOnPlane(pushDirection, Vector3.up);
+            if (pushDirection.sqrMagnitude <= Mathf.Epsilon)
+                return;
+
             pushDirection.Normalize();
-            var deltaTime = Time.deltaTime;
-            var currentSpeed = Vector3.Dot(body.GetPointVelocity(hit.point), pushDirection);
+            var currentSpeed = Vector3.Dot(body.GetPointVelocity(point), pushDirection);
             var pushForce = CalculatePushForce(
                 body.mass,
                 CalculatePushTargetSpeed(body.mass, _moveSpeed),
@@ -164,7 +180,8 @@ namespace Ngecor.Player
             if (impulse <= 0f)
                 return;
 
-            body.AddForceAtPosition(pushDirection * impulse, hit.point, ForceMode.Impulse);
+            _pushedBodies.Add(body);
+            body.AddForceAtPosition(pushDirection * impulse, point, ForceMode.Impulse);
             _remainingPushImpulse -= impulse;
         }
 
