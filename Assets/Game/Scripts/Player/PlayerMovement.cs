@@ -7,7 +7,7 @@ namespace Ngecor.Player
     [RequireComponent(typeof(CharacterController))]
     public sealed class PlayerMovement : MonoBehaviour
     {
-        private const float PushResponseTime = 0.2f;
+        private const float PushResponseTime = 0.1f;
         private const float FullSpeedPushMass = 5f;
         private const float StepProbeGroundClearance = 0.02f;
 
@@ -177,6 +177,7 @@ namespace Ngecor.Player
                 return;
 
             pushDirection.Normalize();
+            point.y = body.worldCenterOfMass.y;
             var currentSpeed = Vector3.Dot(body.GetPointVelocity(point), pushDirection);
             var pushForce = CalculatePushForce(
                 body.mass,

@@ -229,7 +229,7 @@ MonoBehaviour:
   _cameraPivot: {fileID: 8468392425559774994}
   _isLocalPlayer: 0
   _moveSpeed: 5
-  _maxPushForce: 300
+  _maxPushForce: 350
   _lookSensitivity: 0.1
 --- !u!114 &1868023085897671051
 MonoBehaviour:

@@ -8,8 +8,8 @@ PhysicsMaterial:
   m_PrefabAsset: {fileID: 0}
   m_Name: CementBag
   serializedVersion: 2
-  m_DynamicFriction: 0.25
-  m_StaticFriction: 0.25
+  m_DynamicFriction: 0.6
+  m_StaticFriction: 0.75
   m_Bounciness: 0
   m_FrictionCombine: 0
   m_BounceCombine: 2

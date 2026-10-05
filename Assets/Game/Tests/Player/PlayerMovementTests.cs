@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -317,6 +318,7 @@ namespace Ngecor.Player.Tests
             CreatePlayer();
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Game/Prefabs/Material/CementBag.prefab");
             Assert.That(prefab, Is.Not.Null);
+            var failures = new List<string>();
 
             var orientations = new (string name, Quaternion rotation, float centerY, float offsetX,
                 float maximumPlayerY, float minimumDistance)[]
@@ -358,12 +360,15 @@ namespace Ngecor.Player.Tests
                             new Vector2(initialPosition.x, initialPosition.z),
                             new Vector2(body.position.x, body.position.z));
                         Release(keyboard.wKey);
-                        Assert.That(planarDistance, Is.GreaterThan(orientation.minimumDistance),
-                            $"The {orientation.name} CementBag should move during a sustained push.");
-                        Assert.That(maxPlayerHeight, Is.LessThanOrEqualTo(orientation.maximumPlayerY),
-                            $"The player stepped onto the {orientation.name} CementBag.");
-                        Assert.That(maximumLinearSpeed, Is.LessThanOrEqualTo(2.3f),
-                            "A 25 kg CementBag should stay below the 2.3 m/s push-speed target.");
+                        var outcome = $"{orientation.name} {repeat + 1}: {planarDistance:F3} m, " +
+                                      $"player height {maxPlayerHeight:F3} m, speed {maximumLinearSpeed:F3} m/s";
+                        TestContext.WriteLine(outcome);
+                        if (planarDistance <= orientation.minimumDistance)
+                            failures.Add($"{outcome}; expected > {orientation.minimumDistance:F2} m");
+                        if (maxPlayerHeight > orientation.maximumPlayerY)
+                            failures.Add($"{outcome}; player stepped onto the bag");
+                        if (maximumLinearSpeed > 2.3f)
+                            failures.Add($"{outcome}; speed exceeded 2.3 m/s");
 
                         UnityEngine.Object.DestroyImmediate(_pushTarget);
                         _pushTarget = null;
@@ -375,6 +380,8 @@ namespace Ngecor.Player.Tests
             {
                 Time.captureFramerate = previousCaptureFramerate;
             }
+
+            Assert.That(failures, Is.Empty, string.Join(Environment.NewLine, failures));
         }
 #endif
 
@@ -392,9 +399,10 @@ namespace Ngecor.Player.Tests
             var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
             SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_remainingPushImpulse", 10f);
             var pushDeltaTime = 1f / 30f;
+            var contactPoint = body.worldCenterOfMass + Vector3.up;
             for (var i = 0; i < 9; i++)
             {
-                InvokePrivateMethod(movement, "ApplyContactPush", body, body.worldCenterOfMass,
+                InvokePrivateMethod(movement, "ApplyContactPush", body, contactPoint,
                     Vector3.forward, pushDeltaTime);
             }
 
@@ -405,10 +413,12 @@ namespace Ngecor.Player.Tests
                 Ngecor.Player.PlayerMovement.CalculatePushTargetSpeed(body.mass, 5f),
                 4f,
                 pushDeltaTime,
-                0.2f,
+                0.1f,
                 300f) * pushDeltaTime / body.mass;
             Assert.That(body.linearVelocity.z, Is.EqualTo(expectedSingleContactSpeed).Within(0.01f),
                 "Repeated callbacks for one body must not queue repeated stale-velocity responses.");
+            Assert.That(body.angularVelocity.magnitude, Is.LessThan(0.01f),
+                "Contact height must not add torque that presses the body into the floor.");
             Assert.That(body.linearVelocity.z, Is.LessThanOrEqualTo(5.05f));
         }
 
@@ -789,6 +799,16 @@ namespace Ngecor.Player.Tests
             _camera = cameraObject.AddComponent<Camera>();
 
             var movement = _player.AddComponent<Ngecor.Player.PlayerMovement>();
+#if UNITY_EDITOR
+            var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Game/Prefabs/Player/Player.prefab");
+            var prefabMovement = playerPrefab != null ? playerPrefab.GetComponent<Ngecor.Player.PlayerMovement>() : null;
+            var maxPushForceField = typeof(Ngecor.Player.PlayerMovement).GetField(
+                "_maxPushForce", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(prefabMovement, Is.Not.Null, "Player prefab must configure contact pushing.");
+            Assert.That(maxPushForceField, Is.Not.Null);
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_maxPushForce",
+                maxPushForceField.GetValue(prefabMovement));
+#endif
             SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_moveAction", _moveReference);
             SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_lookAction", _lookReference);
             SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_cameraPivot", _cameraPivot);
