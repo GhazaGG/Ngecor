@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using Ngecor.Interaction;
 
 namespace Ngecor.Material
 {
@@ -11,6 +12,7 @@ namespace Ngecor.Material
 
         private BulkMaterialContainer _source;
         private BulkMaterialContainer _requestedReceiver;
+        private GrabbableObject _grabbable;
         private float _flowUntil = float.NegativeInfinity;
         private readonly HashSet<BulkMaterialContainer> _nearbyReceivers = new HashSet<BulkMaterialContainer>();
 
@@ -21,6 +23,7 @@ namespace Ngecor.Material
         private void Awake()
         {
             _source = GetComponent<BulkMaterialContainer>();
+            _grabbable = GetComponent<GrabbableObject>();
         }
 
         public bool RequestPour()
@@ -94,6 +97,12 @@ namespace Ngecor.Material
 
         private void FixedUpdate()
         {
+            if (_grabbable != null && !_grabbable.IsHeld)
+            {
+                CancelPour();
+                return;
+            }
+
             if (_source == null || _requestedReceiver == null)
                 return;
 

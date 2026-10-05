@@ -303,6 +303,35 @@ namespace Ngecor.Material.Tests
         }
 
         [UnityTest]
+        public IEnumerator DroppingHeldBucketBeforeNextPhysicsTickCancelsPendingPour()
+        {
+            var source = CreateBucket(withGrabbable: true);
+            var receiver = CreateReceiver(MaterialType.Sand);
+            receiver.transform.Find("Pour Trigger").GetComponent<BoxCollider>().size = Vector3.one * 4f;
+            yield return new WaitForFixedUpdate();
+
+            var player = CreateLocalPlayer();
+            var pourInput = source.gameObject.AddComponent<BucketPourInput>();
+            pourInput.enabled = false;
+            var grabbable = source.GetComponent<GrabbableObject>();
+            Assert.That(player.GetComponent<PlayerGrab>().ExecuteGrab(grabbable), Is.True);
+            Assert.That(pourInput.RequestPour(), Is.True);
+
+            var creditSeconds = 0.1f - Time.fixedDeltaTime * 0.5f;
+            Assert.That(source.TransferForSeconds(receiver, MaterialType.Sand, creditSeconds), Is.Zero);
+            Assert.That(player.GetComponent<PlayerGrab>().ExecuteDrop(), Is.True);
+            Assert.That(grabbable.IsHeld, Is.False);
+
+            yield return new WaitForFixedUpdate();
+
+            var action = source.GetComponent<BucketPourAction>();
+            Assert.That(source.TotalUnits, Is.EqualTo(10));
+            Assert.That(receiver.TotalUnits, Is.Zero);
+            Assert.That(action.PourReceiver, Is.Null);
+            Assert.That(action.IsPouring, Is.False);
+        }
+
+        [UnityTest]
         public IEnumerator TiltedDynamicBucketSpillsThroughContainerRule()
         {
             var source = CreateBucket();
@@ -316,7 +345,7 @@ namespace Ngecor.Material.Tests
             Assert.That(source.GetUnits(MaterialType.Sand), Is.LessThan(10));
         }
 
-        private BulkMaterialContainer CreateBucket()
+        private BulkMaterialContainer CreateBucket(bool withGrabbable = false)
         {
             var gameObject = new GameObject("Bucket");
             gameObject.SetActive(false);
@@ -337,6 +366,8 @@ namespace Ngecor.Material.Tests
             SetField(container, "_transferUnitsPerSecond", 10f);
             SetField(container, "_spillUnitsPerSecond", 20f);
             gameObject.AddComponent<BucketPourAction>();
+            if (withGrabbable)
+                gameObject.AddComponent<GrabbableObject>();
             gameObject.SetActive(true);
             return container;
         }
