@@ -17,6 +17,7 @@ namespace Ngecor.Player
         private CharacterController _characterController;
         private Camera _playerCamera;
         private bool _cursorLocked;
+        public bool LookInputSuppressed { get; set; }
         private float _verticalVelocity;
         private float _cameraPitch;
 
@@ -61,7 +62,7 @@ namespace Ngecor.Player
             if (_moveAction == null)
                 return;
 
-            if (_lookAction != null && _cursorLocked)
+            if (_lookAction != null && _cursorLocked && !LookInputSuppressed)
             {
                 var look = _lookAction.action.ReadValue<Vector2>() * _lookSensitivity;
                 transform.Rotate(Vector3.up, look.x, Space.World);
