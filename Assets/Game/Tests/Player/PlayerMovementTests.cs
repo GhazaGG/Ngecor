@@ -5,6 +5,9 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.TestTools;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Ngecor.Player.Tests
 {
@@ -305,6 +308,75 @@ namespace Ngecor.Player.Tests
             Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.05f),
                 "The low sack should be pushed forward when it blocks the player's path.");
         }
+
+#if UNITY_EDITOR
+        [UnityTest]
+        public IEnumerator CementBagSlidesSlowlyWithoutBeingSteppedOver()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Game/Prefabs/Material/CementBag.prefab");
+            Assert.That(prefab, Is.Not.Null);
+
+            var orientations = new (string name, Quaternion rotation, float centerY, float offsetX,
+                float maximumPlayerY, float minimumDistance)[]
+            {
+                ("flat", Quaternion.identity, 0.09f, 0f, 0.15f, 0.5f),
+                ("side", Quaternion.Euler(90f, 0f, 0f), 0.225f, 0f, 0.45f, 0.25f),
+                ("side-corner", Quaternion.Euler(90f, 0f, 0f), 0.225f, 0.5f, 0.15f, 0.25f)
+            };
+            var previousCaptureFramerate = Time.captureFramerate;
+            Time.captureFramerate = 60;
+            try
+            {
+                foreach (var orientation in orientations)
+                {
+                    for (var repeat = 0; repeat < 5; repeat++)
+                    {
+                        Release(keyboard.wKey);
+                        ResetPlayer();
+                        yield return WaitForFixedFrames(3, 60);
+
+                        _player.transform.rotation = Quaternion.identity;
+                        var startPosition = TestOrigin + new Vector3(orientation.offsetX, orientation.centerY, 1.2f);
+                        _pushTarget = UnityEngine.Object.Instantiate(prefab, startPosition, orientation.rotation);
+                        var body = _pushTarget.GetComponent<Rigidbody>();
+                        var initialPosition = body.position;
+                        var maxPlayerHeight = _player.transform.position.y;
+                        var maximumLinearSpeed = 0f;
+
+                        Physics.SyncTransforms();
+                        Press(keyboard.wKey);
+                        for (var frame = 0; frame < 180; frame++)
+                        {
+                            yield return null;
+                            maxPlayerHeight = Mathf.Max(maxPlayerHeight, _player.transform.position.y);
+                            maximumLinearSpeed = Mathf.Max(maximumLinearSpeed, body.linearVelocity.magnitude);
+                        }
+
+                        var planarDistance = Vector2.Distance(
+                            new Vector2(initialPosition.x, initialPosition.z),
+                            new Vector2(body.position.x, body.position.z));
+                        Release(keyboard.wKey);
+                        Assert.That(planarDistance, Is.GreaterThan(orientation.minimumDistance),
+                            $"The {orientation.name} CementBag should move during a sustained push.");
+                        Assert.That(maxPlayerHeight, Is.LessThanOrEqualTo(orientation.maximumPlayerY),
+                            $"The player stepped onto the {orientation.name} CementBag.");
+                        Assert.That(maximumLinearSpeed, Is.LessThanOrEqualTo(2.3f),
+                            "A 25 kg CementBag should stay below the 2.3 m/s push-speed target.");
+
+                        UnityEngine.Object.DestroyImmediate(_pushTarget);
+                        _pushTarget = null;
+                        Physics.SyncTransforms();
+                    }
+                }
+            }
+            finally
+            {
+                Time.captureFramerate = previousCaptureFramerate;
+            }
+        }
+#endif
 
         [UnityTest]
         public IEnumerator ContactPushAppliesAtMostOneImpulseToABodyPerMovementStep()
