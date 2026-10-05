@@ -281,8 +281,11 @@ namespace Ngecor.Interaction
 
             var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
             Vector3 throwDir = camera != null ? camera.transform.forward : transform.forward;
+            ScaffoldingPart thrownPart = _carriedScaffoldingPart;
 
             DetachObject();
+            if (thrownPart != null)
+                thrownPart.EndPlacementPreview();
 
             if (rb != null && !rb.isKinematic)
             {
