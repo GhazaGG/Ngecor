@@ -267,11 +267,17 @@ namespace Ngecor.Interaction.Tests
             Physics.SyncTransforms();
             yield return null;
 
+            _detector.Detect();
+            Assert.That(_detector.HasTarget, Is.True);
+
             _playerGrab.ExecuteGrab(grabbable);
             Assert.That(_playerGrab.IsCarrying, Is.True);
 
             Object.DestroyImmediate(_targetObject1);
             _targetObject1 = null;
+
+            Assert.That(_detector.HasTarget, Is.False,
+                "A destroyed Unity component must no longer be exposed as an interaction target.");
 
             yield return null;
 

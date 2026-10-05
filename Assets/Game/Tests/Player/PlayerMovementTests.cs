@@ -359,39 +359,54 @@ namespace Ngecor.Player.Tests
         }
 
         [UnityTest]
-        public IEnumerator StepProbeRetriesWhenIgnoredCollidersFillHitBuffer()
+        public IEnumerator StepProbeRetriesWhenIrrelevantCollidersFillHitBuffer()
         {
-            const int ignoredColliderCount = 12;
+            const int irrelevantColliderCount = 12;
             CreatePlayer();
-            CreatePushTarget(size: 0.18f);
+            var body = CreatePushTarget(size: 0.18f);
             var controller = _player.GetComponent<CharacterController>();
-            _stepProbeIgnoredColliders = new GameObject("StepProbeIgnoredColliders");
-            Collider firstIgnoredCollider = null;
+            _stepProbeIgnoredColliders = new GameObject("StepProbeIrrelevantColliders");
 
-            for (var i = 0; i < ignoredColliderCount; i++)
+            for (var i = 0; i < irrelevantColliderCount; i++)
             {
-                var ignoredObject = new GameObject($"StepProbeIgnored{i}");
-                ignoredObject.transform.SetParent(_stepProbeIgnoredColliders.transform);
-                ignoredObject.transform.position = TestOrigin + new Vector3(
+                var irrelevantObject = new GameObject($"StepProbeIrrelevant{i}");
+                irrelevantObject.transform.SetParent(_stepProbeIgnoredColliders.transform);
+                irrelevantObject.transform.position = TestOrigin + new Vector3(
                     ((i % 3) - 1) * 0.15f,
                     0.1f + (i / 3) * 0.1f,
                     0.65f);
-                var collider = ignoredObject.AddComponent<BoxCollider>();
+                var collider = irrelevantObject.AddComponent<BoxCollider>();
                 collider.size = Vector3.one * 0.08f;
-                Physics.IgnoreCollision(controller, collider, true);
-
-                if (i == 0)
-                    firstIgnoredCollider = collider;
             }
 
             Physics.SyncTransforms();
             yield return WaitForFixedFrames(1);
 
-            Assert.That(Physics.GetIgnoreCollision(controller, firstIgnoredCollider), Is.True);
+            Assert.That(controller.isGrounded, Is.True,
+                "The dynamic-body step probe is only active while the player is grounded.");
+
+            var capsuleCenter = _player.transform.TransformPoint(controller.center) +
+                                Vector3.up * 0.02f;
+            var verticalSegment = Mathf.Max(0f, controller.height * 0.5f - controller.radius);
+            var lowerSphereCenter = capsuleCenter - Vector3.up * verticalSegment;
+            var upperSphereCenter = capsuleCenter + Vector3.up * verticalSegment;
+            var allHits = Physics.CapsuleCastAll(
+                lowerSphereCenter,
+                upperSphereCenter,
+                controller.radius,
+                Vector3.forward,
+                1f + controller.skinWidth,
+                Physics.AllLayers,
+                QueryTriggerInteraction.Ignore);
+            Assert.That(allHits.Length, Is.GreaterThan(8),
+                "The test setup must actually saturate the probe's original eight-hit buffer.");
+            Assert.That(Array.Exists(allHits, hit => hit.collider == body.GetComponent<Collider>()), Is.True,
+                "The same query must include the valid dynamic blocker behind the irrelevant hits.");
+
             var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
             Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
                 Vector3.forward, 1f), Is.True,
-                "The probe should retry a saturated query so a valid dynamic blocker is not hidden by ignored colliders.");
+                "The probe should retry a saturated query so a valid dynamic blocker is not hidden by irrelevant colliders.");
 
             var cachedHits = (RaycastHit[])GetPrivateField(typeof(Ngecor.Player.PlayerMovement),
                 movement, "_stepProbeHits");
