@@ -263,6 +263,8 @@ MonoBehaviour:
   _holdPoint: {fileID: 0}
   _maxGrabDistance: 3.5
   _interactAction: {fileID: 11400000, guid: e498a79e02d1d024591697675bebe739, type: 2}
+  _throwAction: {fileID: 11400000, guid: 9e261aabc37dabc4aae0aeb459285bb9, type: 2}
+  _throwForce: 10
   _showDebugFeedback: 1
 --- !u!1 &7889076200833104320
 GameObject:
