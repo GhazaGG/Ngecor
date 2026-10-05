@@ -43,7 +43,12 @@ Replaced the boolean flag in `PlayerMovement` with a frame-index comparison agai
 The [P2] input bug is fully resolved. Subsequent throw clicks on frame $N+1$ are guaranteed to process regardless of whether `PlayerMovement.Update()` or `PlayerGrab.Update()` runs first. All 73 automated tests pass.
 
 ## Known limitations
-- None for offline M1 throw mechanics.
+- Automated PlayMode test suite (73/73 green) validates runtime logic, frame expiration, and component execution order via synthetic input, but does not substitute for interactive physical hardware verification.
+- Reviewer physical gameplay feel check (mouse/keyboard feel, multi-angle throws, dynamic running throws, and physical feel of 1 kg vs 25 kg) is pending reviewer Play Mode test on current head as required by project workflow.
+- Standalone Windows build and host/client networking are unverified (multiplayer synchronization is deferred to NET-002/003).
 
 ## Unresolved issues or follow-up work
-- Await Team Lead re-review and approval on PR #78.
+- Reviewer to complete physical gameplay test in Editor Play Mode before final approval/merge.
+- Subsequent integration with PR #85 (commit `290efd7`): textual merge via `git merge-tree` verified clean on `PlayerMovement.cs`; verify runtime compatibility maintaining both frame guard and push/probe functionality during integration.
+- Impulse tuning for heavyweight cargo to be discussed in MAT-003 (#46).
+- Carried object collision rules tracked in #76.
