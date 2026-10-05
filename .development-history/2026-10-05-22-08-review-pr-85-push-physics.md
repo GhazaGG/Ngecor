@@ -39,3 +39,12 @@ PR #85 stays at Request changes, with a concrete diagnosis plan for the sack beh
 
 ## Unresolved issues or follow-up work
 - When #78 and #85 merge, keep both the frame relock guard and the push changes in `PlayerMovement`.
+
+## Re-review at `4390fae` (2026-10-05)
+- RyoFPS reproduced the stall with the real CementBag prefab: 0.002–0.004 m in 3 s at friction 0.75/0.6, with the push budget nearly used up. That disproves my 280 N vs 165 N estimate, so the empirical data stands.
+- He fixed it by lowering `CementBag.physicMaterial` to 0.25/0.25. He also added a 15-trial regression with the real prefab (flat, side, corner), reported 74/74 on the full suite, and removed the images from the branch.
+- Posted CHANGES_REQUESTED:
+  - **Must Fix 1:** revert the sack friction. It contradicts DECISIONS #74 (effective friction about 0.6–0.75) and the #73 note not to change sack friction in this ticket, and it affects stacking, wheelbarrow cargo, and scaffold loads.
+  - **Experiments to run instead:** first apply the push at center-of-mass height instead of the top-edge contact point (no decision change); if the sack still stalls, raise `_maxPushForce` stepwise (350/400/450 N), which is the decision's designated tuning knob. The TL updates DECISIONS #74 if more than 300 N is needed.
+  - **Must Fix 2:** the PR description is stale.
+- `DynamicsManager` has no default material, so the floor uses 0.6/0.6 Average, as assumed.
