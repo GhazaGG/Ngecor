@@ -82,7 +82,7 @@ namespace Ngecor.Material.Tests
             Physics.SyncTransforms();
             var stock = sourcePile.GetComponent<BulkMaterialContainer>();
             var initial = stock.TotalUnits;
-            Assert.That(shovel.RequestScoop(), Is.EqualTo(2));
+            Assert.That(ScoopWithoutWarnings(shovel), Is.EqualTo(2));
             Assert.That(stock.TotalUnits, Is.EqualTo(initial - 2));
             sourcePile.SetActive(false);
             var bucket = Prefab("Bucket");
@@ -99,7 +99,7 @@ namespace Ngecor.Material.Tests
             var pile = Piles()[0];
             shovel.transform.position = pile.transform.position + new Vector3(0f, 0.15f, -0.5f);
             Physics.SyncTransforms();
-            Assert.That(shovel.RequestScoop(), Is.EqualTo(2));
+            Assert.That(ScoopWithoutWarnings(shovel), Is.EqualTo(2));
             Assert.That(shovel.GetComponent<BulkMaterialContainer>().TotalUnits + stock.TotalUnits, Is.EqualTo(initial));
             yield return null;
             yield return null;
@@ -159,6 +159,24 @@ namespace Ngecor.Material.Tests
             grabbable.OnRelease();
             Assert.That(shovel.ExecuteDump(), Is.Zero);
             Assert.That(source.TotalUnits, Is.EqualTo(5));
+        }
+
+        [Test]
+        public void UseRequestScoopsWhenEmptyAndDumpsWhenLoaded()
+        {
+            Ground();
+            var shovel = Shovel();
+            var source = Container(new Vector3(0f, 1f, 0.5f), MaterialType.Sand, 10, 7);
+            var input = shovel.GetComponent<ShovelInput>();
+            Physics.SyncTransforms();
+            Assert.That(input.RequestUse(), Is.EqualTo(2));
+            Assert.That(source.TotalUnits, Is.EqualTo(5));
+            source.gameObject.SetActive(false);
+            Physics.SyncTransforms();
+            Assert.That(input.RequestUse(), Is.EqualTo(2));
+            Assert.That(shovel.GetComponent<BulkMaterialContainer>().TotalUnits, Is.Zero);
+            Assert.That(Piles().Length, Is.EqualTo(1));
+            Assert.That(Piles()[0].Container.TotalUnits + source.TotalUnits, Is.EqualTo(7));
         }
 
         [Test]
@@ -385,6 +403,24 @@ namespace Ngecor.Material.Tests
         private static void Set(object instance, string field, object value)
         {
             instance.GetType().GetField(field, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(instance, value);
+        }
+
+        private static int ScoopWithoutWarnings(ShovelAction shovel)
+        {
+            var warnings = 0;
+            Application.LogCallback capture = (message, stack, type) =>
+            {
+                if (type == LogType.Warning || type == LogType.Error || type == LogType.Exception || type == LogType.Assert)
+                    warnings++;
+            };
+            Application.logMessageReceived += capture;
+            try
+            {
+                var moved = shovel.RequestScoop();
+                Assert.That(warnings, Is.Zero, "Mound queries must not emit physics warnings or errors.");
+                return moved;
+            }
+            finally { Application.logMessageReceived -= capture; }
         }
 
         private static void Invoke(object instance, string method)

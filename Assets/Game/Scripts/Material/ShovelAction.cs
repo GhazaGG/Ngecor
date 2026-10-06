@@ -87,7 +87,8 @@ namespace Ngecor.Material
                 var target = collider.GetComponentInParent<BulkMaterialContainer>();
                 if (target == null || target == _container)
                     continue;
-                var point = collider.ClosestPoint(blade.position);
+                if (!TryGetTargetPoint(collider, blade.position, out var point))
+                    continue;
                 var direction = point - blade.position;
                 if (Vector3.Dot(direction.sqrMagnitude > 0f ? direction : target.transform.position - blade.position,
                     blade.forward) < 0f || direction.sqrMagnitude > _reach * _reach)
@@ -133,6 +134,31 @@ namespace Ngecor.Material
                     return false;
             }
             return true;
+        }
+
+        private bool TryGetTargetPoint(Collider collider, Vector3 origin, out Vector3 point)
+        {
+            point = origin;
+            if (!(collider is MeshCollider mesh) || mesh.convex)
+            {
+                point = collider.ClosestPoint(origin);
+                return true;
+            }
+
+            // Non-convex mounds do not support ClosestPoint. Intersect the actual mesh instead.
+            var direction = collider.bounds.center - origin;
+            if (direction.sqrMagnitude == 0f)
+                return true;
+            direction.Normalize();
+            if (collider.Raycast(new Ray(origin, direction), out var hit, _reach))
+            {
+                point = hit.point;
+                return true;
+            }
+
+            // A blade already inside a closed mound has no outward front-face hit.
+            var distance = collider.bounds.size.magnitude + _reach;
+            return collider.Raycast(new Ray(origin - direction * distance, direction), out _, distance);
         }
     }
 }
