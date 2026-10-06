@@ -48,3 +48,18 @@ PR #85 stays at Request changes, with a concrete diagnosis plan for the sack beh
   - **Experiments to run instead:** first apply the push at center-of-mass height instead of the top-edge contact point (no decision change); if the sack still stalls, raise `_maxPushForce` stepwise (350/400/450 N), which is the decision's designated tuning knob. The TL updates DECISIONS #74 if more than 300 N is needed.
   - **Must Fix 2:** the PR description is stale.
 - `DynamicsManager` has no default material, so the floor uses 0.6/0.6 Average, as assumed.
+
+## Re-review at `17cfd79` (2026-10-06)
+- RyoFPS ran the requested experiments:
+  - restored CementBag friction to 0.75/0.6 (the material diff against `main` is empty)
+  - clamped the push point to the center-of-mass height
+  - found that at `PushResponseTime` 0.2 s the 25 kg bag's required force (about 280 N) never reached the cap, so he lowered the response time to 0.1 s
+  - set `_maxPushForce` to 350 N, the lowest value passing all 15 bag trials (300 N failed the flat trials)
+  - suite 74/74; bag peak speed 2.06 m/s
+  - tests now read the cap from `Player.prefab`
+- Posted a COMMENT review approving the code. Remaining gates:
+  - the owner approves 350 N, and the TL updates DECISIONS #74
+  - a manual wheelbarrow check in the owner's gameplay review; the 0.1 s response accelerates the 4 kg cart faster, and cargo mass isn't counted in the target speed
+- TL decision: the warmed-up Profiler capture doesn't block this PR (one non-allocating capsule cast per moving frame); measure it with the Windows playtest build (#80).
+- Nit: a test computes its expected value with a hard-coded 300 N; harmless because the body is 1 kg.
+- `git merge-tree` against `main` (now with #78): no conflicts.
