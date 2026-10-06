@@ -1,0 +1,17 @@
+{
+  "name": "Ngecor.Interaction",
+  "rootNamespace": "Ngecor.Interaction",
+  "references": [
+    "Ngecor.Player",
+    "Unity.InputSystem"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

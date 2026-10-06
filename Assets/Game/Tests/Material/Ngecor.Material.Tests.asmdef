@@ -1,0 +1,23 @@
+{
+  "name": "Ngecor.Material.Tests",
+  "rootNamespace": "Ngecor.Material.Tests",
+  "references": [
+    "Ngecor.Material",
+    "Ngecor.Interaction",
+    "Ngecor.Player"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}

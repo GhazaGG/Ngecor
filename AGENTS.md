@@ -20,6 +20,7 @@ Aturan ini berlaku tanpa pengecualian kecuali developer dan issue menyatakan lai
 10. Jangan menyatakan "sudah dites" atau mencentang checklist jika belum dijalankan di Unity. Tulis apa yang belum dites.
 11. Jangan menulis kode networking (`NetworkBehaviour`, `NetworkObject`, RPC, `NetworkVariable`, atau API NGO lain) di luar tiket `NET-*`, atau tiket yang secara eksplisit memintanya. Fitur lain tetap offline; tiket NET-lah yang menyambungkannya ke jaringan.
 12. Jangan meng-commit plan, spec, atau checklist buatan tool AI (misalnya `docs/superpowers/`, `docs/<TIKET>-plan.md`). Simpan di luar repo. Catatan kerja ditulis di `.development-history/`; desain yang perlu disetujui diposting sebagai komentar di issue.
+13. **Repo ini public.** Semua yang di-commit bisa dibaca dan di-clone siapa pun, termasuk bot, dan tidak bisa ditarik kembali. Jangan meng-commit secret atau kredensial (API key, token, password, service account Unity Gaming Services, file `.env`). Jangan meng-commit aset berbayar atau berlisensi terbatas (Asset Store berbayar, font atau audio berlisensi); lisensinya melarang penyebaran publik. Jika task membutuhkan salah satunya, berhenti dan tanyakan lead.
 
 ## Baca sebelum bekerja
 

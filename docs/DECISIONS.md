@@ -112,6 +112,24 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Pemilik task PLAYER-001, mengikuti issue #7 dan keputusan M1 di atas.
 
+### 2026-10-04 — Usulan binding tuang bucket
+
+**Proposal:** Tambahkan action `Pour` dengan binding tahan tombol `R` saat membawa bucket. Input ini hanya meminta container bucket menuang ketika berada di trigger receiver. Interact tetap `E`, sedangkan Throw tetap tombol kiri mouse pada action `Attack`.
+
+**Reason:** Tuang perlu aksi eksplisit dan tidak boleh berjalan hanya karena bucket menyentuh receiver. `R` tidak bentrok dengan binding minimum M1 yang sudah tercatat.
+
+**Status:** Usulan MAT-002 (#16), menunggu review PR dan playtest feel.
+
+**Source:** Handoff MAT-002 dari Team Lead, 2026-10-04.
+
+### 2026-10-04 — Feedback tuang bucket sederhana
+
+**Decision:** MAT-002 mendapat feedback tuang sederhana sesuai permintaan pemilik proyek: child model bucket miring dan butiran pasir terlihat menuju receiver saat transfer berlangsung. Efek berhenti saat intent dibatalkan, dan selesai dengan ekor singkat setelah transfer terakhir.
+
+**Batas:** Jumlah tetap dikelola `BulkMaterialContainer`. Pose animasi tidak menambah rotasi root Rigidbody supaya aturan tumpah tidak mengurangi unit dua kali. Partikel hanya visual, maksimal 32 aktif per bucket, tanpa Rigidbody atau collision per butir. Tuang bebas dan pile tanah tetap pada MAT-004 (#54); animasi gundukan membal dan VFX final belum termasuk.
+
+**Source:** Permintaan pemilik proyek dalam percakapan 2026-10-04: "bisa kamu execute pembuatan animasinya? sederhana dulu juga gapapa. asal ada keliatan pasir jatuh saat bucket miring".
+
 ### 2026-10-02 — Player mendorong objek fisika lewat kontak
 
 **Decision:**
@@ -170,6 +188,50 @@ Owner/source: orang atau link keputusan
 **Applies from:** MAT-005 (#62), MAT-002 (#16), MAT-004 (#54), MIX-003 (#55), BUILD-002 (#19), MIX-002 (#45), MIX-001 (#17).
 
 **Owner/source:** Keputusan pemilik proyek dalam sesi diskusi desain 2026-10-02.
+
+### 2026-10-03 — Tenaga dorong player dan massa sak semen
+
+**Decision:**
+- Skala massa: 1 unit = 1 kg. Sak semen (sak penuh) bermassa **25 kg**, skala game dan bukan 40–50 kg asli.
+- Dorongan kontak player dibatasi gaya maksimum **350 N** (`_maxPushForce` di `Player.prefab`), dapat dituning di Inspector. Nilai prototype ini disetujui pemilik proyek pada 2026-10-06 setelah uji PLAYER-003. Benda ringan (maksimum 5 kg) dibatasi agar tidak melampaui kecepatan jalan player, sementara sak 25 kg bergeser pelan selama player terus mendorong.
+- Dorongan diterapkan setinggi pusat massa benda supaya kontak tinggi tidak menekan benda ke lantai.
+- Sak semen tidak boleh berfungsi sebagai tembok saat ditabrak player. Friksi efektif sak terhadap lantai dijaga sekitar 0,6 sampai 0,75.
+- Pekerjaan dilakukan di PLAYER-003 (#73). Massa dan friksi sak ada di MAT-001 (#15).
+
+**Reason:** Gaya tetap sekitar 25 N tidak bisa menggeser benda yang lebih berat dari sekitar 4 kg di lantai berfriksi normal, sehingga sak 25 kg menjadi tembok. Menaikkan gaya dorong global membuat prop ringan melesat (PR #67: Strength 20 membuat `Box_8` terlalu brutal); batas gaya manusia menangani keduanya tanpa mengubah setting physics global. Uji PLAYER-003 di Unity 6000.3.25f1 pada head 17cfd79 menunjukkan 300 N gagal pada orientasi sak rebah, sedangkan 350 N adalah nilai terendah yang meluluskan 15/15 orientasi (rebah, sisi, sudut-sisi), dengan kecepatan puncak 2.058 m/s di bawah target 2.3 m/s. Regresi benda 1 kg dan suite PlayMode penuh lulus 74/74. Friksi sak tidak diturunkan karena itu berisiko membuat tumpukan sak, kargo gerobak, dan beban scaffolding mudah tergelincir.
+
+**Revisit:** Setelah gameplay review PLAYER-003 pada wheelbarrow kosong di Ramp_Gentle dan wheelbarrow dengan tepat tiga cargo di tanah datar; pastikan muatan tetap stabil. Pertimbangkan perlambatan player saat mendorong benda berat jika hasil playtest memerlukannya.
+
+**Applies from:** PLAYER-003 (#73), MAT-001 (#15), MAT-003 (#46), VEH-002 (#14).
+
+**Owner/source:** Keputusan awal dari Team Lead (didelegasikan oleh pemilik proyek) saat review draft PLAYER-003, 2026-10-03. Pemilik proyek menyetujui nilai 350 N saat review PR #85 berdasarkan hasil uji pada 2026-10-06.
+
+### 2026-10-03 — Norma tes otomatis
+
+**Decision:** Tes otomatis wajib hanya untuk **logika murni yang kritis dan mudah rusak diam-diam**, yaitu perhitungan yang dipisah dari scene (misalnya perhitungan gaya dorong, aturan transfer container). Feel, physics, dan interaksi dites manual di Play Mode dan dilaporkan di PR. Tiket yang membutuhkan tes otomatis menuliskannya di Acceptance Criteria.
+
+**Reason:** Developer memakai AI yang lebih lemah, yang sering membuat regresi logika tanpa disadari. Tes untuk fungsi murni murah dan stabil, sedangkan tes otomatis untuk feel fisika mahal dan rapuh. `com.unity.test-framework` sudah ada di baseline.
+
+**Applies from:** PLAYER-003 (#73) dan tiket logika murni berikutnya.
+
+**Owner/source:** Keputusan Team Lead (didelegasikan oleh pemilik proyek), 2026-10-03.
+
+### 2026-10-04 — Tali masuk MVP sebagai penambat
+
+**Decision:**
+- Tali (rope) termasuk peralatan awal vertical slice Rumah Pak Ujang, dikerjakan di TOOL-001 (#81).
+- Bentuk MVP adalah **penambat**: tali mengikat dua titik ikat (dua benda fisika, atau satu benda dan satu pos tetap) dan membatasi jarak maksimum keduanya. Saat longgar tidak memberi gaya. Digambar sebagai garis, bukan simulasi tali berantai.
+- Mengikat dan melepas memakai tombol Interact yang sudah ada, tanpa binding baru.
+- Katrol, mengangkat beban dengan tali, memutus tali, jaring muatan, menyelamatkan player, dan menarik crane **tidak** masuk MVP.
+- Prioritas P2 di M5: tali tidak wajib untuk menyelesaikan satu contract dan tidak memblokir LEVEL-001. Core loop didahulukan.
+
+**Reason:** Tali adalah alat improvisasi di konsep game dan disebut sebagai peralatan awal slice. Penambat jarak maksimum memenuhi fungsi paling berguna (menahan pickup atau gerobak yang menggelinding, menarik benda) dengan satu joint per tali, jauh lebih murah dan lebih stabil daripada tali berantai di PhysX. Alat ini membawa risiko baru yang sesuai prinsip inti: benda yang diikat saling menarik, sehingga pickup yang mundur bisa menyeret gerobak atau merobohkan scaffolding, dan semuanya bisa diperbaiki dengan melepas ikatan.
+
+**Revisit:** Setelah playtest M5. Katrol untuk logistik vertikal adalah kandidat berikutnya jika tali terbukti menyenangkan. Jika joint dengan rasio massa besar (pickup dan sak) terus tidak stabil, pertimbangkan batas massa pada titik ikat.
+
+**Applies from:** TOOL-001 (#81).
+
+**Owner/source:** Keputusan pemilik proyek, 2026-10-04 ("masuk MVP"). Lingkup MVP ditentukan Team Lead.
 
 ## Anggaran performa
 
