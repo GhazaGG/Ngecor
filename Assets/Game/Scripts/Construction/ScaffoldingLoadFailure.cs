@@ -5,9 +5,7 @@ namespace Ngecor.Construction
     [RequireComponent(typeof(Rigidbody))]
     public sealed class ScaffoldingLoadFailure : MonoBehaviour
     {
-        [SerializeField, Min(1f)] private float _wobbleThreshold = 160f;
-        [SerializeField, Min(1f)] private float _collapseThreshold = 190f;
-        [SerializeField, Min(0f)] private float _characterControllerMass = 75f;
+        [SerializeField, Min(1f)] private float _wobbleThreshold = 90f;
         [SerializeField, Min(0f)] private float _wobbleDuration = 2f;
         [SerializeField, Min(0f)] private float _wobbleTorque = 2f;
         [SerializeField, Min(0f)] private float _maximumImpactImpulse = 50f;
@@ -17,7 +15,6 @@ namespace Ngecor.Construction
 
         private Collider[] _overlaps = new Collider[16];
         private Rigidbody[] _seenBodies = new Rigidbody[16];
-        private CharacterController[] _seenPlayers = new CharacterController[16];
         private Rigidbody _body;
         private Vector3 _restPosition;
         private Quaternion _restRotation;
@@ -41,12 +38,6 @@ namespace Ngecor.Construction
                 return;
 
             float payloadMass = MeasurePayloadMass();
-            if (payloadMass >= _collapseThreshold)
-            {
-                BreakIntoParts();
-                return;
-            }
-
             bool overloaded = payloadMass >= _wobbleThreshold;
             bool impactWarning = _impactWarning;
             _impactWarning = false;
@@ -102,27 +93,15 @@ namespace Ngecor.Construction
                 int capacity = _overlaps.Length * 2;
                 System.Array.Resize(ref _overlaps, capacity);
                 System.Array.Resize(ref _seenBodies, capacity);
-                System.Array.Resize(ref _seenPlayers, capacity);
             }
             while (true);
 
             float payloadMass = 0f;
             int bodyCount = 0;
-            int playerCount = 0;
 
             for (int i = 0; i < overlapCount; i++)
             {
                 Collider collider = _overlaps[i];
-                if (collider is CharacterController player)
-                {
-                    if (!Contains(_seenPlayers, playerCount, player))
-                    {
-                        _seenPlayers[playerCount++] = player;
-                        payloadMass += _characterControllerMass;
-                    }
-                    continue;
-                }
-
                 Rigidbody cargo = collider.attachedRigidbody;
                 if (cargo == null || cargo == _body || cargo.isKinematic ||
                     Contains(_seenBodies, bodyCount, cargo))
@@ -141,8 +120,6 @@ namespace Ngecor.Construction
                 _overlaps[i] = null;
             for (int i = 0; i < bodyCount; i++)
                 _seenBodies[i] = null;
-            for (int i = 0; i < playerCount; i++)
-                _seenPlayers[i] = null;
 
             return payloadMass;
         }
@@ -152,16 +129,6 @@ namespace Ngecor.Construction
             for (int i = 0; i < count; i++)
             {
                 if (bodies[i] == candidate)
-                    return true;
-            }
-            return false;
-        }
-
-        private static bool Contains(CharacterController[] players, int count, CharacterController candidate)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                if (players[i] == candidate)
                     return true;
             }
             return false;
@@ -234,7 +201,6 @@ namespace Ngecor.Construction
                 partBody.WakeUp();
             }
 
-            Destroy(_body);
             Destroy(gameObject);
         }
     }
