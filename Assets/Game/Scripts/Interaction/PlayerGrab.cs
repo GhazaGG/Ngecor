@@ -137,7 +137,13 @@ namespace Ngecor.Interaction
             var holdPoint = HoldPoint;
             if (holdPoint != null && _carriedObject != null)
             {
-                Vector3 targetPos = ResolveHoldPosition(holdPoint, camera, _carriedObject);
+                Vector3 targetPos = ResolveHoldPosition(holdPoint, camera, _carriedObject, out bool isPinched);
+                if (isPinched)
+                {
+                    ExecuteDrop();
+                    return;
+                }
+
                 Quaternion targetRot = holdPoint.rotation;
                 _carriedObject.transform.SetPositionAndRotation(targetPos, targetRot);
             }
@@ -269,14 +275,17 @@ namespace Ngecor.Interaction
 
             target.OnGrab(gameObject);
 
+            if (_playerMovement == null)
+                _playerMovement = GetComponent<PlayerMovement>();
+            if (_playerMovement != null && rb != null)
+                _playerMovement.CarriedMass = rb.mass;
+
             var holdPoint = HoldPoint;
             if (holdPoint != null)
             {
-                if (_playerMovement == null)
-                    _playerMovement = GetComponent<PlayerMovement>();
                 var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
 
-                Vector3 targetPos = camera != null ? ResolveHoldPosition(holdPoint, camera, target) : holdPoint.position;
+                Vector3 targetPos = camera != null ? ResolveHoldPosition(holdPoint, camera, target, out _) : holdPoint.position;
                 Quaternion targetRot = holdPoint.rotation;
                 target.transform.SetPositionAndRotation(targetPos, targetRot);
             }
@@ -288,6 +297,11 @@ namespace Ngecor.Interaction
             {
                 var target = _carriedObject;
                 _carriedObject = null;
+
+                if (_playerMovement == null)
+                    _playerMovement = GetComponent<PlayerMovement>();
+                if (_playerMovement != null)
+                    _playerMovement.CarriedMass = 0f;
 
                 DepenetrateOnDrop(target);
 
@@ -442,13 +456,16 @@ namespace Ngecor.Interaction
             }
         }
 
-        private Vector3 ResolveHoldPosition(Transform holdPoint, Camera camera, GrabbableObject held)
+        private Vector3 ResolveHoldPosition(Transform holdPoint, Camera camera, GrabbableObject held, out bool isPinched)
         {
             var origin = camera.transform.position;
             var toHold = holdPoint.position - origin;
             var distance = toHold.magnitude;
             if (distance < 0.01f)
+            {
+                isPinched = false;
                 return holdPoint.position;
+            }
 
             var direction = toHold / distance;
             var count = Physics.SphereCastNonAlloc(origin, _carriedRadius, direction, _holdHits,
@@ -464,11 +481,16 @@ namespace Ngecor.Interaction
                     continue;                       // abaikan player sendiri dan objek yang dibawa
 
                 if (_holdHits[i].distance > 0.0001f)
+                {
                     nearest = Mathf.Min(nearest, _holdHits[i].distance);
+                }
+                else if (Vector3.Dot(collider.bounds.center - origin, camera.transform.forward) > 0f)
+                {
+                    nearest = 0f;
+                }
             }
 
-            var minDistance = Mathf.Min(camera.nearClipPlane + 0.05f, distance);
-            nearest = Mathf.Clamp(nearest, minDistance, distance);
+            nearest = Mathf.Clamp(nearest, 0.01f, distance);
 
             var targetPos = origin + direction * nearest;
             var targetRot = holdPoint.rotation;
@@ -525,15 +547,12 @@ namespace Ngecor.Interaction
                 }
             }
 
-            // Pastikan objek tidak pernah berada di belakang kamera atau menembus near-clip plane.
-            // Catatan: Klem forwardDist memprioritaskan keterlihatan pada viewport kamera di atas pemisahan dunia
-            // (trade-off yang disengaja agar objek tidak terpotong near-clip saat player menempel erat ke dinding vertikal).
+            // World obstacle separation takes priority over viewport.
+            // If the obstacle forces the object inside the minimum hold clearance, mark it as pinched.
             var toTarget = targetPos - origin;
             var forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
-            if (forwardDist < minDistance)
-            {
-                targetPos += camera.transform.forward * (minDistance - forwardDist);
-            }
+            float minClearance = Mathf.Max(0.25f, _carriedRadius * 0.6f);
+            isPinched = forwardDist < minClearance;
 
             return targetPos;
         }

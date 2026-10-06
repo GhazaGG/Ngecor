@@ -825,5 +825,81 @@ namespace Ngecor.Interaction.Tests
 
             Assert.That(_playerGrab.IsCarrying, Is.False, "Throw click must throw object even when Grab updates before Movement");
         }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_CarryingHeavyObject_AppliesCarriedMassToMovement()
+        {
+            _targetObject1 = CreateGrabbable("HeavyTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            grabbable.Rigidbody.mass = 25f;
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(0f));
+            _playerGrab.ExecuteGrab(grabbable);
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(25f));
+
+            _playerGrab.ExecuteDrop();
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(0f));
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_PressedAgainstWall_PrioritizesWallOverCameraNearClip()
+        {
+            // Wall placed at 0.55m from player center (camera at Z=0)
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var wall = _obstacleObject;
+            wall.name = "CloseWall";
+            wall.transform.position = new Vector3(0f, 1.4f, 0.55f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+
+            _targetObject1 = CreateGrabbable("SmallBox", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            var boxCol = _targetObject1.GetComponent<Collider>();
+            var wallCol = wall.GetComponent<Collider>();
+
+            bool pen = Physics.ComputePenetration(
+                boxCol, _targetObject1.transform.position, _targetObject1.transform.rotation,
+                wallCol, wall.transform.position, wall.transform.rotation,
+                out _, out float dist);
+
+            Assert.That(pen && dist > 0.01f, Is.False,
+                $"Carried object penetrated wall by {dist}m when pressed close!");
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_PushedTooCloseAgainstPlayer_TriggersAutoDrop()
+        {
+            // Wall placed right at player capsule face (Z=0.25m), leaving no space for 0.4m carried box
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var wall = _obstacleObject;
+            wall.name = "PinchingWall";
+            wall.transform.position = new Vector3(0f, 1.4f, 0.25f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+
+            _targetObject1 = CreateGrabbable("PinchBox", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            // LateUpdate should have detected the pinch and dropped the object
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Object pinched between player and wall should auto-drop!");
+            Assert.That(grabbable.IsHeld, Is.False);
+            Assert.That(grabbable.Rigidbody.isKinematic, Is.False);
+        }
     }
 }
