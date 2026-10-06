@@ -31,6 +31,15 @@ namespace Ngecor.Interaction
         private bool _savedWasKinematic;
         private bool _savedUseGravity;
 
+        private struct SeparatingEntry
+        {
+            public GrabbableObject target;
+            public Collider[] colliders;
+        }
+
+        private readonly SeparatingEntry[] _separatingQueue = new SeparatingEntry[8];
+        private int _separatingCount;
+
         public bool IsCarrying => _carriedObject != null && _carriedObject.gameObject != null;
         public GrabbableObject CarriedObject => IsCarrying ? _carriedObject : null;
         public Transform HoldPoint => ResolveHoldPoint();
@@ -153,6 +162,14 @@ namespace Ngecor.Interaction
         {
             if (IsCarrying)
                 ExecuteDrop();
+
+            for (int i = 0; i < _separatingCount; i++)
+            {
+                if (_separatingQueue[i].target != null)
+                    SetPlayerCollisionIgnored(_separatingQueue[i].target, false);
+                _separatingQueue[i] = default;
+            }
+            _separatingCount = 0;
         }
 
         public bool RequestGrab()
@@ -303,10 +320,6 @@ namespace Ngecor.Interaction
                 if (_playerMovement != null)
                     _playerMovement.CarriedMass = 0f;
 
-                DepenetrateOnDrop(target);
-
-                SetPlayerCollisionIgnored(target, false);
-
                 var rb = target.Rigidbody;
                 if (rb != null)
                 {
@@ -326,32 +339,80 @@ namespace Ngecor.Interaction
                     }
                 }
 
+                // Ignore-until-separated: If object overlaps player capsule upon release,
+                // keep collision ignored until it separates in FixedUpdate to prevent launching impulses.
+                if (IsOverlappingPlayer(target))
+                {
+                    if (_separatingCount < _separatingQueue.Length)
+                    {
+                        _separatingQueue[_separatingCount++] = new SeparatingEntry
+                        {
+                            target = target,
+                            colliders = target.Colliders
+                        };
+                    }
+                }
+                else
+                {
+                    SetPlayerCollisionIgnored(target, false);
+                }
+
                 target.OnRelease();
             }
         }
 
-        private void DepenetrateOnDrop(GrabbableObject target)
+        private bool IsOverlappingPlayer(GrabbableObject target)
         {
             if (target == null)
-                return;
+                return false;
+
+            if (_playerColliders == null || _playerColliders.Length == 0)
+                _playerColliders = GetComponentsInChildren<Collider>();
 
             var targetColliders = target.Colliders;
-            if (targetColliders == null || targetColliders.Length == 0)
+            if (_playerColliders == null || targetColliders == null)
+                return false;
+
+            foreach (var pCol in _playerColliders)
+            {
+                if (pCol == null || pCol.isTrigger) continue;
+                foreach (var tCol in targetColliders)
+                {
+                    if (tCol == null || tCol.isTrigger) continue;
+
+                    if (Physics.ComputePenetration(
+                        tCol, tCol.transform.position, tCol.transform.rotation,
+                        pCol, pCol.transform.position, pCol.transform.rotation,
+                        out _, out float dist) && dist > 0.001f)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private void FixedUpdate()
+        {
+            if (_separatingCount == 0)
                 return;
 
             if (_playerColliders == null || _playerColliders.Length == 0)
                 _playerColliders = GetComponentsInChildren<Collider>();
 
-            for (var iter = 0; iter < 4; iter++)
+            for (int i = _separatingCount - 1; i >= 0; i--)
             {
-                var resolved = false;
+                var entry = _separatingQueue[i];
+                if (entry.target == null || entry.target.gameObject == null)
+                {
+                    RemoveSeparatingEntryAt(i);
+                    continue;
+                }
 
-                // 1. Periksa overlap obstacle dunia di sekitar target
-                var overlapCount = Physics.OverlapSphereNonAlloc(target.transform.position, _carriedRadius + 0.5f, _holdColliders,
-                    ~0, QueryTriggerInteraction.Ignore);
-
-                // 2. Lepaskan penetrasi terhadap player capsule
-                if (_playerColliders != null)
+                bool stillOverlapping = false;
+                var targetColliders = entry.colliders ?? entry.target.Colliders;
+                if (targetColliders != null && _playerColliders != null)
                 {
                     foreach (var pCol in _playerColliders)
                     {
@@ -363,97 +424,33 @@ namespace Ngecor.Interaction
                             if (Physics.ComputePenetration(
                                 tCol, tCol.transform.position, tCol.transform.rotation,
                                 pCol, pCol.transform.position, pCol.transform.rotation,
-                                out Vector3 pDir, out float pDist))
+                                out _, out float dist) && dist > 0.001f)
                             {
-                                if (pDist > 0.001f)
-                                {
-                                    // Cek apakah dorongan pDir akan menabrak obstacle
-                                    Vector3 candidatePos = target.transform.position + pDir * (pDist + 0.01f);
-                                    Collider blockingObstacle = null;
-                                    Vector3 obstacleDepenNormal = Vector3.zero;
-
-                                    for (var i = 0; i < overlapCount; i++)
-                                    {
-                                        var obsCol = _holdColliders[i];
-                                        if (obsCol == null || obsCol.isTrigger
-                                            || obsCol.transform.IsChildOf(transform)
-                                            || obsCol.transform.IsChildOf(target.transform))
-                                            continue;
-
-                                        Vector3 candidateColPos = candidatePos + (tCol.transform.position - target.transform.position);
-                                        if (Physics.ComputePenetration(
-                                            tCol, candidateColPos, tCol.transform.rotation,
-                                            obsCol, obsCol.transform.position, obsCol.transform.rotation,
-                                            out Vector3 oDir, out float oDist) && oDist > 0.001f)
-                                        {
-                                            blockingObstacle = obsCol;
-                                            obstacleDepenNormal = oDir;
-                                            break;
-                                        }
-                                    }
-
-                                    if (blockingObstacle != null)
-                                    {
-                                        // Terjepit antara player dan obstacle: geser menyamping di sepanjang permukaan obstacle
-                                        Vector3 sideways = Vector3.Cross(obstacleDepenNormal, Vector3.up);
-                                        if (sideways.sqrMagnitude < 0.01f)
-                                            sideways = transform.right;
-                                        else
-                                            sideways.Normalize();
-
-                                        Vector3 fromPlayer = target.transform.position - transform.position;
-                                        if (Vector3.Dot(fromPlayer, sideways) < 0f)
-                                            sideways = -sideways;
-
-                                        target.transform.position += sideways * (_carriedRadius + pDist + 0.02f);
-                                    }
-                                    else
-                                    {
-                                        target.transform.position = candidatePos;
-                                    }
-
-                                    Physics.SyncTransforms();
-                                    resolved = true;
-                                }
+                                stillOverlapping = true;
+                                break;
                             }
                         }
+                        if (stillOverlapping)
+                            break;
                     }
                 }
 
-                // 3. Lepaskan penetrasi terhadap obstacle dunia (dinding/ramp) agar tidak menembus
-                overlapCount = Physics.OverlapSphereNonAlloc(target.transform.position, _carriedRadius + 0.5f, _holdColliders,
-                    ~0, QueryTriggerInteraction.Ignore);
-
-                for (var i = 0; i < overlapCount; i++)
+                if (!stillOverlapping)
                 {
-                    var obstacleCol = _holdColliders[i];
-                    if (obstacleCol == null || obstacleCol.isTrigger
-                        || obstacleCol.transform.IsChildOf(transform)
-                        || obstacleCol.transform.IsChildOf(target.transform))
-                        continue;
-
-                    foreach (var tCol in targetColliders)
-                    {
-                        if (tCol == null || tCol.isTrigger) continue;
-
-                        if (Physics.ComputePenetration(
-                            tCol, tCol.transform.position, tCol.transform.rotation,
-                            obstacleCol, obstacleCol.transform.position, obstacleCol.transform.rotation,
-                            out Vector3 depenDir, out float depenDist))
-                        {
-                            if (depenDist > 0.001f)
-                            {
-                                target.transform.position += depenDir * (depenDist + 0.002f);
-                                Physics.SyncTransforms();
-                                resolved = true;
-                            }
-                        }
-                    }
+                    SetPlayerCollisionIgnored(entry.target, false);
+                    RemoveSeparatingEntryAt(i);
                 }
-
-                if (!resolved)
-                    break;
             }
+        }
+
+        private void RemoveSeparatingEntryAt(int index)
+        {
+            _separatingCount--;
+            if (index < _separatingCount)
+            {
+                _separatingQueue[index] = _separatingQueue[_separatingCount];
+            }
+            _separatingQueue[_separatingCount] = default;
         }
 
         private Vector3 ResolveHoldPosition(Transform holdPoint, Camera camera, GrabbableObject held, out bool isPinched)
