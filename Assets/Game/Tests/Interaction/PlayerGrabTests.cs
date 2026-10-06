@@ -272,12 +272,14 @@ namespace Ngecor.Interaction.Tests
         {
             _targetObject1 = CreateGrabbable("TargetDestroy", new Vector3(0f, 1.4f, 2f)).gameObject;
             var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            grabbable.Rigidbody.mass = 25f;
 
             Physics.SyncTransforms();
             yield return null;
 
             _playerGrab.ExecuteGrab(grabbable);
             Assert.That(_playerGrab.IsCarrying, Is.True);
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(25f));
 
             Object.DestroyImmediate(_targetObject1);
             _targetObject1 = null;
@@ -287,6 +289,7 @@ namespace Ngecor.Interaction.Tests
             Assert.DoesNotThrow(() => { bool carrying = _playerGrab.IsCarrying; });
             Assert.That(_playerGrab.IsCarrying, Is.False);
             Assert.That(_playerGrab.CarriedObject, Is.Null);
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(0f));
         }
 
         [UnityTest]
@@ -888,7 +891,7 @@ namespace Ngecor.Interaction.Tests
         }
 
         [UnityTest]
-        public IEnumerator CarriedObject_PushedTooCloseAgainstPlayer_TriggersAutoDrop()
+        public IEnumerator CarriedObject_PushedTooCloseAgainstPlayer_ExceedingPinchDelay_TriggersAutoDrop()
         {
             // Wall placed right at player capsule face (Z=0.25m), leaving no space for 0.4m carried box
             _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -907,10 +910,74 @@ namespace Ngecor.Interaction.Tests
             _playerGrab.ExecuteGrab(grabbable);
             yield return null;
 
-            // LateUpdate should have detected the pinch and dropped the object
-            Assert.That(_playerGrab.IsCarrying, Is.False, "Object pinched between player and wall should auto-drop!");
+            // Immediately after 1 frame (< 0.3s delay), object should still be carried
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Object should not immediately drop before pinch delay expires!");
+
+            // Wait until after _pinchDropDelay (0.3s)
+            yield return new WaitForSeconds(_playerGrab.PinchDropDelay + 0.1f);
+            yield return null;
+
+            // After exceeding pinch delay, LateUpdate should drop the object
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Object pinched past delay should auto-drop!");
             Assert.That(grabbable.IsHeld, Is.False);
             Assert.That(grabbable.Rigidbody.isKinematic, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_PushedTooCloseAgainstPlayer_BrieflyPinchedThenReleased_DoesNotDrop()
+        {
+            // Wall placed right at player capsule face (Z=0.25m)
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var wall = _obstacleObject;
+            wall.name = "TemporaryPinchingWall";
+            wall.transform.position = new Vector3(0f, 1.4f, 0.25f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+
+            _targetObject1 = CreateGrabbable("BriefPinchBox", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            // Terhimpit selama < jeda (mis. 0.1s saat delay 0.3s)
+            yield return new WaitForSeconds(0.1f);
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Object pinched briefly should not drop!");
+
+            // Dilepas dari dinding (dinding dipindahkan jauh ke belakang)
+            wall.transform.position = new Vector3(0f, 1.4f, 10f);
+            Physics.SyncTransforms();
+
+            // Tunggu melewati durasi jeda awal (0.35s) saat sudah tidak terhimpit
+            yield return new WaitForSeconds(0.35f);
+
+            // Objek harus tetap dibawa karena timer ter-reset saat tidak terhimpit
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Object should remain held after being released from pinch before delay expired!");
+            Assert.That(grabbable.IsHeld, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator OnDisable_WhileCarryingHeavyObject_ResetsCarriedMassToZero()
+        {
+            _targetObject1 = CreateGrabbable("HeavyDisableTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            grabbable.Rigidbody.mass = 25f;
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(25f));
+
+            _playerGrab.enabled = false;
+            yield return null;
+
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(0f),
+                "Disabling PlayerGrab should reset CarriedMass on PlayerMovement to 0!");
+            Assert.That(_playerGrab.IsCarrying, Is.False);
         }
 
         [UnityTest]

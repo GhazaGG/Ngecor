@@ -228,7 +228,7 @@ Owner/source: orang atau link keputusan
 
 **Applies from:** INT-005 (#76), MAT-003 (#46), VEH-002 (#14).
 
-**Owner/source:** Keputusan bersama tim pada issue #76, 2026-10-06.
+**Owner/source:** Usulan meryzennn di PR #89; menunggu persetujuan pemilik proyek.
 
 ## Anggaran performa
 

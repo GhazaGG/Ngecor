@@ -15,11 +15,13 @@ namespace Ngecor.Interaction
         [SerializeField] private InputActionReference _interactAction;
         [SerializeField] private InputActionReference _throwAction;
         [SerializeField, Min(0f)] private float _throwForce = 10f;
+        [SerializeField, Min(0f)] private float _pinchDropDelay = 0.3f;
         [SerializeField] private bool _showDebugFeedback = true;
 
         private readonly RaycastHit[] _holdHits = new RaycastHit[8];
         private readonly Collider[] _holdColliders = new Collider[16];
         private float _carriedRadius = 0.25f;
+        private float _pinchTimer;
 
         private CharacterController _characterController;
         private PlayerMovement _playerMovement;
@@ -44,6 +46,11 @@ namespace Ngecor.Interaction
         public GrabbableObject CarriedObject => IsCarrying ? _carriedObject : null;
         public Transform HoldPoint => ResolveHoldPoint();
         public float CarriedRadius => _carriedRadius;
+        public float PinchDropDelay
+        {
+            get => _pinchDropDelay;
+            set => _pinchDropDelay = Mathf.Max(0f, value);
+        }
 
         public float MaxGrabDistance
         {
@@ -132,8 +139,16 @@ namespace Ngecor.Interaction
         {
             if (!IsCarrying)
             {
-                if (_carriedObject != null)
+                if ((object)_carriedObject != null)
+                {
                     _carriedObject = null;
+                }
+                if (_playerMovement == null)
+                    _playerMovement = GetComponent<PlayerMovement>();
+                if (_playerMovement != null && _playerMovement.CarriedMass != 0f)
+                    _playerMovement.CarriedMass = 0f;
+
+                _pinchTimer = 0f;
                 return;
             }
 
@@ -150,8 +165,17 @@ namespace Ngecor.Interaction
                 Vector3 targetPos = ResolveHoldPosition(holdPoint, camera, _carriedObject, out bool isPinched);
                 if (isPinched)
                 {
-                    ExecuteDrop();
-                    return;
+                    _pinchTimer += Time.deltaTime;
+                    if (_pinchTimer >= _pinchDropDelay)
+                    {
+                        _pinchTimer = 0f;
+                        ExecuteDrop();
+                        return;
+                    }
+                }
+                else
+                {
+                    _pinchTimer = 0f;
                 }
 
                 Quaternion targetRot = holdPoint.rotation;
@@ -163,6 +187,13 @@ namespace Ngecor.Interaction
         {
             if (IsCarrying)
                 ExecuteDrop();
+
+            if (_playerMovement == null)
+                _playerMovement = GetComponent<PlayerMovement>();
+            if (_playerMovement != null)
+                _playerMovement.CarriedMass = 0f;
+
+            _pinchTimer = 0f;
 
             for (int i = 0; i < _separatingCount; i++)
             {
@@ -319,6 +350,8 @@ namespace Ngecor.Interaction
             if (_playerMovement != null && rb != null)
                 _playerMovement.CarriedMass = rb.mass;
 
+            _pinchTimer = 0f;
+
             var holdPoint = HoldPoint;
             if (holdPoint != null)
             {
@@ -332,6 +365,8 @@ namespace Ngecor.Interaction
 
         private void DetachObject()
         {
+            _pinchTimer = 0f;
+
             if (_carriedObject != null)
             {
                 var target = _carriedObject;
@@ -504,11 +539,21 @@ namespace Ngecor.Interaction
                 {
                     nearest = Mathf.Min(nearest, _holdHits[i].distance);
                 }
-                else if (Vector3.Dot(_holdHits[i].normal, camera.transform.forward) < -0.2f)
+                else
                 {
-                    // Hanya obstacle yang permukaannya menghadap berlawanan dengan arah pandang (dinding di depan)
-                    // yang memblokir jangkauan ke 0
-                    nearest = 0f;
+                    Ray forwardRay = new Ray(origin, direction);
+                    if (!collider.Raycast(forwardRay, out RaycastHit wallHit, distance))
+                    {
+                        forwardRay = new Ray(origin, camera.transform.forward);
+                        collider.Raycast(forwardRay, out wallHit, distance);
+                    }
+
+                    if (wallHit.collider != null && Mathf.Abs(wallHit.normal.y) < 0.7f
+                        && Vector3.Dot(wallHit.normal, camera.transform.forward) < -0.3f)
+                    {
+                        float clearance = Mathf.Max(0f, wallHit.distance - sweepRadius);
+                        nearest = Mathf.Min(nearest, clearance);
+                    }
                 }
             }
 
@@ -570,15 +615,53 @@ namespace Ngecor.Interaction
             }
 
             // World obstacle separation takes priority over viewport.
-            // Jika tidak ada dinding di depan yang menghalangi, pastikan objek tidak jatuh ke belakang kamera (ramp/slope).
+            // Pastikan objek tidak jatuh ke belakang kamera (ramp/slope) KECUALI jika ada rintangan di depan yang menghalangi.
             var toTarget = targetPos - origin;
             var forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
-            var minDistance = camera.nearClipPlane + 0.05f;
-            if (forwardDist < minDistance && nearest >= minDistance)
+            var minDistance = camera.nearClipPlane + 0.02f;
+            if (forwardDist < minDistance)
             {
-                targetPos = origin + camera.transform.forward * minDistance;
-                toTarget = targetPos - origin;
-                forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
+                var candidatePos = origin + camera.transform.forward * minDistance;
+                bool penetratesObstacle = false;
+                if (heldColliders != null)
+                {
+                    var heldRootPos = held.transform.position;
+                    var invHeldRot = Quaternion.Inverse(held.transform.rotation);
+                    for (var i = 0; i < count; i++)
+                    {
+                        var obstacleCol = _holdHits[i].collider;
+                        if (obstacleCol == null || obstacleCol.isTrigger
+                            || obstacleCol.transform.IsChildOf(transform)
+                            || obstacleCol.transform.IsChildOf(held.transform))
+                            continue;
+
+                        foreach (var heldCol in heldColliders)
+                        {
+                            if (heldCol == null || heldCol.isTrigger) continue;
+                            var relativeRot = invHeldRot * heldCol.transform.rotation;
+                            var relativePos = invHeldRot * (heldCol.transform.position - heldRootPos);
+                            var colPos = candidatePos + targetRot * relativePos;
+                            var colRot = targetRot * relativeRot;
+
+                            if (Physics.ComputePenetration(
+                                heldCol, colPos, colRot,
+                                obstacleCol, obstacleCol.transform.position, obstacleCol.transform.rotation,
+                                out _, out float penDist) && penDist > 0.01f)
+                            {
+                                penetratesObstacle = true;
+                                break;
+                            }
+                        }
+                        if (penetratesObstacle) break;
+                    }
+                }
+
+                if (!penetratesObstacle)
+                {
+                    targetPos = candidatePos;
+                    toTarget = targetPos - origin;
+                    forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
+                }
             }
 
             float minClearance = 0.15f;
