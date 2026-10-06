@@ -301,10 +301,13 @@ namespace Ngecor.Interaction
             {
                 _savedWasKinematic = rb.isKinematic;
                 _savedUseGravity = rb.useGravity;
+                if (!rb.isKinematic)
+                {
+                    rb.linearVelocity = Vector3.zero;
+                    rb.angularVelocity = Vector3.zero;
+                }
                 rb.isKinematic = true;
                 rb.useGravity = false;
-                rb.linearVelocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
             }
 
             SetPlayerCollisionIgnored(target, true);
@@ -484,7 +487,8 @@ namespace Ngecor.Interaction
             }
 
             var direction = toHold / distance;
-            var count = Physics.SphereCastNonAlloc(origin, _carriedRadius, direction, _holdHits,
+            var sweepRadius = Mathf.Clamp(_carriedRadius, 0.05f, 0.25f);
+            var count = Physics.SphereCastNonAlloc(origin, sweepRadius, direction, _holdHits,
                 distance, ~0, QueryTriggerInteraction.Ignore);
 
             var nearest = distance;
@@ -500,8 +504,10 @@ namespace Ngecor.Interaction
                 {
                     nearest = Mathf.Min(nearest, _holdHits[i].distance);
                 }
-                else if (Vector3.Dot(collider.bounds.center - origin, camera.transform.forward) > 0f)
+                else if (Vector3.Dot(_holdHits[i].normal, camera.transform.forward) < -0.2f)
                 {
+                    // Hanya obstacle yang permukaannya menghadap berlawanan dengan arah pandang (dinding di depan)
+                    // yang memblokir jangkauan ke 0
                     nearest = 0f;
                 }
             }
@@ -564,10 +570,18 @@ namespace Ngecor.Interaction
             }
 
             // World obstacle separation takes priority over viewport.
-            // If the obstacle forces the object inside the minimum hold clearance, mark it as pinched.
+            // Jika tidak ada dinding di depan yang menghalangi, pastikan objek tidak jatuh ke belakang kamera (ramp/slope).
             var toTarget = targetPos - origin;
             var forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
-            float minClearance = Mathf.Max(0.25f, _carriedRadius * 0.6f);
+            var minDistance = camera.nearClipPlane + 0.05f;
+            if (forwardDist < minDistance && nearest >= minDistance)
+            {
+                targetPos = origin + camera.transform.forward * minDistance;
+                toTarget = targetPos - origin;
+                forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
+            }
+
+            float minClearance = 0.15f;
             isPinched = forwardDist < minClearance;
 
             return targetPos;
