@@ -175,17 +175,20 @@ Owner/source: orang atau link keputusan
 
 **Decision:**
 - Skala massa: 1 unit = 1 kg. Sak semen (sak penuh) bermassa **25 kg**, skala game dan bukan 40–50 kg asli.
-- Dorongan kontak player dibatasi **gaya maksimum setara tenaga manusia** (acuan awal ±250–300 N, dapat dituning), bukan gaya tetap ±25 N. Benda ringan terdorong tanpa melesat, dan benda berat (sak 25 kg) bergeser pelan selama player terus mendorong.
+- Dorongan kontak player dibatasi **gaya maksimum setara tenaga manusia**, bukan gaya tetap ±25 N. Nilai yang dipakai: **350 N** (`_maxPushForce` di `Player.prefab`), dapat dituning. Benda ringan terdorong tanpa melesat, dan benda berat (sak 25 kg) bergeser pelan selama player terus mendorong.
+- Dorongan diterapkan setinggi pusat massa benda supaya kontak tinggi tidak menekan benda ke lantai.
 - Sak semen tidak boleh berfungsi sebagai tembok saat ditabrak player. Friksi efektif sak terhadap lantai dijaga ≈ 0,6–0,75.
 - Pekerjaan dilakukan di PLAYER-003 (#73). Massa dan friksi sak ada di MAT-001 (#15).
 
-**Reason:** Perhitungan dari `PlayerMovement.cs` menunjukkan gaya tetap ±25 N tidak bisa menggeser benda yang lebih berat dari ±4 kg di lantai berfriksi normal, sehingga sak 25 kg menjadi tembok. Menaikkan `_pushStrength` global membuat prop ringan melesat (PR #67: Strength 20 membuat `Box_8` terlalu brutal). Batas gaya manusia memperbaiki keduanya tanpa mengubah setting physics global. Perhitungan ini belum diverifikasi di Play Mode.
+**Reason:** Perhitungan dari `PlayerMovement.cs` menunjukkan gaya tetap ±25 N tidak bisa menggeser benda yang lebih berat dari ±4 kg di lantai berfriksi normal, sehingga sak 25 kg menjadi tembok. Menaikkan `_pushStrength` global membuat prop ringan melesat (PR #67: Strength 20 membuat `Box_8` terlalu brutal). Batas gaya manusia memperbaiki keduanya tanpa mengubah setting physics global.
+
+Acuan awal ±250–300 N diuji di PR #85 dengan prefab `CementBag` asli (friksi 0,75/0,6): pada 300 N sak yang rebah tetap macet; **350 N** adalah nilai terendah yang menggeser sak pelan di 15/15 percobaan (rebah, berdiri di sisi, kontak di sudut), dengan kecepatan tertinggi ±2,06 m/s. Prop 1 kg tetap tidak melebihi kecepatan jalan. Friksi sak sengaja tidak diturunkan, karena akan membuat tumpukan sak, kargo gerobak, dan beban scaffolding mudah tergelincir.
 
 **Revisit:** Setelah PLAYER-003 diuji bersama wheelbarrow berkargo. Pertimbangkan apakah player perlu melambat saat mendorong benda berat.
 
 **Applies from:** PLAYER-003 (#73), MAT-001 (#15), MAT-003 (#46), VEH-002 (#14).
 
-**Owner/source:** Keputusan Team Lead (didelegasikan oleh pemilik proyek) saat review draft PLAYER-003, 2026-10-03.
+**Owner/source:** Keputusan Team Lead (didelegasikan oleh pemilik proyek) saat review draft PLAYER-003, 2026-10-03. Nilai 350 N disetujui pemilik proyek saat review PR #85, 2026-10-06.
 
 ### 2026-10-03 — Norma tes otomatis
 
