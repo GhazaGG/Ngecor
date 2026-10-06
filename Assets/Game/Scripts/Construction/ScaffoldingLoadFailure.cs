@@ -10,14 +10,14 @@ namespace Ngecor.Construction
         [SerializeField, Min(0f)] private float _characterControllerMass = 75f;
         [SerializeField, Min(0f)] private float _wobbleDuration = 2f;
         [SerializeField, Min(0f)] private float _wobbleTorque = 2f;
-        [SerializeField, Min(0f)] private float _maximumImpactImpulse = 30f;
+        [SerializeField, Min(0f)] private float _maximumImpactImpulse = 8f;
         [SerializeField] private Transform _playerLoadProbe;
         [SerializeField] private Transform[] _breakParts = new Transform[4];
         [SerializeField] private float[] _partMasses = { 20f, 20f, 12.5f, 12.5f };
 
-        private readonly Collider[] _overlaps = new Collider[16];
-        private readonly Rigidbody[] _seenBodies = new Rigidbody[16];
-        private readonly CharacterController[] _seenPlayers = new CharacterController[16];
+        private Collider[] _overlaps = new Collider[16];
+        private Rigidbody[] _seenBodies = new Rigidbody[16];
+        private CharacterController[] _seenPlayers = new CharacterController[16];
         private Rigidbody _body;
         private Vector3 _restPosition;
         private Quaternion _restRotation;
@@ -51,8 +51,11 @@ namespace Ngecor.Construction
             bool impactWarning = _impactWarning;
             _impactWarning = false;
 
+            if (impactWarning)
+                _impactWobble = true;
+
             if (!_wobbling && (overloaded || impactWarning))
-                StartWobble(impactWarning && !overloaded);
+                StartWobble(impactWarning);
 
             if (!_wobbling)
                 return;
@@ -61,14 +64,20 @@ namespace Ngecor.Construction
             float sway = Mathf.Sin(_wobbleTime * 9f) * _wobbleTorque;
             _body.AddTorque(transform.forward * sway + transform.right * sway * 0.35f, ForceMode.Acceleration);
 
-            if (overloaded && _wobbleTime >= _wobbleDuration)
+            if (_wobbleTime >= _wobbleDuration)
             {
-                BreakIntoParts();
-                return;
-            }
+                if (overloaded || _impactWobble)
+                {
+                    BreakIntoParts();
+                    return;
+                }
 
-            if (!overloaded && (!_impactWobble || _wobbleTime >= _wobbleDuration))
                 CalmDown();
+            }
+            else if (!overloaded && !_impactWobble)
+            {
+                CalmDown();
+            }
         }
 
         private float MeasurePayloadMass()
@@ -76,13 +85,26 @@ namespace Ngecor.Construction
             if (_playerLoadProbe == null)
                 return 0f;
 
-            int overlapCount = Physics.OverlapBoxNonAlloc(
-                _playerLoadProbe.position,
-                _playerLoadProbe.lossyScale * 0.5f,
-                _overlaps,
-                _playerLoadProbe.rotation,
-                Physics.DefaultRaycastLayers,
-                QueryTriggerInteraction.Ignore);
+            int overlapCount;
+            do
+            {
+                overlapCount = Physics.OverlapBoxNonAlloc(
+                    _playerLoadProbe.position,
+                    _playerLoadProbe.lossyScale * 0.5f,
+                    _overlaps,
+                    _playerLoadProbe.rotation,
+                    Physics.DefaultRaycastLayers,
+                    QueryTriggerInteraction.Ignore);
+
+                if (overlapCount < _overlaps.Length)
+                    break;
+
+                int capacity = _overlaps.Length * 2;
+                System.Array.Resize(ref _overlaps, capacity);
+                System.Array.Resize(ref _seenBodies, capacity);
+                System.Array.Resize(ref _seenPlayers, capacity);
+            }
+            while (true);
 
             float payloadMass = 0f;
             int bodyCount = 0;
@@ -103,13 +125,15 @@ namespace Ngecor.Construction
 
                 Rigidbody cargo = collider.attachedRigidbody;
                 if (cargo == null || cargo == _body || cargo.isKinematic ||
-                    cargo.GetComponentInParent<ScaffoldingLoadFailure>() != null ||
                     Contains(_seenBodies, bodyCount, cargo))
                 {
                     continue;
                 }
 
                 _seenBodies[bodyCount++] = cargo;
+                if (cargo.GetComponentInParent<ScaffoldingLoadFailure>() != null)
+                    continue;
+
                 payloadMass += cargo.mass;
             }
 

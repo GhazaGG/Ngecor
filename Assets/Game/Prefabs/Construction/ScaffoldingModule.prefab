@@ -2081,7 +2081,7 @@ MonoBehaviour:
   _characterControllerMass: 75
   _wobbleDuration: 2
   _wobbleTorque: 2
-  _maximumImpactImpulse: 30
+  _maximumImpactImpulse: 8
   _playerLoadProbe: {fileID: 1408730870289977871}
   _breakParts:
   - {fileID: 2511664153320148147}
