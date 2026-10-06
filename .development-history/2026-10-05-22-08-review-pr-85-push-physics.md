@@ -63,3 +63,16 @@ PR #85 stays at Request changes, with a concrete diagnosis plan for the sack beh
 - TL decision: the warmed-up Profiler capture doesn't block this PR (one non-allocating capsule cast per moving frame); measure it with the Windows playtest build (#80).
 - Nit: a test computes its expected value with a hard-coded 300 N; harmless because the body is 1 kg.
 - `git merge-tree` against `main` (now with #78): no conflicts.
+
+## Approval at `93b2473` (2026-10-06)
+- RyoFPS merged `main` (with #78 and #87) and reported the suite at 85/85 (Interaction 42, Material 12, Player 31). He also reported that the empty wheelbarrow climbs `Ramp_Gentle` and that three cargo items stay put on flat ground.
+- Verified in the merged `PlayerMovement.cs`:
+  - the #78 frame relock guard is kept
+  - the #85 push logic is intact: `_maxPushForce`, `PushResponseTime` 0.1, push at center-of-mass height, the step probe
+  - no conflicts with `main`
+- Approved, with non-blocking notes:
+  - commit `d72f66f` rewrote the just-merged DECISIONS entry with consistent content; feature PRs shouldn't reword decisions
+  - the code default `_maxPushForce` is 300 while the prefab is 350
+  - #89 conflicts with `PlayerMovement` and resolves on its side after this merges
+  - the Profiler capture remains a follow-up for the Windows build (#80)
+- Merge still waits for the owner's short Play Mode check.
