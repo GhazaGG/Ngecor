@@ -15,7 +15,8 @@ namespace Ngecor.Interaction
 
         public IInteractable CurrentTarget { get; private set; }
         public RaycastHit CurrentHit { get; private set; }
-        public bool HasTarget => CurrentTarget != null;
+        public bool HasTarget => CurrentTarget != null &&
+                                 (!(CurrentTarget is Object unityObject) || unityObject != null);
 
         public float MaxDistance
         {
