@@ -34,6 +34,7 @@ Merged the latest `origin/main` into the PR #85 feature branch and resolved the 
 - Confirmed the conflict index is empty and `docs/DECISIONS.md` has no conflict markers.
 - `git diff --cached --check -- docs/DECISIONS.md` passed.
 - Whole-merge whitespace check reported trailing spaces in Unity YAML default fields from `Playground.unity` and the input-action reference `.meta`; those serialized files were left untouched.
+- After push, GitHub confirmed head `e50eb7a131062389e688cdc8fe3ec891dc1ac3ad`, base `3eb674d6caab6dbf82d74477d87bb92113056979`, and `MERGEABLE`; the PR remains open with `CHANGES_REQUESTED` and merge state `BLOCKED`.
 - No Unity Editor, PlayMode test, or manual gameplay run was performed for this merge.
 
 ## Final Result
@@ -47,4 +48,5 @@ The documentation conflict is resolved in an isolated feature worktree, with bot
 ## Unresolved Issues or Follow-up Work
 
 - The PR's empty-wheelbarrow Ramp_Gentle and three-cargo flat-ground gameplay checks remain pending.
-- Recheck the PR's current review and merge gates after pushing the updated feature branch.
+- The PR remains blocked by its `CHANGES_REQUESTED` review decision; the review gate still needs resolution.
+- The empty-wheelbarrow Ramp_Gentle and three-cargo flat-ground gameplay checks remain pending.
