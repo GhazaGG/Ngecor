@@ -19,6 +19,7 @@ Aturan ini berlaku tanpa pengecualian kecuali developer dan issue menyatakan lai
 9. Jangan menulis kode multiplayer yang membuat client menentukan state dunia (posisi objek fisika, hasil grab, jumlah material). Client hanya mengirim niat. Satu-satunya pengecualian: movement dan arah pandang player milik client itu sendiri.
 10. Jangan menyatakan "sudah dites" atau mencentang checklist jika belum dijalankan di Unity. Tulis apa yang belum dites.
 11. Jangan menulis kode networking (`NetworkBehaviour`, `NetworkObject`, RPC, `NetworkVariable`, atau API NGO lain) di luar tiket `NET-*`, atau tiket yang secara eksplisit memintanya. Fitur lain tetap offline; tiket NET-lah yang menyambungkannya ke jaringan.
+13. **Repo ini public.** Semua yang di-commit bisa dibaca dan di-clone siapa pun, termasuk bot, dan tidak bisa ditarik kembali. Jangan meng-commit secret atau kredensial (API key, token, password, service account Unity Gaming Services, file `.env`). Jangan meng-commit aset berbayar atau berlisensi terbatas (Asset Store berbayar, font atau audio berlisensi); lisensinya melarang penyebaran publik. Jika task membutuhkan salah satunya, berhenti dan tanyakan lead.
 
 ## Baca sebelum bekerja
 

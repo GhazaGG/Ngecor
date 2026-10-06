@@ -112,6 +112,24 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Pemilik task PLAYER-001, mengikuti issue #7 dan keputusan M1 di atas.
 
+### 2026-10-04 — Usulan binding tuang bucket
+
+**Proposal:** Tambahkan action `Pour` dengan binding tahan tombol `R` saat membawa bucket. Input ini hanya meminta container bucket menuang ketika berada di trigger receiver. Interact tetap `E`, sedangkan Throw tetap tombol kiri mouse pada action `Attack`.
+
+**Reason:** Tuang perlu aksi eksplisit dan tidak boleh berjalan hanya karena bucket menyentuh receiver. `R` tidak bentrok dengan binding minimum M1 yang sudah tercatat.
+
+**Status:** Usulan MAT-002 (#16), menunggu review PR dan playtest feel.
+
+**Source:** Handoff MAT-002 dari Team Lead, 2026-10-04.
+
+### 2026-10-04 — Feedback tuang bucket sederhana
+
+**Decision:** MAT-002 mendapat feedback tuang sederhana sesuai permintaan pemilik proyek: child model bucket miring dan butiran pasir terlihat menuju receiver saat transfer berlangsung. Efek berhenti saat intent dibatalkan, dan selesai dengan ekor singkat setelah transfer terakhir.
+
+**Batas:** Jumlah tetap dikelola `BulkMaterialContainer`. Pose animasi tidak menambah rotasi root Rigidbody supaya aturan tumpah tidak mengurangi unit dua kali. Partikel hanya visual, maksimal 32 aktif per bucket, tanpa Rigidbody atau collision per butir. Tuang bebas dan pile tanah tetap pada MAT-004 (#54); animasi gundukan membal dan VFX final belum termasuk.
+
+**Source:** Permintaan pemilik proyek dalam percakapan 2026-10-04: "bisa kamu execute pembuatan animasinya? sederhana dulu juga gapapa. asal ada keliatan pasir jatuh saat bucket miring".
+
 ### 2026-10-02 — Player mendorong objek fisika lewat kontak
 
 **Decision:**
@@ -175,17 +193,18 @@ Owner/source: orang atau link keputusan
 
 **Decision:**
 - Skala massa: 1 unit = 1 kg. Sak semen (sak penuh) bermassa **25 kg**, skala game dan bukan 40–50 kg asli.
-- Dorongan kontak player dibatasi **gaya maksimum setara tenaga manusia** (acuan awal ±250–300 N, dapat dituning), bukan gaya tetap ±25 N. Benda ringan terdorong tanpa melesat, dan benda berat (sak 25 kg) bergeser pelan selama player terus mendorong.
-- Sak semen tidak boleh berfungsi sebagai tembok saat ditabrak player. Friksi efektif sak terhadap lantai dijaga ≈ 0,6–0,75.
+- Dorongan kontak player dibatasi gaya maksimum **350 N** (`_maxPushForce` di `Player.prefab`), dapat dituning di Inspector. Nilai prototype ini disetujui pemilik proyek pada 2026-10-06 setelah uji PLAYER-003. Benda ringan (maksimum 5 kg) dibatasi agar tidak melampaui kecepatan jalan player, sementara sak 25 kg bergeser pelan selama player terus mendorong.
+- Dorongan diterapkan setinggi pusat massa benda supaya kontak tinggi tidak menekan benda ke lantai.
+- Sak semen tidak boleh berfungsi sebagai tembok saat ditabrak player. Friksi efektif sak terhadap lantai dijaga sekitar 0,6 sampai 0,75.
 - Pekerjaan dilakukan di PLAYER-003 (#73). Massa dan friksi sak ada di MAT-001 (#15).
 
-**Reason:** Perhitungan dari `PlayerMovement.cs` menunjukkan gaya tetap ±25 N tidak bisa menggeser benda yang lebih berat dari ±4 kg di lantai berfriksi normal, sehingga sak 25 kg menjadi tembok. Menaikkan `_pushStrength` global membuat prop ringan melesat (PR #67: Strength 20 membuat `Box_8` terlalu brutal). Batas gaya manusia memperbaiki keduanya tanpa mengubah setting physics global. Perhitungan ini belum diverifikasi di Play Mode.
+**Reason:** Gaya tetap sekitar 25 N tidak bisa menggeser benda yang lebih berat dari sekitar 4 kg di lantai berfriksi normal, sehingga sak 25 kg menjadi tembok. Menaikkan gaya dorong global membuat prop ringan melesat (PR #67: Strength 20 membuat `Box_8` terlalu brutal); batas gaya manusia menangani keduanya tanpa mengubah setting physics global. Uji PLAYER-003 di Unity 6000.3.25f1 pada head 17cfd79 menunjukkan 300 N gagal pada orientasi sak rebah, sedangkan 350 N adalah nilai terendah yang meluluskan 15/15 orientasi (rebah, sisi, sudut-sisi), dengan kecepatan puncak 2.058 m/s di bawah target 2.3 m/s. Regresi benda 1 kg dan suite PlayMode penuh lulus 74/74. Friksi sak tidak diturunkan karena itu berisiko membuat tumpukan sak, kargo gerobak, dan beban scaffolding mudah tergelincir.
 
-**Revisit:** Setelah PLAYER-003 diuji bersama wheelbarrow berkargo. Pertimbangkan apakah player perlu melambat saat mendorong benda berat.
+**Revisit:** Setelah gameplay review PLAYER-003 pada wheelbarrow kosong di Ramp_Gentle dan wheelbarrow dengan tepat tiga cargo di tanah datar; pastikan muatan tetap stabil. Pertimbangkan perlambatan player saat mendorong benda berat jika hasil playtest memerlukannya.
 
 **Applies from:** PLAYER-003 (#73), MAT-001 (#15), MAT-003 (#46), VEH-002 (#14).
 
-**Owner/source:** Keputusan Team Lead (didelegasikan oleh pemilik proyek) saat review draft PLAYER-003, 2026-10-03.
+**Owner/source:** Keputusan awal dari Team Lead (didelegasikan oleh pemilik proyek) saat review draft PLAYER-003, 2026-10-03. Pemilik proyek menyetujui nilai 350 N saat review PR #85 berdasarkan hasil uji pada 2026-10-06.
 
 ### 2026-10-03 — Norma tes otomatis
 

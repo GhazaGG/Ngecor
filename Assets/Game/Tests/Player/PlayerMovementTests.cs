@@ -1,10 +1,14 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.TestTools;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Ngecor.Player.Tests
 {
@@ -16,6 +20,7 @@ namespace Ngecor.Player.Tests
         private GameObject _wall;
         private GameObject _ramp;
         private GameObject _pushTarget;
+        private GameObject _stepProbeIgnoredColliders;
         private Transform _cameraPivot;
         private Camera _camera;
         private InputActionAsset _actionAsset;
@@ -43,6 +48,9 @@ namespace Ngecor.Player.Tests
 
             if (_pushTarget != null)
                 UnityEngine.Object.DestroyImmediate(_pushTarget);
+
+            if (_stepProbeIgnoredColliders != null)
+                UnityEngine.Object.DestroyImmediate(_stepProbeIgnoredColliders);
 
             if (_moveReference != null)
                 UnityEngine.Object.DestroyImmediate(_moveReference);
@@ -307,7 +315,378 @@ namespace Ngecor.Player.Tests
             yield return WaitForFixedFrames(30);
 
             Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.1f));
-            Assert.That(body.linearVelocity.magnitude, Is.LessThan(3f));
+            Assert.That(body.linearVelocity.magnitude, Is.LessThanOrEqualTo(5.05f));
+        }
+
+        [UnityTest]
+        public IEnumerator ContactPushMoves25KgBodyMoreSlowlyThanPlayer()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(size: 1.5f);
+            body.mass = 25f;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+            var startingPosition = body.position;
+            var maxSpeed = 0f;
+
+            Press(keyboard.wKey);
+            var previousCaptureFramerate = Time.captureFramerate;
+            Time.captureFramerate = 60;
+            try
+            {
+                for (var i = 0; i < 120; i++)
+                {
+                    yield return null;
+                    maxSpeed = Mathf.Max(maxSpeed, body.linearVelocity.z);
+                }
+            }
+            finally
+            {
+                Time.captureFramerate = previousCaptureFramerate;
+            }
+
+            Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.05f),
+                "A sustained push should produce measurable movement without requiring a heavy body to move quickly.");
+            Assert.That(maxSpeed, Is.LessThanOrEqualTo(2.3f),
+                "A 25 kg body should stay well below the player's 5 m/s walking speed.");
+        }
+
+        [UnityTest]
+        public IEnumerator PlayerPushesLowDynamicRigidbodyInsteadOfSteppingOntoIt()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(size: 0.18f);
+            body.mass = 25f;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+            Physics.SyncTransforms();
+            var startingPosition = body.position;
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(120);
+
+            Assert.That(_player.transform.position.y, Is.LessThan(0.1f),
+                "The player should stay on the ground instead of stepping onto the low sack.");
+            Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.05f),
+                "The low sack should be pushed forward when it blocks the player's path.");
+        }
+
+#if UNITY_EDITOR
+        [UnityTest]
+        public IEnumerator CementBagSlidesSlowlyWithoutBeingSteppedOver()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Game/Prefabs/Material/CementBag.prefab");
+            Assert.That(prefab, Is.Not.Null);
+            var failures = new List<string>();
+
+            var orientations = new (string name, Quaternion rotation, float centerY, float offsetX,
+                float maximumPlayerY, float minimumDistance)[]
+            {
+                ("flat", Quaternion.identity, 0.09f, 0f, 0.15f, 0.5f),
+                ("side", Quaternion.Euler(90f, 0f, 0f), 0.225f, 0f, 0.45f, 0.25f),
+                ("side-corner", Quaternion.Euler(90f, 0f, 0f), 0.225f, 0.5f, 0.15f, 0.25f)
+            };
+            var previousCaptureFramerate = Time.captureFramerate;
+            Time.captureFramerate = 60;
+            try
+            {
+                foreach (var orientation in orientations)
+                {
+                    for (var repeat = 0; repeat < 5; repeat++)
+                    {
+                        Release(keyboard.wKey);
+                        ResetPlayer();
+                        yield return WaitForFixedFrames(3, 60);
+
+                        _player.transform.rotation = Quaternion.identity;
+                        var startPosition = TestOrigin + new Vector3(orientation.offsetX, orientation.centerY, 1.2f);
+                        _pushTarget = UnityEngine.Object.Instantiate(prefab, startPosition, orientation.rotation);
+                        var body = _pushTarget.GetComponent<Rigidbody>();
+                        var initialPosition = body.position;
+                        var maxPlayerHeight = _player.transform.position.y;
+                        var maximumLinearSpeed = 0f;
+
+                        Physics.SyncTransforms();
+                        Press(keyboard.wKey);
+                        for (var frame = 0; frame < 180; frame++)
+                        {
+                            yield return null;
+                            maxPlayerHeight = Mathf.Max(maxPlayerHeight, _player.transform.position.y);
+                            maximumLinearSpeed = Mathf.Max(maximumLinearSpeed, body.linearVelocity.magnitude);
+                        }
+
+                        var planarDistance = Vector2.Distance(
+                            new Vector2(initialPosition.x, initialPosition.z),
+                            new Vector2(body.position.x, body.position.z));
+                        Release(keyboard.wKey);
+                        var outcome = $"{orientation.name} {repeat + 1}: {planarDistance:F3} m, " +
+                                      $"player height {maxPlayerHeight:F3} m, speed {maximumLinearSpeed:F3} m/s";
+                        TestContext.WriteLine(outcome);
+                        if (planarDistance <= orientation.minimumDistance)
+                            failures.Add($"{outcome}; expected > {orientation.minimumDistance:F2} m");
+                        if (maxPlayerHeight > orientation.maximumPlayerY)
+                            failures.Add($"{outcome}; player stepped onto the bag");
+                        if (maximumLinearSpeed > 2.3f)
+                            failures.Add($"{outcome}; speed exceeded 2.3 m/s");
+
+                        UnityEngine.Object.DestroyImmediate(_pushTarget);
+                        _pushTarget = null;
+                        Physics.SyncTransforms();
+                    }
+                }
+            }
+            finally
+            {
+                Time.captureFramerate = previousCaptureFramerate;
+            }
+
+            Assert.That(failures, Is.Empty, string.Join(Environment.NewLine, failures));
+        }
+#endif
+
+        [UnityTest]
+        public IEnumerator ContactPushAppliesAtMostOneImpulseToABodyPerMovementStep()
+        {
+            CreatePlayer();
+            var body = CreatePushTarget(size: 0.5f);
+            body.mass = 1f;
+            body.useGravity = false;
+            body.position = TestOrigin + new Vector3(0f, 10f, 1.2f);
+            body.linearVelocity = Vector3.forward * 4f;
+            Physics.SyncTransforms();
+
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_remainingPushImpulse", 10f);
+            var pushDeltaTime = 1f / 30f;
+            var contactPoint = body.worldCenterOfMass + Vector3.up;
+            for (var i = 0; i < 9; i++)
+            {
+                InvokePrivateMethod(movement, "ApplyContactPush", body, contactPoint,
+                    Vector3.forward, pushDeltaTime);
+            }
+
+            yield return WaitForFixedFrames(1, 30);
+
+            var expectedSingleContactSpeed = 4f + Ngecor.Player.PlayerMovement.CalculatePushForce(
+                body.mass,
+                Ngecor.Player.PlayerMovement.CalculatePushTargetSpeed(body.mass, 5f),
+                4f,
+                pushDeltaTime,
+                0.1f,
+                300f) * pushDeltaTime / body.mass;
+            Assert.That(body.linearVelocity.z, Is.EqualTo(expectedSingleContactSpeed).Within(0.01f),
+                "Repeated callbacks for one body must not queue repeated stale-velocity responses.");
+            Assert.That(body.angularVelocity.magnitude, Is.LessThan(0.01f),
+                "Contact height must not add torque that presses the body into the floor.");
+            Assert.That(body.linearVelocity.z, Is.LessThanOrEqualTo(5.05f));
+        }
+
+        [UnityTest]
+        public IEnumerator StepProbeDoesNotBlockForAnIgnoredColliderPair()
+        {
+            CreatePlayer();
+            var body = CreatePushTarget(size: 0.18f);
+            var controller = _player.GetComponent<CharacterController>();
+            var collider = body.GetComponent<Collider>();
+            Physics.IgnoreCollision(controller, collider, true);
+            Physics.SyncTransforms();
+            yield return WaitForFixedFrames(1);
+
+            Assert.That(Physics.GetIgnoreCollision(controller, collider), Is.True);
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
+                Vector3.forward, 1f), Is.False,
+                "The step probe should skip a low dynamic collider excluded from the player's collisions.");
+        }
+
+        [UnityTest]
+        public IEnumerator StepProbeRetriesWhenIrrelevantCollidersFillHitBuffer()
+        {
+            const int irrelevantColliderCount = 12;
+            CreatePlayer();
+            var body = CreatePushTarget(size: 0.18f);
+            var controller = _player.GetComponent<CharacterController>();
+            _stepProbeIgnoredColliders = new GameObject("StepProbeIrrelevantColliders");
+
+            for (var i = 0; i < irrelevantColliderCount; i++)
+            {
+                var irrelevantObject = new GameObject($"StepProbeIrrelevant{i}");
+                irrelevantObject.transform.SetParent(_stepProbeIgnoredColliders.transform);
+                irrelevantObject.transform.position = TestOrigin + new Vector3(
+                    ((i % 3) - 1) * 0.15f,
+                    0.1f + (i / 3) * 0.1f,
+                    0.65f);
+                var collider = irrelevantObject.AddComponent<BoxCollider>();
+                collider.size = Vector3.one * 0.08f;
+            }
+
+            Physics.SyncTransforms();
+            yield return WaitForFixedFrames(1);
+
+            Assert.That(controller.isGrounded, Is.True,
+                "The dynamic-body step probe is only active while the player is grounded.");
+
+            var capsuleCenter = _player.transform.TransformPoint(controller.center) +
+                                Vector3.up * 0.02f;
+            var verticalSegment = Mathf.Max(0f, controller.height * 0.5f - controller.radius);
+            var lowerSphereCenter = capsuleCenter - Vector3.up * verticalSegment;
+            var upperSphereCenter = capsuleCenter + Vector3.up * verticalSegment;
+            var allHits = Physics.CapsuleCastAll(
+                lowerSphereCenter,
+                upperSphereCenter,
+                controller.radius,
+                Vector3.forward,
+                1f + controller.skinWidth,
+                Physics.AllLayers,
+                QueryTriggerInteraction.Ignore);
+            Assert.That(allHits.Length, Is.GreaterThan(8),
+                "The test setup must actually saturate the probe's original eight-hit buffer.");
+            Assert.That(Array.Exists(allHits, hit => hit.collider == body.GetComponent<Collider>()), Is.True,
+                "The same query must include the valid dynamic blocker behind the irrelevant hits.");
+
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
+                Vector3.forward, 1f), Is.True,
+                "The probe should retry a saturated query so a valid dynamic blocker is not hidden by irrelevant colliders.");
+
+            var cachedHits = (RaycastHit[])GetPrivateField(typeof(Ngecor.Player.PlayerMovement),
+                movement, "_stepProbeHits");
+            Assert.That(cachedHits.Length, Is.GreaterThan(8),
+                "The cached result buffer should grow only after the original capacity is exhausted.");
+            Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
+                Vector3.forward, 1f), Is.True);
+            Assert.That(GetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_stepProbeHits"),
+                Is.SameAs(cachedHits),
+                "The grown result buffer should be reused once it has enough capacity.");
+        }
+
+        [UnityTest]
+        public IEnumerator StepProbeDoesNotBlockForAnIgnoredLayerPair()
+        {
+            const int probeTestLayer = 31;
+            var wasIgnored = Physics.GetIgnoreLayerCollision(0, probeTestLayer);
+            try
+            {
+                Physics.IgnoreLayerCollision(0, probeTestLayer, true);
+                CreatePlayer();
+                var body = CreatePushTarget(size: 0.18f);
+                body.gameObject.layer = probeTestLayer;
+                Physics.SyncTransforms();
+                yield return WaitForFixedFrames(1);
+
+                Assert.That(Physics.GetIgnoreLayerCollision(0, probeTestLayer), Is.True);
+                var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+                Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
+                    Vector3.forward, 1f), Is.False,
+                    "The step probe should skip layers excluded by the project collision matrix.");
+            }
+            finally
+            {
+                Physics.IgnoreLayerCollision(0, probeTestLayer, wasIgnored);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator StepProbeIncludesPhysicallyCollidableIgnoreRaycastObjects()
+        {
+            const int ignoreRaycastLayer = 2;
+            var wasIgnored = Physics.GetIgnoreLayerCollision(0, ignoreRaycastLayer);
+            try
+            {
+                Physics.IgnoreLayerCollision(0, ignoreRaycastLayer, false);
+                CreatePlayer();
+                var body = CreatePushTarget(size: 0.18f);
+                body.gameObject.layer = ignoreRaycastLayer;
+                Physics.SyncTransforms();
+                yield return WaitForFixedFrames(1);
+
+                var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+                Assert.That(InvokePrivateMethod(movement, "ShouldBlockStepOverDynamicBody",
+                    Vector3.forward, 1f), Is.True,
+                    "Ignore Raycast excludes ray queries by default, but does not exclude physical collision.");
+            }
+            finally
+            {
+                Physics.IgnoreLayerCollision(0, ignoreRaycastLayer, wasIgnored);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator CharacterControllerCanStillStepOverAStaticBlock()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            _wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _wall.transform.position = TestOrigin + new Vector3(0f, 0.15f, 1.2f);
+            _wall.transform.localScale = new Vector3(2f, 0.3f, 0.4f);
+            Physics.SyncTransforms();
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(60);
+
+            Assert.That(_player.transform.position.z, Is.GreaterThan(1.8f),
+                "A low static step should remain traversable with the normal CharacterController step offset.");
+        }
+
+        [UnityTest]
+        public IEnumerator ContactPushDoesNotAccelerate1KgBodyPastWalkingSpeed()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var body = CreatePushTarget(size: 1.5f);
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+            var startingPosition = body.position;
+            var maxSpeed = 0f;
+
+            Press(keyboard.wKey);
+            var previousCaptureFramerate = Time.captureFramerate;
+            Time.captureFramerate = 60;
+            try
+            {
+                for (var i = 0; i < 120; i++)
+                {
+                    yield return null;
+                    maxSpeed = Mathf.Max(maxSpeed, body.linearVelocity.z);
+                }
+            }
+            finally
+            {
+                Time.captureFramerate = previousCaptureFramerate;
+            }
+
+            Assert.That(body.position.z, Is.GreaterThan(startingPosition.z + 0.1f),
+                "A light body should move under a sustained player push.");
+            Assert.That(maxSpeed, Is.LessThanOrEqualTo(5.05f),
+                "A light body must not outrun the player's 5 m/s walking speed.");
+        }
+
+        [Test]
+        public void PushForceScalesWithMassAndRespectsTheHumanForceLimit()
+        {
+            var lightForce = Ngecor.Player.PlayerMovement.CalculatePushForce(1f, 5f, 0f, 0.02f, 0.2f, 300f);
+            var heavyForce = Ngecor.Player.PlayerMovement.CalculatePushForce(25f, 5f, 0f, 0.02f, 0.2f, 300f);
+            var nearlyAtTargetForce = Ngecor.Player.PlayerMovement.CalculatePushForce(1f, 5f, 4.9f, 0.02f, 0.2f, 300f);
+            var atTargetForce = Ngecor.Player.PlayerMovement.CalculatePushForce(1f, 5f, 5f, 0.02f, 0.2f, 300f);
+
+            Assert.That(lightForce, Is.EqualTo(23.79f).Within(0.02f));
+            Assert.That(heavyForce, Is.EqualTo(300f));
+            Assert.That(nearlyAtTargetForce, Is.LessThan(lightForce));
+            Assert.That(atTargetForce, Is.EqualTo(0f));
+        }
+
+        [Test]
+        public void PushTargetSpeedDecreasesWithMassAndNeverExceedsWalkingSpeed()
+        {
+            var oneKgTarget = Ngecor.Player.PlayerMovement.CalculatePushTargetSpeed(1f, 5f);
+            var fiveKgTarget = Ngecor.Player.PlayerMovement.CalculatePushTargetSpeed(5f, 5f);
+            var twentyFiveKgTarget = Ngecor.Player.PlayerMovement.CalculatePushTargetSpeed(25f, 5f);
+
+            Assert.That(oneKgTarget, Is.EqualTo(5f));
+            Assert.That(fiveKgTarget, Is.EqualTo(5f));
+            Assert.That(twentyFiveKgTarget, Is.EqualTo(5f * Mathf.Sqrt(0.2f)).Within(0.001f));
+            Assert.That(twentyFiveKgTarget, Is.LessThan(fiveKgTarget));
         }
 
         [UnityTest]
@@ -535,6 +914,16 @@ namespace Ngecor.Player.Tests
             _camera = cameraObject.AddComponent<Camera>();
 
             var movement = _player.AddComponent<Ngecor.Player.PlayerMovement>();
+#if UNITY_EDITOR
+            var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Game/Prefabs/Player/Player.prefab");
+            var prefabMovement = playerPrefab != null ? playerPrefab.GetComponent<Ngecor.Player.PlayerMovement>() : null;
+            var maxPushForceField = typeof(Ngecor.Player.PlayerMovement).GetField(
+                "_maxPushForce", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(prefabMovement, Is.Not.Null, "Player prefab must configure contact pushing.");
+            Assert.That(maxPushForceField, Is.Not.Null);
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_maxPushForce",
+                maxPushForceField.GetValue(prefabMovement));
+#endif
             SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_moveAction", _moveReference);
             SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_lookAction", _lookReference);
             SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_cameraPivot", _cameraPivot);
@@ -575,6 +964,13 @@ namespace Ngecor.Player.Tests
             var field = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, $"Missing {type.Name} field '{name}'.");
             return field.GetValue(target);
+        }
+
+        private static object InvokePrivateMethod(object target, string name, params object[] arguments)
+        {
+            var method = target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null, $"Missing {target.GetType().Name} method '{name}'.");
+            return method.Invoke(target, arguments);
         }
 
         private static IEnumerator WaitForFixedFrames(int frameCount, int framerate = 60)
