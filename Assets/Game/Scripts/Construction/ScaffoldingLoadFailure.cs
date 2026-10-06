@@ -143,10 +143,15 @@ namespace Ngecor.Construction
 
             for (int i = 0; i < collision.contactCount; i++)
             {
-                if (Mathf.Abs(collision.GetContact(i).normal.y) < 0.5f)
+                ContactPoint contact = collision.GetContact(i);
+                if (Mathf.Abs(contact.normal.y) >= 0.5f)
+                    continue;
+
+                float incomingMomentum = collision.rigidbody.mass *
+                    Mathf.Abs(Vector3.Dot(collision.relativeVelocity, contact.normal));
+                if (Mathf.Max(collision.impulse.magnitude, incomingMomentum) >= _maximumImpactImpulse)
                 {
-                    if (collision.impulse.magnitude >= _maximumImpactImpulse)
-                        _impactWarning = true;
+                    _impactWarning = true;
                     return;
                 }
             }
@@ -166,11 +171,11 @@ namespace Ngecor.Construction
             _wobbling = false;
             _impactWobble = false;
             _wobbleTime = 0f;
-            _body.isKinematic = true;
             _body.position = _restPosition;
             _body.rotation = _restRotation;
             _body.linearVelocity = Vector3.zero;
             _body.angularVelocity = Vector3.zero;
+            _body.isKinematic = true;
         }
 
         private void BreakIntoParts()
