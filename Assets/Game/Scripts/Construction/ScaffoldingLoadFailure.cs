@@ -11,13 +11,18 @@ namespace Ngecor.Construction
         [SerializeField, Min(0f)] private float _wobbleDuration = 2f;
         [SerializeField, Min(0f)] private float _wobbleTorque = 2f;
         [SerializeField, Min(0f)] private float _maximumImpactImpulse = 30f;
+        [SerializeField, Min(0f), Tooltip("Impacts at or above this impulse collapse the module " +
+            "immediately instead of only wobbling. Calibration: a thrown 20 kg cement bag carries " +
+            "~10 N·s (wobble path); a heavy 20 kg object sliding down a ramp reaches ~100+ N·s " +
+            "(collapse). Tune in the Inspector.")]
+        private float _impactCollapseImpulse = 60f;
         [SerializeField] private Transform _playerLoadProbe;
         [SerializeField] private Transform[] _breakParts = new Transform[4];
         [SerializeField] private float[] _partMasses = { 20f, 20f, 12.5f, 12.5f };
 
-        private readonly Collider[] _overlaps = new Collider[16];
-        private readonly Rigidbody[] _seenBodies = new Rigidbody[16];
-        private readonly CharacterController[] _seenPlayers = new CharacterController[16];
+        private readonly Collider[] _overlaps = new Collider[32];
+        private readonly Rigidbody[] _seenBodies = new Rigidbody[32];
+        private readonly CharacterController[] _seenPlayers = new CharacterController[32];
         private Rigidbody _body;
         private Vector3 _restPosition;
         private Quaternion _restRotation;
@@ -26,6 +31,8 @@ namespace Ngecor.Construction
         private bool _impactWobble;
         private bool _impactWarning;
         private bool _broken;
+        private bool _payloadUncertain;
+        private float _lastBufferFullWarningTime = -10f;
 
         private void Awake()
         {
@@ -47,7 +54,7 @@ namespace Ngecor.Construction
                 return;
             }
 
-            bool overloaded = payloadMass >= _wobbleThreshold;
+            bool overloaded = payloadMass >= _wobbleThreshold || _payloadUncertain;
             bool impactWarning = _impactWarning;
             _impactWarning = false;
 
@@ -74,7 +81,10 @@ namespace Ngecor.Construction
         private float MeasurePayloadMass()
         {
             if (_playerLoadProbe == null)
+            {
+                _payloadUncertain = false;
                 return 0f;
+            }
 
             int overlapCount = Physics.OverlapBoxNonAlloc(
                 _playerLoadProbe.position,
@@ -83,6 +93,10 @@ namespace Ngecor.Construction
                 _playerLoadProbe.rotation,
                 Physics.DefaultRaycastLayers,
                 QueryTriggerInteraction.Ignore);
+
+            _payloadUncertain = overlapCount == _overlaps.Length;
+            if (_payloadUncertain)
+                LogBufferFullWarning();
 
             float payloadMass = 0f;
             int bodyCount = 0;
@@ -103,11 +117,14 @@ namespace Ngecor.Construction
 
                 Rigidbody cargo = collider.attachedRigidbody;
                 if (cargo == null || cargo == _body || cargo.isKinematic ||
-                    cargo.GetComponentInParent<ScaffoldingLoadFailure>() != null ||
                     Contains(_seenBodies, bodyCount, cargo))
                 {
                     continue;
                 }
+
+                // Only look up the component for unique, load-bearing candidates.
+                if (cargo.GetComponentInParent<ScaffoldingLoadFailure>() != null)
+                    continue;
 
                 _seenBodies[bodyCount++] = cargo;
                 payloadMass += cargo.mass;
@@ -121,6 +138,18 @@ namespace Ngecor.Construction
                 _seenPlayers[i] = null;
 
             return payloadMass;
+        }
+
+        private void LogBufferFullWarning()
+        {
+            // Throttled so a crowded probe does not spam the console every physics tick.
+            if (Time.time - _lastBufferFullWarningTime < 5f)
+                return;
+            _lastBufferFullWarningTime = Time.time;
+            Debug.LogWarning($"[ScaffoldingLoadFailure] Load probe on '{name}' returned a full " +
+                $"buffer ({_overlaps.Length} colliders); the payload mass is a lower bound, so the " +
+                "module wobbles as the safe side. Consider splitting the probe or excluding " +
+                "irrelevant colliders.", this);
         }
 
         private static bool Contains(Rigidbody[] bodies, int count, Rigidbody candidate)
@@ -145,7 +174,13 @@ namespace Ngecor.Construction
 
         private void OnCollisionEnter(Collision collision)
         {
-            if (!_broken && collision.impulse.magnitude >= _maximumImpactImpulse)
+            if (_broken)
+                return;
+
+            float impulse = collision.impulse.magnitude;
+            if (impulse >= _impactCollapseImpulse)
+                BreakIntoParts();
+            else if (impulse >= _maximumImpactImpulse)
                 _impactWarning = true;
         }
 
