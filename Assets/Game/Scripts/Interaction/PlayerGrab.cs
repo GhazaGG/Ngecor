@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using UnityEngine.Rendering;
 using Ngecor.Player;
 
 namespace Ngecor.Interaction
@@ -9,7 +8,6 @@ namespace Ngecor.Interaction
     [RequireComponent(typeof(CharacterController))]
     [RequireComponent(typeof(PlayerMovement))]
     [RequireComponent(typeof(InteractionDetector))]
-    [DefaultExecutionOrder(-100)]
     public class PlayerGrab : MonoBehaviour
     {
         [SerializeField] private Transform _holdPoint;
@@ -20,37 +18,18 @@ namespace Ngecor.Interaction
         [SerializeField] private bool _showDebugFeedback = true;
 
         private readonly RaycastHit[] _holdHits = new RaycastHit[8];
-        private readonly RaycastHit[] _groundHits = new RaycastHit[16];
         private readonly Collider[] _holdColliders = new Collider[16];
-        [SerializeField, Min(0.1f)] private float _groundSnapDistance = 5f;
-        [SerializeField, Min(0.01f)] private float _scaffoldingRotateSensitivity = 0.25f;
-        [SerializeField, Min(0.01f)] private float _scaffoldingRotationSmoothTime = 0.06f;
         private float _carriedRadius = 0.25f;
 
         private CharacterController _characterController;
         private PlayerMovement _playerMovement;
         private InteractionDetector _detector;
         private GrabbableObject _carriedObject;
-        private ScaffoldingPart _carriedScaffoldingPart;
         private Transform _resolvedHoldPoint;
         private Collider[] _playerColliders;
 
         private bool _savedWasKinematic;
         private bool _savedUseGravity;
-        private bool[] _savedColliderEnabled;
-        private Renderer[] _carriedScaffoldingRenderers;
-        private bool[] _savedRendererEnabled;
-        private GameObject _scaffoldingPreview;
-        private Material _scaffoldingPreviewMaterial;
-        private bool _scaffoldingPreviewCanConnect;
-        private float _scaffoldingPreviewBaseYaw;
-        private float _scaffoldingPreviewYaw;
-        private float _scaffoldingPreviewCurrentYaw;
-        private float _scaffoldingPreviewYawVelocity;
-        private float _nextScaffoldingPreviewRefresh;
-
-        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
-        private static readonly int ColorId = Shader.PropertyToID("_Color");
 
         public bool IsCarrying => _carriedObject != null && _carriedObject.gameObject != null;
         public GrabbableObject CarriedObject => IsCarrying ? _carriedObject : null;
@@ -93,19 +72,8 @@ namespace Ngecor.Interaction
             if (_playerMovement == null)
                 _playerMovement = GetComponent<PlayerMovement>();
 
-            bool isLocalPlayer = _playerMovement != null && _playerMovement.LocalCamera != null;
-            bool rotatingScaffolding = isLocalPlayer && _carriedScaffoldingPart != null &&
-                                       Mouse.current != null && Mouse.current.rightButton.isPressed;
-            if (_playerMovement != null)
-                _playerMovement.LookInputSuppressed = rotatingScaffolding;
-
-            if (rotatingScaffolding)
-                _scaffoldingPreviewYaw = Mathf.Repeat(
-                    _scaffoldingPreviewYaw + Mouse.current.delta.ReadValue().x * _scaffoldingRotateSensitivity,
-                    360f);
-
             // Only process input for the local player
-            if (!isLocalPlayer)
+            if (_playerMovement == null || _playerMovement.LocalCamera == null)
                 return;
 
             // Handle Interact Input (Grab / Drop)
@@ -145,11 +113,8 @@ namespace Ngecor.Interaction
             if (IsCarrying)
             {
                 string objectName = _carriedObject != null ? _carriedObject.gameObject.name : "Object";
-                string action = _carriedScaffoldingPart != null
-                    ? $"[Carrying: {objectName}] Ghost: {(_scaffoldingPreviewCanConnect ? "connectable" : "free place")} | Hold RMB + move mouse: rotate | Interact: place"
-                    : $"[Carrying]: {objectName} (Drop)";
-                float width = _carriedScaffoldingPart != null ? 650f : 240f;
-                GUI.Box(new Rect(Screen.width / 2f - width / 2f, Screen.height / 2f + 75f, width, 30f), action);
+                GUI.Box(new Rect(Screen.width / 2f - 120f, Screen.height / 2f + 75f, 240f, 30f),
+                    $"[Carrying]: {objectName} (Drop)");
             }
         }
 
@@ -173,29 +138,13 @@ namespace Ngecor.Interaction
             if (holdPoint != null && _carriedObject != null)
             {
                 Vector3 targetPos = ResolveHoldPosition(holdPoint, camera, _carriedObject);
-                Quaternion targetRot = _carriedScaffoldingPart != null
-                    ? GetScaffoldingPreviewRotation()
-                    : holdPoint.rotation;
-                if (_carriedScaffoldingPart != null && _carriedScaffoldingPart.IsSupport)
-                    targetPos = SnapSupportToGround(_carriedScaffoldingPart, targetPos, targetRot);
-
+                Quaternion targetRot = holdPoint.rotation;
                 _carriedObject.transform.SetPositionAndRotation(targetPos, targetRot);
-
-                if (_carriedScaffoldingPart != null && _scaffoldingPreview != null)
-                {
-                    _scaffoldingPreview.transform.SetPositionAndRotation(targetPos, targetRot);
-                    if (Time.unscaledTime >= _nextScaffoldingPreviewRefresh)
-                        RefreshScaffoldingPreview();
-                }
             }
-
         }
 
         private void OnDisable()
         {
-            if (_playerMovement != null)
-                _playerMovement.LookInputSuppressed = false;
-
             if (IsCarrying)
                 ExecuteDrop();
         }
@@ -242,7 +191,6 @@ namespace Ngecor.Interaction
         {
             // Offline M1: Direct local execution.
             // NET-002/003: Will route drop intent to host.
-
             return ExecuteDrop();
         }
 
@@ -251,13 +199,7 @@ namespace Ngecor.Interaction
             if (!IsCarrying)
                 return false;
 
-            ScaffoldingPart droppedPart = _carriedScaffoldingPart;
             DetachObject();
-            if (droppedPart != null)
-            {
-                droppedPart.ConnectToTouchingParts();
-                droppedPart.EndPlacementPreview();
-            }
             return true;
         }
 
@@ -281,11 +223,8 @@ namespace Ngecor.Interaction
 
             var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
             Vector3 throwDir = camera != null ? camera.transform.forward : transform.forward;
-            ScaffoldingPart thrownPart = _carriedScaffoldingPart;
 
             DetachObject();
-            if (thrownPart != null)
-                thrownPart.EndPlacementPreview();
 
             if (rb != null && !rb.isKinematic)
             {
@@ -299,10 +238,6 @@ namespace Ngecor.Interaction
         private void AttachObject(GrabbableObject target)
         {
             _carriedObject = target;
-            _carriedScaffoldingPart = target.GetComponent<ScaffoldingPart>();
-
-            if (_carriedScaffoldingPart != null)
-                _carriedScaffoldingPart.DetachFromOtherParts();
 
             var colliders = target.Colliders;
             if (colliders != null && colliders.Length > 0)
@@ -320,8 +255,6 @@ namespace Ngecor.Interaction
             {
                 _carriedRadius = 0.25f;
             }
-
-            DisableCarriedColliders(target);
 
             var rb = target.Rigidbody;
             if (rb != null)
@@ -344,20 +277,9 @@ namespace Ngecor.Interaction
                 var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
 
                 Vector3 targetPos = camera != null ? ResolveHoldPosition(holdPoint, camera, target) : holdPoint.position;
-            _scaffoldingPreviewBaseYaw = camera != null
-                ? camera.transform.eulerAngles.y
-                : transform.eulerAngles.y;
-                _scaffoldingPreviewYaw = 0f;
-                Quaternion targetRot = _carriedScaffoldingPart != null
-                    ? Quaternion.Euler(0f, _scaffoldingPreviewBaseYaw, 0f)
-                    : holdPoint.rotation;
-                _scaffoldingPreviewCurrentYaw = _scaffoldingPreviewBaseYaw;
-                _scaffoldingPreviewYawVelocity = 0f;
+                Quaternion targetRot = holdPoint.rotation;
                 target.transform.SetPositionAndRotation(targetPos, targetRot);
             }
-
-            if (_carriedScaffoldingPart != null)
-                CreateScaffoldingPreview(_carriedScaffoldingPart);
         }
 
         private void DetachObject()
@@ -366,14 +288,6 @@ namespace Ngecor.Interaction
             {
                 var target = _carriedObject;
                 _carriedObject = null;
-                _carriedScaffoldingPart = null;
-                if (_playerMovement != null)
-                    _playerMovement.LookInputSuppressed = false;
-
-                RestoreCarriedColliders(target);
-                RestoreCarriedScaffoldingRenderers();
-                DestroyScaffoldingPreview();
-                Physics.SyncTransforms();
 
                 DepenetrateOnDrop(target);
 
@@ -399,265 +313,6 @@ namespace Ngecor.Interaction
                 }
 
                 target.OnRelease();
-            }
-        }
-
-        private void DisableCarriedColliders(GrabbableObject target)
-        {
-            Collider[] colliders = target.Colliders;
-            _savedColliderEnabled = new bool[colliders.Length];
-            for (int i = 0; i < colliders.Length; i++)
-            {
-                if (colliders[i] == null)
-                    continue;
-
-                _savedColliderEnabled[i] = colliders[i].enabled;
-                colliders[i].enabled = false;
-            }
-        }
-
-        private Vector3 SnapSupportToGround(ScaffoldingPart support, Vector3 desiredPosition, Quaternion desiredRotation)
-        {
-            if (_groundSnapDistance <= 0f)
-                return desiredPosition;
-
-            SetCarriedCollidersEnabled(true);
-            try
-            {
-                support.transform.SetPositionAndRotation(desiredPosition, desiredRotation);
-                Physics.SyncTransforms();
-
-                bool hasBounds = false;
-                Bounds bounds = default;
-                foreach (Collider collider in _carriedObject.Colliders)
-                {
-                    if (collider == null || !collider.enabled || collider.isTrigger)
-                        continue;
-
-                    if (!hasBounds)
-                    {
-                        bounds = collider.bounds;
-                        hasBounds = true;
-                    }
-                    else
-                    {
-                        bounds.Encapsulate(collider.bounds);
-                    }
-                }
-
-                if (!hasBounds)
-                    return desiredPosition;
-
-                Vector3 origin = new Vector3(desiredPosition.x, bounds.max.y + _groundSnapDistance, desiredPosition.z);
-                float rayDistance = bounds.size.y + _groundSnapDistance * 2f;
-                int hitCount = Physics.RaycastNonAlloc(
-                    origin,
-                    Vector3.down,
-                    _groundHits,
-                    rayDistance,
-                    Physics.DefaultRaycastLayers,
-                    QueryTriggerInteraction.Ignore);
-
-                bool foundGround = false;
-                float groundHeight = float.NegativeInfinity;
-                for (int i = 0; i < hitCount; i++)
-                {
-                    Collider ground = _groundHits[i].collider;
-                    if (ground == null || ground.attachedRigidbody != null || _groundHits[i].normal.y < 0.5f ||
-                        ground.transform == support.transform || ground.transform.IsChildOf(support.transform) ||
-                        ground.transform.IsChildOf(transform))
-                        continue;
-
-                    if (_groundHits[i].point.y <= groundHeight)
-                        continue;
-
-                    groundHeight = _groundHits[i].point.y;
-                    foundGround = true;
-                }
-
-                if (foundGround)
-                    desiredPosition.y += groundHeight - bounds.min.y;
-
-                return desiredPosition;
-            }
-            finally
-            {
-                SetCarriedCollidersEnabled(false);
-            }
-        }
-
-        private Quaternion GetScaffoldingPreviewRotation()
-        {
-            float targetYaw = _scaffoldingPreviewBaseYaw + _scaffoldingPreviewYaw;
-            _scaffoldingPreviewCurrentYaw = Mathf.SmoothDampAngle(
-                _scaffoldingPreviewCurrentYaw,
-                targetYaw,
-                ref _scaffoldingPreviewYawVelocity,
-                _scaffoldingRotationSmoothTime);
-            return Quaternion.Euler(0f, _scaffoldingPreviewCurrentYaw, 0f);
-        }
-
-        private void SetCarriedCollidersEnabled(bool enabled)
-        {
-            if (_carriedObject == null || _savedColliderEnabled == null)
-                return;
-
-            Collider[] colliders = _carriedObject.Colliders;
-            for (int i = 0; i < colliders.Length && i < _savedColliderEnabled.Length; i++)
-            {
-                if (colliders[i] != null)
-                    colliders[i].enabled = enabled && _savedColliderEnabled[i];
-            }
-        }
-
-        private void RestoreCarriedColliders(GrabbableObject target)
-        {
-            Collider[] colliders = target.Colliders;
-            for (int i = 0; i < colliders.Length && _savedColliderEnabled != null && i < _savedColliderEnabled.Length; i++)
-            {
-                if (colliders[i] != null)
-                    colliders[i].enabled = _savedColliderEnabled[i];
-            }
-
-            _savedColliderEnabled = null;
-        }
-
-        private void CreateScaffoldingPreview(ScaffoldingPart part)
-        {
-            _carriedScaffoldingRenderers = part.GetComponentsInChildren<Renderer>(true);
-            _savedRendererEnabled = new bool[_carriedScaffoldingRenderers.Length];
-            for (int i = 0; i < _carriedScaffoldingRenderers.Length; i++)
-            {
-                Renderer renderer = _carriedScaffoldingRenderers[i];
-                if (renderer == null)
-                    continue;
-
-                _savedRendererEnabled[i] = renderer.enabled;
-                renderer.enabled = false;
-            }
-
-            _scaffoldingPreviewMaterial = CreateScaffoldingPreviewMaterial();
-            _scaffoldingPreview = new GameObject($"{part.name}_PlacementPreview")
-            {
-                hideFlags = HideFlags.HideAndDontSave
-            };
-            _scaffoldingPreview.transform.SetPositionAndRotation(part.transform.position, part.transform.rotation);
-            _scaffoldingPreview.transform.localScale = part.transform.lossyScale;
-            CopyPreviewMeshes(part.transform, _scaffoldingPreview.transform);
-
-            part.BeginPlacementPreview();
-            RefreshScaffoldingPreview();
-        }
-
-        private void CopyPreviewMeshes(Transform source, Transform preview)
-        {
-            MeshFilter sourceFilter = source.GetComponent<MeshFilter>();
-            MeshRenderer sourceRenderer = source.GetComponent<MeshRenderer>();
-            if (sourceFilter != null && sourceFilter.sharedMesh != null && sourceRenderer != null)
-            {
-                MeshFilter previewFilter = preview.gameObject.AddComponent<MeshFilter>();
-                previewFilter.sharedMesh = sourceFilter.sharedMesh;
-                MeshRenderer previewRenderer = preview.gameObject.AddComponent<MeshRenderer>();
-                int submeshCount = sourceFilter.sharedMesh.subMeshCount;
-                Material[] materials = new Material[submeshCount];
-                for (int i = 0; i < materials.Length; i++)
-                    materials[i] = _scaffoldingPreviewMaterial;
-                previewRenderer.sharedMaterials = materials;
-                previewRenderer.shadowCastingMode = ShadowCastingMode.Off;
-                previewRenderer.receiveShadows = false;
-            }
-
-            for (int i = 0; i < source.childCount; i++)
-            {
-                Transform sourceChild = source.GetChild(i);
-                var previewChild = new GameObject(sourceChild.name).transform;
-                previewChild.SetParent(preview, false);
-                previewChild.localPosition = sourceChild.localPosition;
-                previewChild.localRotation = sourceChild.localRotation;
-                previewChild.localScale = sourceChild.localScale;
-                CopyPreviewMeshes(sourceChild, previewChild);
-            }
-        }
-
-        private static Material CreateScaffoldingPreviewMaterial()
-        {
-            Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (shader == null)
-                shader = Shader.Find("Unlit/Transparent");
-            if (shader == null)
-                shader = Shader.Find("Sprites/Default");
-            if (shader == null)
-                return null;
-
-            var material = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
-            if (material.HasProperty("_Surface"))
-                material.SetFloat("_Surface", 1f);
-            if (material.HasProperty("_SrcBlend"))
-                material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
-            if (material.HasProperty("_DstBlend"))
-                material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
-            if (material.HasProperty("_ZWrite"))
-                material.SetInt("_ZWrite", 0);
-            material.SetOverrideTag("RenderType", "Transparent");
-            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
-            material.renderQueue = (int)RenderQueue.Transparent;
-            return material;
-        }
-
-        private void RefreshScaffoldingPreview()
-        {
-            if (_carriedScaffoldingPart == null || _scaffoldingPreviewMaterial == null)
-                return;
-
-            SetCarriedCollidersEnabled(true);
-            try
-            {
-                _scaffoldingPreviewCanConnect = _carriedScaffoldingPart.CanConnectToTouchingParts();
-            }
-            finally
-            {
-                SetCarriedCollidersEnabled(false);
-            }
-
-            Color tint = _scaffoldingPreviewCanConnect
-                ? new Color(0.2f, 1f, 0.25f, 0.45f)
-                : new Color(1f, 0.2f, 0.15f, 0.45f);
-            if (_scaffoldingPreviewMaterial.HasProperty(BaseColorId))
-                _scaffoldingPreviewMaterial.SetColor(BaseColorId, tint);
-            if (_scaffoldingPreviewMaterial.HasProperty(ColorId))
-                _scaffoldingPreviewMaterial.SetColor(ColorId, tint);
-
-            _nextScaffoldingPreviewRefresh = Time.unscaledTime + 0.1f;
-        }
-
-        private void RestoreCarriedScaffoldingRenderers()
-        {
-            if (_carriedScaffoldingRenderers == null)
-                return;
-
-            for (int i = 0; i < _carriedScaffoldingRenderers.Length && _savedRendererEnabled != null && i < _savedRendererEnabled.Length; i++)
-            {
-                if (_carriedScaffoldingRenderers[i] != null)
-                    _carriedScaffoldingRenderers[i].enabled = _savedRendererEnabled[i];
-            }
-
-            _carriedScaffoldingRenderers = null;
-            _savedRendererEnabled = null;
-        }
-
-        private void DestroyScaffoldingPreview()
-        {
-            if (_scaffoldingPreview != null)
-            {
-                _scaffoldingPreview.SetActive(false);
-                Destroy(_scaffoldingPreview);
-                _scaffoldingPreview = null;
-            }
-
-            if (_scaffoldingPreviewMaterial != null)
-            {
-                Destroy(_scaffoldingPreviewMaterial);
-                _scaffoldingPreviewMaterial = null;
             }
         }
 

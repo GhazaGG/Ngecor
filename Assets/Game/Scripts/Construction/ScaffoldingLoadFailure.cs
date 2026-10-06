@@ -10,7 +10,7 @@ namespace Ngecor.Construction
         [SerializeField, Min(0f)] private float _characterControllerMass = 75f;
         [SerializeField, Min(0f)] private float _wobbleDuration = 2f;
         [SerializeField, Min(0f)] private float _wobbleTorque = 2f;
-        [SerializeField, Min(0f)] private float _maximumImpactImpulse = 8f;
+        [SerializeField, Min(0f)] private float _maximumImpactImpulse = 50f;
         [SerializeField] private Transform _playerLoadProbe;
         [SerializeField] private Transform[] _breakParts = new Transform[4];
         [SerializeField] private float[] _partMasses = { 20f, 20f, 12.5f, 12.5f };
@@ -169,8 +169,20 @@ namespace Ngecor.Construction
 
         private void OnCollisionEnter(Collision collision)
         {
-            if (!_broken && collision.impulse.magnitude >= _maximumImpactImpulse)
-                _impactWarning = true;
+            if (_broken || _wobbling || collision.rigidbody == null || collision.rigidbody.isKinematic)
+            {
+                return;
+            }
+
+            for (int i = 0; i < collision.contactCount; i++)
+            {
+                if (Mathf.Abs(collision.GetContact(i).normal.y) < 0.5f)
+                {
+                    if (collision.impulse.magnitude >= _maximumImpactImpulse)
+                        _impactWarning = true;
+                    return;
+                }
+            }
         }
 
         private void StartWobble(bool impactWobble)
