@@ -332,7 +332,7 @@ namespace Ngecor.Material.Tests
         }
 
         [UnityTest]
-        public IEnumerator TiltedDynamicBucketSpillsThroughContainerRule()
+        public IEnumerator TiltedDynamicBucketWithoutDepositRetainsUnits()
         {
             var source = CreateBucket();
             var body = source.GetComponent<Rigidbody>();
@@ -342,7 +342,7 @@ namespace Ngecor.Material.Tests
 
             yield return new WaitForSeconds(0.4f);
 
-            Assert.That(source.GetUnits(MaterialType.Sand), Is.LessThan(10));
+            Assert.That(source.GetUnits(MaterialType.Sand), Is.EqualTo(10));
         }
 
         private BulkMaterialContainer CreateBucket(bool withGrabbable = false)
