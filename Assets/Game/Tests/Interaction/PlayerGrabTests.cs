@@ -976,5 +976,75 @@ namespace Ngecor.Interaction.Tests
 
             yield return new WaitForFixedUpdate();
         }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_CompoundCollider_IgnoresTriggersWhenCalculatingCarriedRadius()
+        {
+            var compoundRoot = new GameObject("CompoundWithTrigger");
+            compoundRoot.transform.position = new Vector3(0f, 1.4f, 2f);
+            var rb = compoundRoot.AddComponent<Rigidbody>();
+            rb.isKinematic = false;
+            rb.useGravity = true;
+
+            // Solid collider: size 0.4 -> extents 0.2
+            var childSolid = new GameObject("SolidPart");
+            childSolid.transform.SetParent(compoundRoot.transform, false);
+            var solidCol = childSolid.AddComponent<BoxCollider>();
+            solidCol.size = new Vector3(0.4f, 0.4f, 0.4f);
+
+            // Trigger collider: 10m detector trigger
+            var childTrigger = new GameObject("TriggerPart");
+            childTrigger.transform.SetParent(compoundRoot.transform, false);
+            var triggerCol = childTrigger.AddComponent<BoxCollider>();
+            triggerCol.size = new Vector3(10f, 10f, 10f);
+            triggerCol.isTrigger = true;
+
+            var grabbable = compoundRoot.AddComponent<GrabbableObject>();
+            _targetObject1 = compoundRoot;
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            // Carried radius should be computed from solid collider (0.2m), ignoring the 10m trigger
+            Assert.That(_playerGrab.CarriedRadius, Is.EqualTo(0.2f).Within(0.01f),
+                "CarriedRadius must ignore trigger colliders and only use solid collider bounds!");
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_CollidingWithDynamicRigidbody_DoesNotImpartExcessiveImpulse()
+        {
+            // Dynamic prop in front of player
+            var prop = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            prop.name = "DynamicProp";
+            prop.transform.position = new Vector3(0f, 1.4f, 1.0f);
+            prop.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var propRb = prop.AddComponent<Rigidbody>();
+            propRb.mass = 1f;
+            propRb.useGravity = false;
+            _obstacleObject = prop;
+
+            _targetObject1 = CreateGrabbable("HeldTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            // Simulate physics for 15 frames while held object is near/touching the dynamic prop
+            for (int i = 0; i < 15; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
+
+            // Prop should not receive infinite/wild kinematic impulse
+            Assert.That(propRb.linearVelocity.magnitude, Is.LessThan(3f),
+                $"Dynamic prop launched with excessive velocity: {propRb.linearVelocity.magnitude} m/s ({propRb.linearVelocity})");
+        }
     }
 }

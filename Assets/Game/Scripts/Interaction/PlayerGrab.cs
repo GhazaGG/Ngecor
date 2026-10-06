@@ -43,6 +43,7 @@ namespace Ngecor.Interaction
         public bool IsCarrying => _carriedObject != null && _carriedObject.gameObject != null;
         public GrabbableObject CarriedObject => IsCarrying ? _carriedObject : null;
         public Transform HoldPoint => ResolveHoldPoint();
+        public float CarriedRadius => _carriedRadius;
 
         public float MaxGrabDistance
         {
@@ -263,14 +264,30 @@ namespace Ngecor.Interaction
             _carriedObject = target;
 
             var colliders = target.Colliders;
-            if (colliders != null && colliders.Length > 0)
+            bool foundBounds = false;
+            Bounds b = default;
+            if (colliders != null)
             {
-                Bounds b = colliders[0].bounds;
-                for (int i = 1; i < colliders.Length; i++)
+                for (int i = 0; i < colliders.Length; i++)
                 {
-                    if (colliders[i] != null)
-                        b.Encapsulate(colliders[i].bounds);
+                    var col = colliders[i];
+                    if (col == null || col.isTrigger || !col.enabled)
+                        continue;
+
+                    if (!foundBounds)
+                    {
+                        b = col.bounds;
+                        foundBounds = true;
+                    }
+                    else
+                    {
+                        b.Encapsulate(col.bounds);
+                    }
                 }
+            }
+
+            if (foundBounds)
+            {
                 Vector3 extents = b.extents;
                 _carriedRadius = Mathf.Clamp(Mathf.Max(extents.x, extents.y, extents.z), 0.05f, 0.5f);
             }
@@ -286,6 +303,8 @@ namespace Ngecor.Interaction
                 _savedUseGravity = rb.useGravity;
                 rb.isKinematic = true;
                 rb.useGravity = false;
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
             }
 
             SetPlayerCollisionIgnored(target, true);
