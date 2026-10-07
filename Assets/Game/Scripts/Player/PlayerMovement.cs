@@ -25,6 +25,7 @@ namespace Ngecor.Player
         private float _verticalVelocity;
         private float _cameraPitch;
         private float _remainingPushImpulse;
+        private Vector3 _movementDirection;
         private readonly HashSet<Rigidbody> _pushedBodies = new HashSet<Rigidbody>();
         private RaycastHit[] _stepProbeHits = new RaycastHit[8];
 
@@ -48,6 +49,12 @@ namespace Ngecor.Player
         public bool IsCursorLocked => _cursorLocked;
         public bool CursorRelockedThisFrame => _cursorRelockedFrame == Time.frameCount;
 
+        public void ApplyMovementPush(Rigidbody body, Vector3 point, float deltaTime)
+        {
+            if (_isLocalPlayer)
+                ApplyContactPush(body, point, _movementDirection, deltaTime);
+        }
+
         public void SetLocalPlayer(bool isLocalPlayer)
         {
             if (_isLocalPlayer == isLocalPlayer)
@@ -66,12 +73,18 @@ namespace Ngecor.Player
         private void Update()
         {
             if (!_isLocalPlayer || _characterController == null)
+            {
+                _movementDirection = Vector3.zero;
                 return;
+            }
 
             HandleCursorInput();
 
             if (_moveAction == null)
+            {
+                _movementDirection = Vector3.zero;
                 return;
+            }
 
             if (_lookAction != null && _cursorLocked)
             {
@@ -88,6 +101,7 @@ namespace Ngecor.Player
             var input = Vector2.ClampMagnitude(_moveAction.action.ReadValue<Vector2>(), 1f);
             var direction = transform.right * input.x + transform.forward * input.y;
             direction.y = 0f;
+            _movementDirection = direction.sqrMagnitude > Mathf.Epsilon ? direction.normalized : Vector3.zero;
 
             var deltaTime = Time.deltaTime;
             if (_characterController.isGrounded && _verticalVelocity < 0f)

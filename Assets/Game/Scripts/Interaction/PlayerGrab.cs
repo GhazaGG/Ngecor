@@ -25,6 +25,7 @@ namespace Ngecor.Interaction
         private PlayerMovement _playerMovement;
         private InteractionDetector _detector;
         private GrabbableObject _carriedObject;
+        private IHoldInteractable _heldInteractable;
         private Transform _resolvedHoldPoint;
         private Collider[] _playerColliders;
 
@@ -32,6 +33,7 @@ namespace Ngecor.Interaction
         private bool _savedUseGravity;
 
         public bool IsCarrying => _carriedObject != null && _carriedObject.gameObject != null;
+        public bool IsUsingInteractable => _heldInteractable is Object heldObject && heldObject != null;
         public GrabbableObject CarriedObject => IsCarrying ? _carriedObject : null;
         public Transform HoldPoint => ResolveHoldPoint();
 
@@ -79,7 +81,9 @@ namespace Ngecor.Interaction
             // Handle Interact Input (Grab / Drop)
             if (_interactAction != null && _interactAction.action != null && _interactAction.action.WasPressedThisFrame())
             {
-                if (IsCarrying)
+                if (IsUsingInteractable)
+                    RequestEndInteraction();
+                else if (IsCarrying)
                     RequestDrop();
                 else
                     RequestGrab();
@@ -116,6 +120,13 @@ namespace Ngecor.Interaction
                 GUI.Box(new Rect(Screen.width / 2f - 120f, Screen.height / 2f + 75f, 240f, 30f),
                     $"[Carrying]: {objectName} (Drop)");
             }
+            else if (IsUsingInteractable)
+            {
+                var component = _heldInteractable as Component;
+                string objectName = component != null ? component.gameObject.name : "Object";
+                GUI.Box(new Rect(Screen.width / 2f - 120f, Screen.height / 2f + 75f, 240f, 30f),
+                    $"[Using]: {objectName} (Release)");
+            }
         }
 
         private void LateUpdate()
@@ -147,6 +158,8 @@ namespace Ngecor.Interaction
         {
             if (IsCarrying)
                 ExecuteDrop();
+            if (IsUsingInteractable)
+                RequestEndInteraction();
         }
 
         public bool RequestGrab()
@@ -154,11 +167,43 @@ namespace Ngecor.Interaction
             if (_detector == null)
                 _detector = GetComponent<InteractionDetector>();
 
+            if (_detector != null && _detector.CurrentTarget is IHoldInteractable holdInteractable)
+                return RequestBeginInteraction(holdInteractable);
+
             var target = _detector != null ? _detector.CurrentTarget as GrabbableObject : null;
             if (target == null && _detector != null && _detector.CurrentTarget is Component comp)
                 target = comp.GetComponentInParent<GrabbableObject>();
 
             return RequestGrab(target);
+        }
+
+        private bool RequestBeginInteraction(IHoldInteractable target)
+        {
+            if (IsCarrying || IsUsingInteractable || target == null || !target.CanInteract(gameObject))
+                return false;
+
+            if (target is Component component && Vector3.Distance(transform.position, component.transform.position) > _maxGrabDistance)
+                return false;
+
+            if (!target.TryBeginInteraction(gameObject))
+                return false;
+
+            _heldInteractable = target;
+            return true;
+        }
+
+        private bool RequestEndInteraction()
+        {
+            if (!IsUsingInteractable)
+            {
+                _heldInteractable = null;
+                return false;
+            }
+
+            var target = _heldInteractable;
+            _heldInteractable = null;
+            target.EndInteraction(gameObject);
+            return true;
         }
 
         public bool RequestGrab(GrabbableObject target)
