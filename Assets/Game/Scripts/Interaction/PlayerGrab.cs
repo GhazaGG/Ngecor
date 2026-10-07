@@ -179,10 +179,13 @@ namespace Ngecor.Interaction
 
         private bool RequestBeginInteraction(IHoldInteractable target)
         {
-            if (IsCarrying || IsUsingInteractable || target == null || !target.CanInteract(gameObject))
+            if (IsCarrying || IsUsingInteractable || target == null || _detector == null ||
+                _detector.CurrentTarget != target ||
+                !target.CanInteractFrom(gameObject, _detector.CurrentHit.collider) ||
+                !target.CanInteract(gameObject))
                 return false;
 
-            if (target is Component component && Vector3.Distance(transform.position, component.transform.position) > _maxGrabDistance)
+            if (Vector3.Distance(transform.position, _detector.CurrentHit.point) > _maxGrabDistance)
                 return false;
 
             if (!target.TryBeginInteraction(gameObject))
@@ -204,6 +207,12 @@ namespace Ngecor.Interaction
             _heldInteractable = null;
             target.EndInteraction(gameObject);
             return true;
+        }
+
+        public void NotifyInteractionEnded(IHoldInteractable target)
+        {
+            if (ReferenceEquals(_heldInteractable, target))
+                _heldInteractable = null;
         }
 
         public bool RequestGrab(GrabbableObject target)

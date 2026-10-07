@@ -45,6 +45,10 @@ namespace Ngecor.Interaction
             {
                 CurrentHit = hit;
                 var interactable = hit.collider.GetComponentInParent<IInteractable>();
+                if (interactable is IHoldInteractable holdInteractable &&
+                    !holdInteractable.CanInteractFrom(gameObject, hit.collider))
+                    return null;
+
                 if (interactable != null && interactable.CanInteract(gameObject))
                     CurrentTarget = interactable;
             }

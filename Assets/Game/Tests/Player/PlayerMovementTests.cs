@@ -319,6 +319,29 @@ namespace Ngecor.Player.Tests
         }
 
         [UnityTest]
+        public IEnumerator DisabledMovementClearsDirectionAndRejectsWheelbarrowPush()
+        {
+            CreatePlayer();
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            var body = CreatePushTarget(size: 0.5f);
+            body.useGravity = false;
+
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_movementDirection", Vector3.forward);
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_remainingPushImpulse", 100f);
+            movement.enabled = false;
+
+            Assert.That(GetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_movementDirection"),
+                Is.EqualTo(Vector3.zero), "Disabling movement must clear the last input direction.");
+
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_movementDirection", Vector3.forward);
+            movement.ApplyMovementPush(body, body.worldCenterOfMass, 1f / 30f);
+            yield return WaitForFixedFrames(1);
+
+            Assert.That(body.linearVelocity, Is.EqualTo(Vector3.zero),
+                "A disabled movement component must not push through a stale movement direction.");
+        }
+
+        [UnityTest]
         public IEnumerator ContactPushMoves25KgBodyMoreSlowlyThanPlayer()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();

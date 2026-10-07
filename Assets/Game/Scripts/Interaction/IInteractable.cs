@@ -10,6 +10,7 @@ namespace Ngecor.Interaction
 
     public interface IHoldInteractable : IInteractable
     {
+        bool CanInteractFrom(GameObject interactor, Collider collider);
         bool TryBeginInteraction(GameObject interactor);
         void EndInteraction(GameObject interactor);
     }

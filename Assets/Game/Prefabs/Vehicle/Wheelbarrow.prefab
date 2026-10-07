@@ -532,6 +532,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4f82c7d28d6597b438f4c71667bdbba5, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Ngecor.Vehicle.WheelbarrowInteraction
+  _handleColliders:
+  - {fileID: 1848001282903134755}
+  - {fileID: 7358563733950724741}
 --- !u!1 &5976532713788847577
 GameObject:
   m_ObjectHideFlags: 0

@@ -103,6 +103,47 @@ namespace Ngecor.Interaction.Tests
             return go.AddComponent<GrabbableObject>();
         }
 
+        private Component CreateWheelbarrow(string name, Vector3 position, out BoxCollider tray, out BoxCollider handle)
+        {
+            var wheelbarrow = new GameObject(name);
+            wheelbarrow.transform.position = position;
+            var body = wheelbarrow.AddComponent<Rigidbody>();
+            body.useGravity = false;
+
+            var interactionType = FindWheelbarrowInteractionType();
+            var interaction = wheelbarrow.AddComponent(interactionType);
+            tray = CreateWheelbarrowCollider(wheelbarrow.transform, "Tray", new Vector3(0f, 0f, -0.25f), new Vector3(0.5f, 0.5f, 0.1f));
+            handle = CreateWheelbarrowCollider(wheelbarrow.transform, "Handle", new Vector3(0f, 0f, 0.25f), Vector3.one * 0.2f);
+
+            var handleField = interactionType.GetField("_handleColliders", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(handleField, Is.Not.Null, "Wheelbarrow interaction must expose its serialized handle colliders.");
+            handleField.SetValue(interaction, new Collider[] { handle });
+            return interaction;
+        }
+
+        private static BoxCollider CreateWheelbarrowCollider(Transform parent, string name, Vector3 localPosition, Vector3 size)
+        {
+            var child = new GameObject(name);
+            child.transform.SetParent(parent, false);
+            child.transform.localPosition = localPosition;
+            var collider = child.AddComponent<BoxCollider>();
+            collider.size = size;
+            return collider;
+        }
+
+        private static System.Type FindWheelbarrowInteractionType()
+        {
+            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var type = assembly.GetType("Ngecor.Vehicle.WheelbarrowInteraction");
+                if (type != null)
+                    return type;
+            }
+
+            Assert.Fail("WheelbarrowInteraction must be available in the loaded Unity assemblies.");
+            return null;
+        }
+
         [UnityTest]
         public IEnumerator RequestGrab_GrabsValidTargetInFront()
         {
@@ -580,6 +621,77 @@ namespace Ngecor.Interaction.Tests
             yield return null;
 
             Assert.That(_playerGrab.IsCarrying, Is.False, "Pressing interact did not drop object.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_StartsOnlyFromConfiguredHandle()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 2f), out var tray, out var handle);
+            _targetObject1 = interaction.gameObject;
+
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+
+            Assert.That(_detector.CurrentHit.collider, Is.SameAs(tray));
+            Assert.That(_detector.CurrentTarget, Is.Null, "The tray must not start a handle interaction.");
+
+            tray.enabled = false;
+            Physics.SyncTransforms();
+            _detector.Detect();
+
+            Assert.That(_detector.CurrentHit.collider, Is.SameAs(handle));
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_WalkAwayEndsHoldAndAllowsAnotherTarget()
+        {
+            var first = CreateWheelbarrow("FirstWheelbarrow", new Vector3(0f, 1.4f, 2f), out var firstTray, out _);
+            _targetObject1 = first.gameObject;
+            firstTray.enabled = false;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            first.transform.position = new Vector3(0f, 1.4f, 8f);
+            var second = CreateWheelbarrow("SecondWheelbarrow", new Vector3(0f, 1.4f, 2f), out var secondTray, out _);
+            _targetObject2 = second.gameObject;
+            secondTray.enabled = false;
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False,
+                "Walking out of range must clear PlayerGrab's held-interactable state.");
+            _detector.Detect();
+            Assert.That((_detector.CurrentTarget as Component)?.gameObject, Is.SameAs(second.gameObject));
+            Assert.That(_playerGrab.RequestGrab(), Is.True,
+                "A new wheelbarrow must be usable immediately after walking away from the previous one.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_DisableAndReenableClearsAndRestoresHold()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 2f), out var tray, out _);
+            _targetObject1 = interaction.gameObject;
+            tray.enabled = false;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            ((Behaviour)interaction).enabled = false;
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False,
+                "Disabling the interactable must clear PlayerGrab's held-interactable state.");
+
+            ((Behaviour)interaction).enabled = true;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True,
+                "The wheelbarrow must be usable again after its interaction component is re-enabled.");
         }
 
         [UnityTest]

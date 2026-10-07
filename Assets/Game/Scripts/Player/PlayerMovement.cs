@@ -51,7 +51,7 @@ namespace Ngecor.Player
 
         public void ApplyMovementPush(Rigidbody body, Vector3 point, float deltaTime)
         {
-            if (_isLocalPlayer)
+            if (_isLocalPlayer && isActiveAndEnabled)
                 ApplyContactPush(body, point, _movementDirection, deltaTime);
         }
 
@@ -66,6 +66,7 @@ namespace Ngecor.Player
 
         private void OnDisable()
         {
+            _movementDirection = Vector3.zero;
             if (_isLocalPlayer)
                 SetCursorLocked(false);
         }
