@@ -1,0 +1,212 @@
+using UnityEngine;
+
+namespace Ngecor.Construction
+{
+    [RequireComponent(typeof(Rigidbody))]
+    public sealed class ScaffoldingLoadFailure : MonoBehaviour
+    {
+        [SerializeField, Min(1f)] private float _wobbleThreshold = 90f;
+        [SerializeField, Min(0f)] private float _wobbleDuration = 2f;
+        [SerializeField, Min(0f)] private float _wobbleTorque = 2f;
+        [SerializeField, Min(0f)] private float _maximumImpactImpulse = 50f;
+        [SerializeField] private Transform _playerLoadProbe;
+        [SerializeField] private Transform[] _breakParts = new Transform[4];
+        [SerializeField] private float[] _partMasses = { 20f, 20f, 12.5f, 12.5f };
+
+        private Collider[] _overlaps = new Collider[16];
+        private Rigidbody[] _seenBodies = new Rigidbody[16];
+        private Rigidbody _body;
+        private Vector3 _restPosition;
+        private Quaternion _restRotation;
+        private float _wobbleTime;
+        private bool _wobbling;
+        private bool _impactWobble;
+        private bool _impactWarning;
+        private bool _broken;
+
+        private void Awake()
+        {
+            _body = GetComponent<Rigidbody>();
+            _restPosition = _body.position;
+            _restRotation = _body.rotation;
+            _body.isKinematic = true;
+        }
+
+        private void FixedUpdate()
+        {
+            if (_broken)
+                return;
+
+            float payloadMass = MeasurePayloadMass();
+            bool overloaded = payloadMass >= _wobbleThreshold;
+            bool impactWarning = _impactWarning;
+            _impactWarning = false;
+
+            if (impactWarning)
+                _impactWobble = true;
+
+            if (!_wobbling && (overloaded || impactWarning))
+                StartWobble(impactWarning);
+
+            if (!_wobbling)
+                return;
+
+            _wobbleTime += Time.fixedDeltaTime;
+            float sway = Mathf.Sin(_wobbleTime * 9f) * _wobbleTorque;
+            _body.AddTorque(transform.forward * sway + transform.right * sway * 0.35f, ForceMode.Acceleration);
+
+            if (_wobbleTime >= _wobbleDuration)
+            {
+                if (overloaded || _impactWobble)
+                {
+                    BreakIntoParts();
+                    return;
+                }
+
+                CalmDown();
+            }
+            else if (!overloaded && !_impactWobble)
+            {
+                CalmDown();
+            }
+        }
+
+        private float MeasurePayloadMass()
+        {
+            if (_playerLoadProbe == null)
+                return 0f;
+
+            int overlapCount;
+            do
+            {
+                overlapCount = Physics.OverlapBoxNonAlloc(
+                    _playerLoadProbe.position,
+                    _playerLoadProbe.lossyScale * 0.5f,
+                    _overlaps,
+                    _playerLoadProbe.rotation,
+                    Physics.DefaultRaycastLayers,
+                    QueryTriggerInteraction.Ignore);
+
+                if (overlapCount < _overlaps.Length)
+                    break;
+
+                int capacity = _overlaps.Length * 2;
+                System.Array.Resize(ref _overlaps, capacity);
+                System.Array.Resize(ref _seenBodies, capacity);
+            }
+            while (true);
+
+            float payloadMass = 0f;
+            int bodyCount = 0;
+
+            for (int i = 0; i < overlapCount; i++)
+            {
+                Collider collider = _overlaps[i];
+                Rigidbody cargo = collider.attachedRigidbody;
+                if (cargo == null || cargo == _body || cargo.isKinematic ||
+                    Contains(_seenBodies, bodyCount, cargo))
+                {
+                    continue;
+                }
+
+                _seenBodies[bodyCount++] = cargo;
+                if (cargo.GetComponentInParent<ScaffoldingLoadFailure>() != null)
+                    continue;
+
+                payloadMass += cargo.mass;
+            }
+
+            for (int i = 0; i < overlapCount; i++)
+                _overlaps[i] = null;
+            for (int i = 0; i < bodyCount; i++)
+                _seenBodies[i] = null;
+
+            return payloadMass;
+        }
+
+        private static bool Contains(Rigidbody[] bodies, int count, Rigidbody candidate)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                if (bodies[i] == candidate)
+                    return true;
+            }
+            return false;
+        }
+
+        private void OnCollisionEnter(Collision collision)
+        {
+            if (_broken || _wobbling || collision.rigidbody == null || collision.rigidbody.isKinematic)
+            {
+                return;
+            }
+
+            for (int i = 0; i < collision.contactCount; i++)
+            {
+                ContactPoint contact = collision.GetContact(i);
+                if (Mathf.Abs(contact.normal.y) >= 0.5f)
+                    continue;
+
+                float incomingMomentum = collision.rigidbody.mass *
+                    Mathf.Abs(Vector3.Dot(collision.relativeVelocity, contact.normal));
+                if (Mathf.Max(collision.impulse.magnitude, incomingMomentum) >= _maximumImpactImpulse)
+                {
+                    _impactWarning = true;
+                    return;
+                }
+            }
+        }
+
+        private void StartWobble(bool impactWobble)
+        {
+            _wobbling = true;
+            _impactWobble = impactWobble;
+            _wobbleTime = 0f;
+            _body.isKinematic = false;
+            _body.WakeUp();
+        }
+
+        private void CalmDown()
+        {
+            _wobbling = false;
+            _impactWobble = false;
+            _wobbleTime = 0f;
+            _body.position = _restPosition;
+            _body.rotation = _restRotation;
+            _body.linearVelocity = Vector3.zero;
+            _body.angularVelocity = Vector3.zero;
+            _body.isKinematic = true;
+        }
+
+        private void BreakIntoParts()
+        {
+            _broken = true;
+            Vector3 linearVelocity = _body.linearVelocity;
+            Vector3 angularVelocity = _body.angularVelocity;
+            Vector3 origin = transform.position;
+
+            int count = Mathf.Min(_breakParts.Length, _partMasses.Length);
+            for (int i = 0; i < count; i++)
+            {
+                Transform part = _breakParts[i];
+                if (part == null)
+                    continue;
+
+                Vector3 partPosition = part.position;
+                part.SetParent(null, true);
+
+                Rigidbody partBody = part.gameObject.AddComponent<Rigidbody>();
+                partBody.mass = _partMasses[i];
+                partBody.interpolation = RigidbodyInterpolation.Interpolate;
+                partBody.collisionDetectionMode = CollisionDetectionMode.Continuous;
+                partBody.linearDamping = 0.2f;
+                partBody.angularDamping = 0.5f;
+                partBody.linearVelocity = linearVelocity + Vector3.Cross(angularVelocity, partPosition - origin);
+                partBody.angularVelocity = angularVelocity;
+                partBody.WakeUp();
+            }
+
+            Destroy(gameObject);
+        }
+    }
+}
