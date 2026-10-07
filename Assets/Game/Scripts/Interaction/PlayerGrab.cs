@@ -39,7 +39,7 @@ namespace Ngecor.Interaction
             public Collider[] colliders;
         }
 
-        private readonly SeparatingEntry[] _separatingQueue = new SeparatingEntry[8];
+        private SeparatingEntry[] _separatingQueue = new SeparatingEntry[8];
         private int _separatingCount;
 
         public bool IsCarrying => _carriedObject != null && _carriedObject.gameObject != null;
@@ -195,10 +195,27 @@ namespace Ngecor.Interaction
 
             _pinchTimer = 0f;
 
+            if (_playerColliders == null || _playerColliders.Length == 0)
+                _playerColliders = GetComponentsInChildren<Collider>();
+
             for (int i = 0; i < _separatingCount; i++)
             {
-                if (_separatingQueue[i].target != null)
-                    SetPlayerCollisionIgnored(_separatingQueue[i].target, false);
+                var entry = _separatingQueue[i];
+                if (entry.target != null && entry.target.gameObject != null)
+                {
+                    var targetColliders = entry.colliders ?? entry.target.Colliders;
+                    if (CheckOverlapping(_playerColliders, targetColliders))
+                    {
+                        if (entry.target.gameObject.activeInHierarchy)
+                        {
+                            entry.target.StartCoroutine(MonitorSeparationRoutine(_playerColliders, entry.target));
+                        }
+                    }
+                    else
+                    {
+                        SetPlayerCollisionIgnored(entry.target, false);
+                    }
+                }
                 _separatingQueue[i] = default;
             }
             _separatingCount = 0;
@@ -343,6 +360,15 @@ namespace Ngecor.Interaction
 
             SetPlayerCollisionIgnored(target, true);
 
+            for (int i = 0; i < _separatingCount; i++)
+            {
+                if (_separatingQueue[i].target == target)
+                {
+                    RemoveSeparatingEntryAt(i);
+                    break;
+                }
+            }
+
             target.OnGrab(gameObject);
 
             if (_playerMovement == null)
@@ -400,13 +426,41 @@ namespace Ngecor.Interaction
                 // keep collision ignored until it separates in FixedUpdate to prevent launching impulses.
                 if (IsOverlappingPlayer(target))
                 {
-                    if (_separatingCount < _separatingQueue.Length)
+                    if (!enabled)
                     {
-                        _separatingQueue[_separatingCount++] = new SeparatingEntry
+                        if (target.gameObject.activeInHierarchy)
                         {
-                            target = target,
-                            colliders = target.Colliders
-                        };
+                            if (_playerColliders == null || _playerColliders.Length == 0)
+                                _playerColliders = GetComponentsInChildren<Collider>();
+                            target.StartCoroutine(MonitorSeparationRoutine(_playerColliders, target));
+                        }
+                    }
+                    else
+                    {
+                        bool alreadyQueued = false;
+                        for (int i = 0; i < _separatingCount; i++)
+                        {
+                            if (_separatingQueue[i].target == target)
+                            {
+                                _separatingQueue[i].colliders = target.Colliders;
+                                alreadyQueued = true;
+                                break;
+                            }
+                        }
+
+                        if (!alreadyQueued)
+                        {
+                            if (_separatingCount >= _separatingQueue.Length)
+                            {
+                                System.Array.Resize(ref _separatingQueue, Mathf.Max(8, _separatingQueue.Length * 2));
+                            }
+
+                            _separatingQueue[_separatingCount++] = new SeparatingEntry
+                            {
+                                target = target,
+                                colliders = target.Colliders
+                            };
+                        }
                     }
                 }
                 else
@@ -418,24 +472,17 @@ namespace Ngecor.Interaction
             }
         }
 
-        private bool IsOverlappingPlayer(GrabbableObject target)
+        private static bool CheckOverlapping(Collider[] playerColliders, Collider[] targetColliders)
         {
-            if (target == null)
+            if (playerColliders == null || targetColliders == null)
                 return false;
 
-            if (_playerColliders == null || _playerColliders.Length == 0)
-                _playerColliders = GetComponentsInChildren<Collider>();
-
-            var targetColliders = target.Colliders;
-            if (_playerColliders == null || targetColliders == null)
-                return false;
-
-            foreach (var pCol in _playerColliders)
+            foreach (var pCol in playerColliders)
             {
-                if (pCol == null || pCol.isTrigger) continue;
+                if (pCol == null || pCol.isTrigger || !pCol.enabled) continue;
                 foreach (var tCol in targetColliders)
                 {
-                    if (tCol == null || tCol.isTrigger) continue;
+                    if (tCol == null || tCol.isTrigger || !tCol.enabled) continue;
 
                     if (Physics.ComputePenetration(
                         tCol, tCol.transform.position, tCol.transform.rotation,
@@ -448,6 +495,17 @@ namespace Ngecor.Interaction
             }
 
             return false;
+        }
+
+        private bool IsOverlappingPlayer(GrabbableObject target)
+        {
+            if (target == null)
+                return false;
+
+            if (_playerColliders == null || _playerColliders.Length == 0)
+                _playerColliders = GetComponentsInChildren<Collider>();
+
+            return CheckOverlapping(_playerColliders, target.Colliders);
         }
 
         private void FixedUpdate()
@@ -467,36 +525,37 @@ namespace Ngecor.Interaction
                     continue;
                 }
 
-                bool stillOverlapping = false;
                 var targetColliders = entry.colliders ?? entry.target.Colliders;
-                if (targetColliders != null && _playerColliders != null)
-                {
-                    foreach (var pCol in _playerColliders)
-                    {
-                        if (pCol == null || pCol.isTrigger) continue;
-                        foreach (var tCol in targetColliders)
-                        {
-                            if (tCol == null || tCol.isTrigger) continue;
-
-                            if (Physics.ComputePenetration(
-                                tCol, tCol.transform.position, tCol.transform.rotation,
-                                pCol, pCol.transform.position, pCol.transform.rotation,
-                                out _, out float dist) && dist > 0.001f)
-                            {
-                                stillOverlapping = true;
-                                break;
-                            }
-                        }
-                        if (stillOverlapping)
-                            break;
-                    }
-                }
+                bool stillOverlapping = CheckOverlapping(_playerColliders, targetColliders);
 
                 if (!stillOverlapping)
                 {
                     SetPlayerCollisionIgnored(entry.target, false);
                     RemoveSeparatingEntryAt(i);
                 }
+            }
+        }
+
+        private static System.Collections.IEnumerator MonitorSeparationRoutine(Collider[] playerColliders, GrabbableObject target)
+        {
+            if (target == null || playerColliders == null)
+                yield break;
+
+            var targetColliders = target.Colliders;
+            if (targetColliders == null || targetColliders.Length == 0)
+                yield break;
+
+            while (CheckOverlapping(playerColliders, targetColliders))
+            {
+                yield return new WaitForFixedUpdate();
+
+                if (target == null || target.gameObject == null || target.IsHeld)
+                    yield break;
+            }
+
+            if (target != null && target.gameObject != null && !target.IsHeld)
+            {
+                SetCollisionIgnored(playerColliders, targetColliders, false);
             }
         }
 
@@ -670,6 +729,22 @@ namespace Ngecor.Interaction
             return targetPos;
         }
 
+        private static void SetCollisionIgnored(Collider[] playerColliders, Collider[] targetColliders, bool ignore)
+        {
+            if (playerColliders == null || targetColliders == null)
+                return;
+
+            foreach (var pCol in playerColliders)
+            {
+                if (pCol == null) continue;
+                foreach (var tCol in targetColliders)
+                {
+                    if (tCol == null) continue;
+                    Physics.IgnoreCollision(pCol, tCol, ignore);
+                }
+            }
+        }
+
         private void SetPlayerCollisionIgnored(GrabbableObject target, bool ignore)
         {
             if (target == null)
@@ -678,19 +753,7 @@ namespace Ngecor.Interaction
             if (_playerColliders == null || _playerColliders.Length == 0)
                 _playerColliders = GetComponentsInChildren<Collider>();
 
-            var targetColliders = target.Colliders;
-            if (_playerColliders != null && targetColliders != null)
-            {
-                foreach (var pCol in _playerColliders)
-                {
-                    if (pCol == null) continue;
-                    foreach (var tCol in targetColliders)
-                    {
-                        if (tCol == null) continue;
-                        Physics.IgnoreCollision(pCol, tCol, ignore);
-                    }
-                }
-            }
+            SetCollisionIgnored(_playerColliders, target.Colliders, ignore);
         }
 
         public Transform ResolveHoldPoint()

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -1048,6 +1049,108 @@ namespace Ngecor.Interaction.Tests
             });
 
             yield return new WaitForFixedUpdate();
+        }
+
+        [UnityTest]
+        public IEnumerator SeparationTracking_ExceedingInitialQueueCapacity_MonitorsAllAndRestoresCollisionOnceSeparated()
+        {
+            var playerCol = _playerObject.GetComponent<Collider>();
+            var targets = new List<GameObject>();
+            var targetCols = new List<Collider>();
+
+            try
+            {
+                // Create 10 grabbable objects (initial queue capacity is 8)
+                const int count = 10;
+                for (int i = 0; i < count; i++)
+                {
+                    var obj = CreateGrabbable($"OverflowTarget_{i}", new Vector3(0f, 1.4f, 2f)).gameObject;
+                    targets.Add(obj);
+                    var grabbable = obj.GetComponent<GrabbableObject>();
+                    var col = obj.GetComponent<Collider>();
+                    targetCols.Add(col);
+
+                    Physics.SyncTransforms();
+                    yield return null;
+
+                    _playerGrab.ExecuteGrab(grabbable);
+                    yield return null;
+
+                    // Position overlapping player capsule
+                    obj.transform.position = _playerObject.transform.position + new Vector3(0f, 0.9f, 0.2f);
+                    Physics.SyncTransforms();
+
+                    _playerGrab.ExecuteDrop();
+
+                    Assert.That(Physics.GetIgnoreCollision(playerCol, col), Is.True,
+                        $"Object {i} must maintain ignored collision while overlapping player capsule!");
+                }
+
+                // Move player far away so all objects are completely separated
+                _playerObject.transform.position += new Vector3(10f, 0f, 0f);
+                Physics.SyncTransforms();
+
+                yield return new WaitForFixedUpdate();
+
+                // All objects, including those exceeding initial queue capacity (8), must have collision restored
+                for (int i = 0; i < count; i++)
+                {
+                    Assert.That(Physics.GetIgnoreCollision(playerCol, targetCols[i]), Is.False,
+                        $"Collision for object {i} must be restored once separated, even when initial capacity was exceeded!");
+                }
+            }
+            finally
+            {
+                foreach (var obj in targets)
+                {
+                    if (obj != null)
+                        Object.DestroyImmediate(obj);
+                }
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator OnDisable_WhenCarriedObjectOverlapsPlayer_PreservesIgnoreUntilSeparatedAndPreventsLaunch()
+        {
+            _targetObject1 = CreateGrabbable("OverlapOnDisableTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            var rb = grabbable.Rigidbody;
+            var playerCol = _playerObject.GetComponent<Collider>();
+            var targetCol = _targetObject1.GetComponent<Collider>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            // Position held object deeply overlapping player capsule
+            _targetObject1.transform.position = _playerObject.transform.position + new Vector3(0f, 0.9f, 0.1f);
+            Physics.SyncTransforms();
+
+            // Disable PlayerGrab while object is overlapping
+            _playerGrab.enabled = false;
+            yield return null;
+
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Object should be dropped when component is disabled!");
+            Assert.That(grabbable.IsHeld, Is.False);
+            Assert.That(Physics.GetIgnoreCollision(playerCol, targetCol), Is.True,
+                "Collision must remain ignored while overlapping capsule, even after PlayerGrab is disabled!");
+
+            // Run physics step while overlapping: solver must NOT launch object
+            yield return new WaitForFixedUpdate();
+            Assert.That(rb.linearVelocity.magnitude, Is.LessThan(2f),
+                $"Object launched with excessive velocity on disable: {rb.linearVelocity.magnitude} m/s ({rb.linearVelocity})");
+
+            // Move player far away to separate
+            _playerObject.transform.position += new Vector3(10f, 0f, 0f);
+            Physics.SyncTransforms();
+
+            yield return new WaitForFixedUpdate();
+
+            // Once separated, collision must be restored
+            Assert.That(Physics.GetIgnoreCollision(playerCol, targetCol), Is.False,
+                "Collision should be restored once player and object have separated after disable!");
         }
 
         [UnityTest]
