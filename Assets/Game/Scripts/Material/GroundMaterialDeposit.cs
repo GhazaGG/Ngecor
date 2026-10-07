@@ -46,9 +46,13 @@ namespace Ngecor.Material
                     surface = hit;
                 }
             }
-            return surface.collider != null && surface.rigidbody == null
+            var valid = surface.collider != null && surface.rigidbody == null
+                && surface.collider.GetComponentInParent<CharacterController>() == null
                 && surface.collider.GetComponentInParent<BulkMaterialContainer>() == null
                 && Vector3.Dot(surface.normal, Vector3.up) >= 0.5f;
+            if (valid)
+                DepositPoint = surface.point;
+            return valid;
         }
 
         public int Deposit(MaterialType type, int requestedUnits)
@@ -90,7 +94,6 @@ namespace Ngecor.Material
                 Destroy(nearest.gameObject);
             if (moved > 0)
             {
-                DepositPoint = surface.point;
                 // Make the new/shrunken mound discoverable by the next deposit in this frame.
                 nearest.RefreshVisual();
                 Physics.SyncTransforms();

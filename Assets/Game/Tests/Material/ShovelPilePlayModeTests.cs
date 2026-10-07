@@ -145,7 +145,7 @@ namespace Ngecor.Material.Tests
         }
 
         [Test]
-        public void ExecutionRejectsReleasedOrRemoteHolder()
+        public void RemoteHolderCanExecuteButCannotRequestLocally()
         {
             var shovel = Shovel();
             var source = Container(new Vector3(0f, 1f, 0.5f), MaterialType.Sand, 10, 7);
@@ -153,9 +153,9 @@ namespace Ngecor.Material.Tests
             var grabbable = shovel.GetComponent<GrabbableObject>();
             var movement = grabbable.CurrentHolder.GetComponent<PlayerMovement>();
             movement.SetLocalPlayer(false);
-            Assert.That(shovel.ExecuteScoop(), Is.Zero);
-            movement.SetLocalPlayer(true);
+            Assert.That(shovel.RequestScoop(), Is.Zero);
             Assert.That(shovel.ExecuteScoop(), Is.EqualTo(2));
+            Assert.That(shovel.RequestDump(), Is.Zero);
             grabbable.OnRelease();
             Assert.That(shovel.ExecuteDump(), Is.Zero);
             Assert.That(source.TotalUnits, Is.EqualTo(5));
@@ -192,6 +192,47 @@ namespace Ngecor.Material.Tests
             Assert.That(shovel.ExecuteDump(), Is.Zero);
             Assert.That(contents.TotalUnits, Is.EqualTo(2));
             Assert.That(Piles().Length, Is.Zero);
+        }
+
+        [Test]
+        public void PlayerCapsuleDoesNotReceiveGroundDeposit()
+        {
+            var shovel = Shovel();
+            var contents = shovel.GetComponent<BulkMaterialContainer>();
+            contents.AddUnits(MaterialType.Sand, 2);
+            var player = new GameObject("Player beneath outlet");
+            _objects.Add(player);
+            player.transform.position = new Vector3(0f, -0.1f, 0f);
+            var controller = player.AddComponent<CharacterController>();
+            controller.height = 1.8f;
+            controller.radius = 0.5f;
+            Physics.SyncTransforms();
+
+            var deposit = shovel.GetComponent<GroundMaterialDeposit>();
+            Assert.That(deposit.TryGetSurface(out _), Is.False);
+            Assert.That(deposit.Deposit(MaterialType.Sand, 2), Is.Zero);
+            Assert.That(contents.TotalUnits, Is.EqualTo(2));
+            Assert.That(Piles().Length, Is.Zero);
+        }
+
+        [Test]
+        public void ValidSurfaceRefreshesParticleDestinationBeforeNextTransfer()
+        {
+            Ground();
+            var shovel = Shovel();
+            var contents = shovel.GetComponent<BulkMaterialContainer>();
+            contents.AddUnits(MaterialType.Sand, 2);
+            var deposit = shovel.GetComponent<GroundMaterialDeposit>();
+            shovel.transform.position = new Vector3(1f, 1f, 0f);
+            Physics.SyncTransforms();
+            Assert.That(deposit.Deposit(MaterialType.Sand, 1), Is.EqualTo(1));
+            Assert.That(deposit.DepositPoint.x, Is.EqualTo(1f).Within(0.01f));
+
+            shovel.transform.position = new Vector3(2f, 1f, 0f);
+            Physics.SyncTransforms();
+            Assert.That(deposit.TryGetSurface(out _), Is.True);
+            Assert.That(deposit.DepositPoint.x, Is.EqualTo(2f).Within(0.01f));
+            Assert.That(contents.TotalUnits, Is.EqualTo(1));
         }
 
         [UnityTest]

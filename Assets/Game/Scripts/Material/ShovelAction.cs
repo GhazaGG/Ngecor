@@ -21,20 +21,22 @@ namespace Ngecor.Material
         private readonly RaycastHit[] _sightHits = new RaycastHit[32];
         private readonly Dictionary<BulkMaterialContainer, float> _candidates = new Dictionary<BulkMaterialContainer, float>();
 
-        public bool HasLocalHolder
+        private bool HasHolder
         {
             get
             {
-                if (!_grabbable.IsHeld)
+                if (!_grabbable.IsHeld || _grabbable.CurrentHolder == null)
                     return false;
                 if (_holder != _grabbable.CurrentHolder)
                 {
                     _holder = _grabbable.CurrentHolder;
                     _movement = _holder != null ? _holder.GetComponent<PlayerMovement>() : null;
                 }
-                return _movement != null && _movement.LocalCamera != null;
+                return true;
             }
         }
+
+        public bool HasLocalHolder => HasHolder && _movement != null && _movement.LocalCamera != null;
 
         private void Awake()
         {
@@ -43,12 +45,12 @@ namespace Ngecor.Material
             _ground = GetComponent<GroundMaterialDeposit>();
         }
 
-        public int RequestScoop() => ExecuteScoop();
-        public int RequestDump() => ExecuteDump();
+        public int RequestScoop() => HasLocalHolder ? ExecuteScoop() : 0;
+        public int RequestDump() => HasLocalHolder ? ExecuteDump() : 0;
 
         public int ExecuteScoop()
         {
-            if (!isActiveAndEnabled || !HasLocalHolder || _container.TotalUnits >= _container.Capacity)
+            if (!isActiveAndEnabled || !HasHolder || _container.TotalUnits >= _container.Capacity)
                 return 0;
             var source = FindTarget(out _);
             if (source == null || !source.TryGetMaterialType(out var type))
@@ -60,7 +62,7 @@ namespace Ngecor.Material
 
         public int ExecuteDump()
         {
-            if (!isActiveAndEnabled || !HasLocalHolder || !_container.TryGetMaterialType(out var type))
+            if (!isActiveAndEnabled || !HasHolder || !_container.TryGetMaterialType(out var type))
                 return 0;
             var receiver = FindTarget(out var cancelled);
             if (cancelled)
