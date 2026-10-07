@@ -233,6 +233,22 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Keputusan pemilik proyek, 2026-10-04 ("masuk MVP"). Lingkup MVP ditentukan Team Lead.
 
+### 2026-10-06 — Aturan tabrakan objek yang dibawa player (INT-005)
+
+**Decision:**
+1. **Terhadap dunia:** Objek yang dibawa tidak boleh menembus dinding, lantai, atau ramp. `ResolveHoldPosition` menarik objek mundur ke permukaan rintangan. Jika player terus bergerak maju menempel rintangan sehingga ruang antara player dan rintangan lebih sempit dari batas minimum objek (< 0.25 m dari center player atau terhimpit tanpa jalan keluar), objek mengalami auto-drop lembut (*soft failure*).
+2. **Terhadap prop dinamis:** Objek yang dibawa memperlakukan prop dinamis lain sebagai rintangan tabrakan (tertahan di permukaannya tanpa penetrasi). Objek yang dibawa tidak memberikan gaya kinematic paksa ke prop dinamis. Dorongan fisik prop tetap dilakukan lewat kontak badan player (`CharacterController.OnControllerColliderHit`) sesuai keputusan 2026-10-02 dan PLAYER-003 (#73).
+3. **Terhadap player & kamera:** Jarak terdekat objek ke player dibatasi di luar kapsul player. Rintangan dunia diprioritaskan di atas near-clip kamera: objek tidak dipaksa maju menembus dinding demi menghindari kamera near-clip. Jika objek terhimpit dan menutupi layar, batas ruang fisik memicu auto-drop agar tidak tersangkut atau menembus dinding.
+4. **Saat drop:** Pendekatan "abaikan tabrakan sampai terpisah" (*ignore collision until separated*) menggantikan seluruh heuristik pergeseran menyamping (`DepenetrateOnDrop`). Saat dilepas, `Physics.IgnoreCollision` antara player dan objek dipertahankan sampai collider keduanya tidak lagi tumpang-tindih (overlap), lalu tabrakan dipulihkan otomatis. Ini menjamin objek tidak pernah terlontar akibat solver PhysX.
+5. **Massa/Berat:** Membawa objek berat memperlambat pergerakan jalan player secara linier proporsional ($v_{\text{eff}} = v_{\text{base}} \times \text{clamp}(1 - \text{mass} \times 0.012, 0.6, 1.0)$). Sak semen 25 kg memperlambat player sekitar 30%, sementara objek ringan (1 kg) praktis tidak terasa perlambatannya (~1%). Jarak hold point tetap konsisten agar kontrol interaksi tetap terprediksi.
+6. **Authority multiplayer:** Mengikuti batas authority 2026-10-01, objek yang dibawa disimulasikan di host. Client mengirim niat (`RequestGrab`, `RequestDrop`, `RequestThrow`); host memvalidasi dan menjalankan penempatan hold position serta pelacakan separasi tabrakan di host. Client tidak pernah menentukan posisi objek di dunia.
+
+**Reason:** Memenuhi dua prinsip inti (sepenuhnya fisik dan kegagalan yang bisa dipulihkan). Klem kamera-prioritas sebelumnya menyebabkan objek menembus dinding saat player menempel rapat. Heuristik drop sebelumnya (~130 baris) rapuh dan rentan regresi, sedangkan *ignore-until-separated* adalah solusi native PhysX yang sederhana, bebas alokasi GC, dan matematis mencegah lontaran. Skala penalti massa memberi rasa fisik pada sak semen 25 kg tanpa mengubah tuning kontrol gerak dasar.
+
+**Applies from:** INT-005 (#76), MAT-003 (#46), VEH-002 (#14).
+
+**Owner/source:** Usulan meryzennn di PR #89; disetujui pemilik proyek pada 2026-10-06.
+
 ## Anggaran performa
 
 Angka di bawah adalah titik awal. Ubah lewat PR setelah ada data Profiler, jangan diubah karena satu fitur sulit memenuhinya.

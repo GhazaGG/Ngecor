@@ -18,12 +18,15 @@ namespace Ngecor.Player
         [SerializeField, Min(0f)] private float _moveSpeed = 5f;
         [SerializeField, Min(0f)] private float _maxPushForce = 300f;
         [SerializeField, Min(0f)] private float _lookSensitivity = 0.1f;
+        [SerializeField, Range(0f, 0.05f)] private float _massSpeedPenaltyFactor = 0.012f;
+        [SerializeField, Range(0.2f, 1f)] private float _minMassSpeedMultiplier = 0.6f;
 
         private CharacterController _characterController;
         private Camera _playerCamera;
         private bool _cursorLocked;
         private float _verticalVelocity;
         private float _cameraPitch;
+        private float _carriedMass;
         private float _remainingPushImpulse;
         private readonly HashSet<Rigidbody> _pushedBodies = new HashSet<Rigidbody>();
         private RaycastHit[] _stepProbeHits = new RaycastHit[8];
@@ -47,6 +50,12 @@ namespace Ngecor.Player
         public Camera LocalCamera => _isLocalPlayer ? _playerCamera : null;
         public bool IsCursorLocked => _cursorLocked;
         public bool CursorRelockedThisFrame => _cursorRelockedFrame == Time.frameCount;
+
+        public float CarriedMass
+        {
+            get => _carriedMass;
+            set => _carriedMass = Mathf.Max(0f, value);
+        }
 
         public void SetLocalPlayer(bool isLocalPlayer)
         {
@@ -95,12 +104,13 @@ namespace Ngecor.Player
             else
                 _verticalVelocity += Physics.gravity.y * deltaTime;
 
-            var movement = direction * _moveSpeed + Vector3.up * _verticalVelocity;
+            float massMultiplier = Mathf.Clamp(1f - _carriedMass * _massSpeedPenaltyFactor, _minMassSpeedMultiplier, 1f);
+            var movement = direction * (_moveSpeed * massMultiplier) + Vector3.up * _verticalVelocity;
             _remainingPushImpulse = _maxPushForce * deltaTime;
             _pushedBodies.Clear();
 
             var stepOffset = _characterController.stepOffset;
-            var horizontalDistance = direction.magnitude * _moveSpeed * deltaTime;
+            var horizontalDistance = direction.magnitude * (_moveSpeed * massMultiplier) * deltaTime;
             if (ShouldBlockStepOverDynamicBody(direction, horizontalDistance))
                 _characterController.stepOffset = 0f;
 
