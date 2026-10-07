@@ -208,7 +208,7 @@ namespace Ngecor.Interaction
                     {
                         if (entry.target.gameObject.activeInHierarchy)
                         {
-                            entry.target.StartCoroutine(MonitorSeparationRoutine(_playerColliders, entry.target));
+                            entry.target.StartCoroutine(MonitorSeparationRoutine(gameObject, _playerColliders, entry.target));
                         }
                     }
                     else
@@ -432,7 +432,7 @@ namespace Ngecor.Interaction
                         {
                             if (_playerColliders == null || _playerColliders.Length == 0)
                                 _playerColliders = GetComponentsInChildren<Collider>();
-                            target.StartCoroutine(MonitorSeparationRoutine(_playerColliders, target));
+                            target.StartCoroutine(MonitorSeparationRoutine(gameObject, _playerColliders, target));
                         }
                     }
                     else
@@ -525,6 +525,12 @@ namespace Ngecor.Interaction
                     continue;
                 }
 
+                if (entry.target.IsHeld && entry.target.CurrentHolder == gameObject)
+                {
+                    RemoveSeparatingEntryAt(i);
+                    continue;
+                }
+
                 var targetColliders = entry.colliders ?? entry.target.Colliders;
                 bool stillOverlapping = CheckOverlapping(_playerColliders, targetColliders);
 
@@ -536,7 +542,7 @@ namespace Ngecor.Interaction
             }
         }
 
-        private static System.Collections.IEnumerator MonitorSeparationRoutine(Collider[] playerColliders, GrabbableObject target)
+        private static System.Collections.IEnumerator MonitorSeparationRoutine(GameObject playerOwner, Collider[] playerColliders, GrabbableObject target)
         {
             if (target == null || playerColliders == null)
                 yield break;
@@ -549,13 +555,19 @@ namespace Ngecor.Interaction
             {
                 yield return new WaitForFixedUpdate();
 
-                if (target == null || target.gameObject == null || target.IsHeld)
+                if (target == null || target.gameObject == null)
+                    yield break;
+
+                if (playerOwner != null && target.IsHeld && target.CurrentHolder == playerOwner)
                     yield break;
             }
 
-            if (target != null && target.gameObject != null && !target.IsHeld)
+            if (target != null && target.gameObject != null)
             {
-                SetCollisionIgnored(playerColliders, targetColliders, false);
+                if (playerOwner == null || !target.IsHeld || target.CurrentHolder != playerOwner)
+                {
+                    SetCollisionIgnored(playerColliders, targetColliders, false);
+                }
             }
         }
 

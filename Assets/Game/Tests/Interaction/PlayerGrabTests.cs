@@ -1222,5 +1222,86 @@ namespace Ngecor.Interaction.Tests
             Assert.That(propRb.linearVelocity.magnitude, Is.LessThan(3f),
                 $"Dynamic prop launched with excessive velocity: {propRb.linearVelocity.magnitude} m/s ({propRb.linearVelocity})");
         }
+
+        [UnityTest]
+        public IEnumerator TwoPlayers_WhenPlayerADisablesWhileOverlapping_AndPlayerBGrabsAndMovesAway_PlayerACollisionRestored()
+        {
+            var playerB = new GameObject("PlayerB");
+            try
+            {
+                playerB.transform.position = new Vector3(0f, 0f, 0.5f);
+                var bCol = playerB.AddComponent<CapsuleCollider>();
+                bCol.height = 1.8f;
+                bCol.radius = 0.35f;
+                bCol.center = new Vector3(0f, 0.9f, 0f);
+
+                var pivot = new GameObject("CameraPivot");
+                pivot.transform.SetParent(playerB.transform, false);
+                pivot.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+
+                var cameraObject = new GameObject("PlayerCamera");
+                cameraObject.transform.SetParent(pivot.transform, false);
+                cameraObject.AddComponent<Camera>();
+
+                var bMovement = playerB.AddComponent<PlayerMovement>();
+                var playerBGrab = playerB.AddComponent<PlayerGrab>();
+                playerBGrab.InteractAction = _interactReference;
+                playerBGrab.ThrowAction = _throwReference;
+                bMovement.SetLocalPlayer(false);
+
+                _targetObject1 = CreateGrabbable("SharedTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+                var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+                var playerACol = _playerObject.GetComponent<Collider>();
+                var targetCol = _targetObject1.GetComponent<Collider>();
+
+                Physics.SyncTransforms();
+                yield return null;
+
+                // Player A grabs target
+                _playerGrab.ExecuteGrab(grabbable);
+                yield return null;
+
+                // Deeply overlap target with Player A capsule
+                _targetObject1.transform.position = _playerObject.transform.position + new Vector3(0f, 0.9f, 0.1f);
+                Physics.SyncTransforms();
+
+                // Player A is disabled while overlapping
+                _playerGrab.enabled = false;
+                yield return null;
+
+                Assert.That(_playerGrab.IsCarrying, Is.False, "Player A must release object when disabled");
+                Assert.That(Physics.GetIgnoreCollision(playerACol, targetCol), Is.True,
+                    "Player A must ignore collision while overlapping after disable!");
+
+                // Player B grabs the object while it still overlaps Player A
+                bool grabBSuccess = playerBGrab.ExecuteGrab(grabbable);
+                yield return null;
+
+                Assert.That(grabBSuccess, Is.True, "Player B must successfully grab the object");
+                Assert.That(playerBGrab.IsCarrying, Is.True);
+                Assert.That(grabbable.IsHeld, Is.True);
+                Assert.That(grabbable.CurrentHolder, Is.EqualTo(playerB));
+
+                // Player B carries object away from Player A
+                playerB.transform.position += new Vector3(10f, 0f, 0f);
+                _targetObject1.transform.position += new Vector3(10f, 0f, 0f);
+                Physics.SyncTransforms();
+
+                yield return new WaitForFixedUpdate();
+
+                // Player A collision with object must be restored once separated, even though Player B re-grabbed it!
+                Assert.That(Physics.GetIgnoreCollision(playerACol, targetCol), Is.False,
+                    "Player A's collision with object must be restored once separated after Player B re-grabs it!");
+
+                // Player B must still have collision ignored with the object it is carrying
+                Assert.That(Physics.GetIgnoreCollision(bCol, targetCol), Is.True,
+                    "Player B must maintain ignored collision while carrying the object!");
+            }
+            finally
+            {
+                if (playerB != null)
+                    Object.DestroyImmediate(playerB);
+            }
+        }
     }
 }
