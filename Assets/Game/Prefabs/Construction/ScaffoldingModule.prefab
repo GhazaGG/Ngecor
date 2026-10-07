@@ -1743,7 +1743,7 @@ MonoBehaviour:
   _wobbleThreshold: 90
   _wobbleDuration: 2
   _wobbleTorque: 2
-  _maximumImpactImpulse: 50
+  _maximumImpactImpulse: 75
   _playerLoadProbe: {fileID: 1408730870289977871}
   _breakParts:
   - {fileID: 2511664153320148147}
