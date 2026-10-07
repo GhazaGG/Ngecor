@@ -551,9 +551,11 @@ namespace Ngecor.Interaction
             if (targetColliders == null || targetColliders.Length == 0)
                 yield break;
 
+            var waitForFixedUpdate = new WaitForFixedUpdate();
+
             while (CheckOverlapping(playerColliders, targetColliders))
             {
-                yield return new WaitForFixedUpdate();
+                yield return waitForFixedUpdate;
 
                 if (target == null || target.gameObject == null)
                     yield break;
