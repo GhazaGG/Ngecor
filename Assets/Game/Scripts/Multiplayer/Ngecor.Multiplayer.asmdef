@@ -3,7 +3,9 @@
   "rootNamespace": "Ngecor.Multiplayer",
   "references": [
     "Unity.Netcode.Runtime",
-    "Unity.Networking.Transport"
+    "Unity.Networking.Transport",
+    "Ngecor.Player",
+    "Ngecor.Interaction"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

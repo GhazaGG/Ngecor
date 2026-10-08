@@ -76,6 +76,9 @@ namespace Ngecor.Interaction
             set => _throwForce = Mathf.Max(0f, value);
         }
 
+        public System.Func<GrabbableObject, bool> GrabRequestHandler { get; set; }
+        public System.Func<bool> DropRequestHandler { get; set; }
+
         private void Awake()
         {
             _playerMovement = GetComponent<PlayerMovement>();
@@ -238,8 +241,9 @@ namespace Ngecor.Interaction
             if (target == null)
                 return false;
 
-            // Offline M1: Direct local execution.
-            // NET-002/003: Will route intent to host via ServerRpc.
+            if (GrabRequestHandler != null)
+                return GrabRequestHandler(target);
+
             return ExecuteGrab(target);
         }
 
@@ -261,8 +265,9 @@ namespace Ngecor.Interaction
 
         public bool RequestDrop()
         {
-            // Offline M1: Direct local execution.
-            // NET-002/003: Will route drop intent to host.
+            if (DropRequestHandler != null)
+                return DropRequestHandler();
+
             return ExecuteDrop();
         }
 

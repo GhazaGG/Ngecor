@@ -1303,5 +1303,58 @@ namespace Ngecor.Interaction.Tests
                     Object.DestroyImmediate(playerB);
             }
         }
+
+        [Test]
+        public void RequestGrab_WithGrabRequestHandler_InvokesHandlerAndReturnsResult()
+        {
+            _targetObject1 = CreateGrabbable("TargetForHandler", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            bool handlerCalled = false;
+            GrabbableObject passedTarget = null;
+            _playerGrab.GrabRequestHandler = target =>
+            {
+                handlerCalled = true;
+                passedTarget = target;
+                return true;
+            };
+
+            bool result = _playerGrab.RequestGrab(grabbable);
+
+            Assert.That(handlerCalled, Is.True, "GrabRequestHandler must be invoked when assigned.");
+            Assert.That(passedTarget, Is.SameAs(grabbable), "Target must match passed GrabbableObject.");
+            Assert.That(result, Is.True, "Result must match handler return value.");
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Local ExecuteGrab must not be called when handler intercepts.");
+        }
+
+        [Test]
+        public void RequestDrop_WithDropRequestHandler_InvokesHandlerAndReturnsResult()
+        {
+            bool handlerCalled = false;
+            _playerGrab.DropRequestHandler = () =>
+            {
+                handlerCalled = true;
+                return true;
+            };
+
+            bool result = _playerGrab.RequestDrop();
+
+            Assert.That(handlerCalled, Is.True, "DropRequestHandler must be invoked when assigned.");
+            Assert.That(result, Is.True, "Result must match handler return value.");
+        }
+
+        [Test]
+        public void RequestGrab_WithoutGrabRequestHandler_ExecutesDirectly()
+        {
+            _targetObject1 = CreateGrabbable("TargetDirect", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            _playerGrab.GrabRequestHandler = null;
+            bool result = _playerGrab.RequestGrab(grabbable);
+
+            Assert.That(result, Is.True, "Direct RequestGrab must succeed.");
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Local ExecuteGrab must be executed.");
+        }
     }
 }
+
