@@ -9,7 +9,7 @@ namespace Ngecor.Interaction
     {
         [SerializeField, Min(0.1f)] private float _maxDistance = 3f;
         [SerializeField] private LayerMask _layerMask = ~0;
-        [SerializeField] private bool _showDebugFeedback = true;
+        [SerializeField] private bool _showDebugFeedback = false;
 
         private PlayerMovement _playerMovement;
 
@@ -22,6 +22,12 @@ namespace Ngecor.Interaction
         {
             get => _maxDistance;
             set => _maxDistance = Mathf.Max(0.1f, value);
+        }
+
+        public bool ShowDebugFeedback
+        {
+            get => _showDebugFeedback;
+            set => _showDebugFeedback = value;
         }
 
         private void Awake() => _playerMovement = GetComponent<PlayerMovement>();

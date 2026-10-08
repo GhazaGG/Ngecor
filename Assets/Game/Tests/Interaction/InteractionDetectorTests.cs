@@ -57,6 +57,12 @@ namespace Ngecor.Interaction.Tests
                 Object.DestroyImmediate(_obstacleObject);
         }
 
+        [Test]
+        public void ShowDebugFeedback_DefaultsToFalse()
+        {
+            Assert.That(_detector.ShowDebugFeedback, Is.False);
+        }
+
         [UnityTest]
         public IEnumerator DetectsInteractableDirectlyInFront()
         {
