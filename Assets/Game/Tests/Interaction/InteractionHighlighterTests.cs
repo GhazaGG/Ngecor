@@ -336,5 +336,69 @@ namespace Ngecor.Interaction.Tests
                 InteractionHighlighter.ClearMeshCache();
             }
         }
+
+        [UnityTest]
+        public IEnumerator HotPath_MultiMeshTargetAndIdle_DoesNotScanCacheEveryFrameOrLookup()
+        {
+            InteractionHighlighter.ClearMeshCache();
+
+            // 1. Create a composite interactable with multiple child MeshFilters
+            _targetObject = new GameObject("CompositeInteractable");
+            _targetObject.transform.position = new Vector3(0f, 1.4f, 2f);
+            var interactable = _targetObject.AddComponent<InteractableObject>();
+            var col = _targetObject.AddComponent<BoxCollider>();
+            col.size = Vector3.one * 2f;
+
+            // Child mesh 1 (Cube)
+            var child1 = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            child1.transform.SetParent(_targetObject.transform, false);
+            child1.transform.localPosition = new Vector3(-0.5f, 0f, 0f);
+
+            // Child mesh 2 (Sphere)
+            var child2 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            child2.transform.SetParent(_targetObject.transform, false);
+            child2.transform.localPosition = new Vector3(0.5f, 0f, 0f);
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _detector.Detect();
+            Assert.That(_detector.HasTarget, Is.True);
+
+            // Highlight target
+            _highlighter.UpdateHighlight();
+            Assert.That(_highlighter.HighlightedMeshCount, Is.GreaterThanOrEqualTo(2));
+
+            // Reset prune counter
+            InteractionHighlighter.ClearMeshCache();
+            int initialPrunes = InteractionHighlighter.PruneInvocationCount;
+
+            // Render across 5 consecutive frames (steady-state hot path)
+            for (var frame = 0; frame < 5; frame++)
+            {
+                yield return null;
+                _highlighter.UpdateHighlight();
+            }
+
+            // Verify that hot-path lookup & rendering did NOT trigger prune scans per-lookup or per-frame
+            Assert.That(InteractionHighlighter.PruneInvocationCount, Is.LessThanOrEqualTo(1),
+                "Pruning must not scan the static cache on every lookup or every frame in steady-state.");
+
+            // Also test idle (no target)
+            _targetObject.SetActive(false);
+            yield return null;
+            _detector.Detect();
+            _highlighter.UpdateHighlight();
+            Assert.That(_highlighter.HasHighlight, Is.False);
+
+            for (var frame = 0; frame < 3; frame++)
+            {
+                yield return null;
+                _highlighter.UpdateHighlight();
+            }
+
+            Assert.That(InteractionHighlighter.PruneInvocationCount, Is.LessThanOrEqualTo(1),
+                "Idle state must not trigger redundant cache prune scans.");
+        }
     }
 }

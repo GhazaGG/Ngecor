@@ -64,13 +64,11 @@ namespace Ngecor.Interaction
         private void OnDisable()
         {
             ClearHighlight();
-            PruneDeadMeshes();
         }
 
         private void OnDestroy()
         {
             ClearHighlight();
-            PruneDeadMeshes();
             if (_outlineMaterial != null && _outlineMaterial.hideFlags == HideFlags.DontSave)
             {
                 #if UNITY_EDITOR
@@ -87,7 +85,7 @@ namespace Ngecor.Interaction
 
         private void LateUpdate()
         {
-            PruneDeadMeshes();
+            MaybePruneDeadMeshes();
             UpdateHighlight();
             RenderOutline();
         }
@@ -212,8 +210,6 @@ namespace Ngecor.Interaction
             if (source == null)
                 return null;
 
-            PruneDeadMeshes();
-
             if (s_OutlineMeshCache.TryGetValue(source, out var cached) && cached != null)
                 return cached;
 
@@ -272,6 +268,32 @@ namespace Ngecor.Interaction
 #endif
         }
 
+        /// <summary>Cooldown in seconds between background cache eviction passes.</summary>
+        public static float EvictionIntervalSeconds { get; set; } = 3.0f;
+
+        private static float s_LastEvictionTime = -1f;
+
+        /// <summary>Total number of times the outline cache has executed a prune scan.</summary>
+        public static int PruneInvocationCount { get; private set; }
+
+        /// <summary>
+        /// Periodically evaluates whether dead meshes need to be pruned.
+        /// Throttled by <see cref="EvictionIntervalSeconds"/> to avoid hot-path rendering overhead.
+        /// </summary>
+        public static bool MaybePruneDeadMeshes(float? timeOverride = null)
+        {
+            if (s_OutlineMeshCache.Count == 0)
+                return false;
+
+            var currentTime = timeOverride ?? Time.unscaledTime;
+            if (s_LastEvictionTime >= 0f && currentTime - s_LastEvictionTime < EvictionIntervalSeconds)
+                return false;
+
+            s_LastEvictionTime = currentTime;
+            PruneDeadMeshes();
+            return true;
+        }
+
         /// <summary>
         /// Prunes any entries whose source mesh or outline mesh has been destroyed,
         /// destroying the cloned outline mesh to prevent native memory leaks.
@@ -280,6 +302,7 @@ namespace Ngecor.Interaction
         /// <returns>The number of pruned dead entries.</returns>
         public static int PruneDeadMeshes()
         {
+            PruneInvocationCount++;
             if (s_OutlineMeshCache.Count == 0)
                 return 0;
 
@@ -350,6 +373,8 @@ namespace Ngecor.Interaction
                 }
             }
             s_OutlineMeshCache.Clear();
+            s_LastEvictionTime = -1f;
+            PruneInvocationCount = 0;
         }
 
         private readonly struct QuantizedVertex : System.IEquatable<QuantizedVertex>
@@ -376,7 +401,6 @@ namespace Ngecor.Interaction
             _cachedMeshFilters.Clear();
             _currentTargetObject = null;
             _hasHighlight = false;
-            PruneDeadMeshes();
         }
     }
 }
