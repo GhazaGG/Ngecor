@@ -1,0 +1,27 @@
+{
+  "name": "Ngecor.Multiplayer.Tests",
+  "rootNamespace": "Ngecor.Multiplayer.Tests",
+  "references": [
+    "Ngecor.Multiplayer",
+    "Ngecor.Player",
+    "Ngecor.Interaction",
+    "Unity.Netcode.Runtime",
+    "Unity.Networking.Transport",
+    "Unity.InputSystem",
+    "Unity.InputSystem.TestFramework"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false,
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ]
+}
