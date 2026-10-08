@@ -33,7 +33,10 @@ namespace Ngecor.Material
 
         public int RequestUse()
         {
-            return _container.TotalUnits == 0 ? _shovel.RequestScoop() : _shovel.RequestDump();
+            if (_container.TotalUnits != 0)
+                return _shovel.RequestDump();
+            var stirred = _shovel.RequestStir();
+            return stirred != 0 ? stirred : _shovel.RequestScoop();
         }
     }
 }

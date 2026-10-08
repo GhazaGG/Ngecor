@@ -48,6 +48,15 @@ namespace Ngecor.Material
         public int RequestScoop() => HasLocalHolder ? ExecuteScoop() : 0;
         public int RequestDump() => HasLocalHolder ? ExecuteDump() : 0;
 
+        public int RequestStir()
+        {
+            if (!HasLocalHolder)
+                return 0;
+            var target = FindTarget(out var cancelled);
+            var spot = !cancelled && target != null ? target.GetComponent<ManualMixingSpot>() : null;
+            return spot != null && spot.ExecuteStirAction() ? 1 : 0;
+        }
+
         public int ExecuteScoop()
         {
             if (!isActiveAndEnabled || !HasHolder || _container.TotalUnits >= _container.Capacity)

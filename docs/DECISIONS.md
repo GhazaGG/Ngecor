@@ -197,6 +197,12 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Keputusan pemilik proyek dalam sesi diskusi desain 2026-10-02.
 
+### 2026-10-08 — Nilai awal aduk manual MIX-003
+
+**Decision:** Nilai tuning awal untuk playtest: satu sak semen penuh menjadi 25 unit cement (1 unit = 1 kg), resep satu batch memakai 1 unit cement + 2 unit sand dan menghasilkan 3 unit concrete, serta membutuhkan 5 aksi aduk shovel. Jumlah sak, rasio resep, dan kerja per batch dapat dituning di Inspector. Mixer memakai resep yang sama. Ini nilai awal prototype yang dapat disesuaikan berdasarkan playtest.
+
+**Owner/source:** Disetujui pemilik proyek setelah review PR A MIX-003 dan usulan default dari RyoFPS, 2026-10-08.
+
 ### 2026-10-03 — Tenaga dorong player dan massa sak semen
 
 **Decision:**
