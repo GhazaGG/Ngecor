@@ -159,25 +159,32 @@ namespace Ngecor.Interaction
                 _playerMovement = GetComponent<PlayerMovement>();
 
             var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
-            if (camera == null)
-                return;
 
             var holdPoint = HoldPoint;
             if (holdPoint != null && _carriedObject != null)
             {
-                Vector3 targetPos = ResolveHoldPosition(holdPoint, camera, _carriedObject, out bool isPinched);
-                if (isPinched)
+                Vector3 targetPos;
+                if (camera != null)
                 {
-                    _pinchTimer += Time.deltaTime;
-                    if (_pinchTimer >= _pinchDropDelay)
+                    targetPos = ResolveHoldPosition(holdPoint, camera, _carriedObject, out bool isPinched);
+                    if (isPinched)
+                    {
+                        _pinchTimer += Time.deltaTime;
+                        if (_pinchTimer >= _pinchDropDelay)
+                        {
+                            _pinchTimer = 0f;
+                            ExecuteDrop();
+                            return;
+                        }
+                    }
+                    else
                     {
                         _pinchTimer = 0f;
-                        ExecuteDrop();
-                        return;
                     }
                 }
                 else
                 {
+                    targetPos = holdPoint.position;
                     _pinchTimer = 0f;
                 }
 
@@ -787,9 +794,25 @@ namespace Ngecor.Interaction
                 _playerMovement = GetComponent<PlayerMovement>();
 
             var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+            Transform parentTransform = null;
             if (camera != null)
             {
-                var existing = camera.transform.Find("HoldPoint");
+                parentTransform = camera.transform;
+            }
+            else if (_playerMovement != null)
+            {
+                var cam = _playerMovement.GetComponentInChildren<Camera>(true);
+                parentTransform = cam != null ? cam.transform : transform;
+            }
+            else
+            {
+                var cam = GetComponentInChildren<Camera>(true);
+                parentTransform = cam != null ? cam.transform : transform;
+            }
+
+            if (parentTransform != null)
+            {
+                var existing = parentTransform.Find("HoldPoint");
                 if (existing != null)
                 {
                     _resolvedHoldPoint = existing;
@@ -797,7 +820,7 @@ namespace Ngecor.Interaction
                 else
                 {
                     var hp = new GameObject("HoldPoint");
-                    hp.transform.SetParent(camera.transform, false);
+                    hp.transform.SetParent(parentTransform, false);
                     hp.transform.localPosition = new Vector3(0.3f, -0.25f, 1.2f);
                     _resolvedHoldPoint = hp.transform;
                 }
