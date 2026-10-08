@@ -44,14 +44,14 @@ namespace Ngecor.Editor
                 {
                     mat = new UnityEngine.Material(shader);
                     mat.SetColor("_OutlineColor", new Color(1f, 1f, 1f, 0.9f));
-                    mat.SetFloat("_OutlineWidth", 0.04f);
+                    mat.SetFloat("_OutlineWidth", 0.02f);
                     AssetDatabase.CreateAsset(mat, MaterialPath);
                 }
                 else if (shader != null)
                 {
                     mat.shader = shader;
                     mat.SetColor("_OutlineColor", new Color(1f, 1f, 1f, 0.9f));
-                    mat.SetFloat("_OutlineWidth", 0.04f);
+                    mat.SetFloat("_OutlineWidth", 0.02f);
                     EditorUtility.SetDirty(mat);
                 }
 
@@ -162,7 +162,7 @@ namespace Ngecor.Editor
                         matProp.objectReferenceValue = mat;
                     var widthProp = highlighterSo.FindProperty("_outlineWidth");
                     if (widthProp != null)
-                        widthProp.floatValue = 0.04f;
+                        widthProp.floatValue = 0.02f;
                     highlighterSo.ApplyModifiedPropertiesWithoutUndo();
 
                     // Ensure InteractionPromptUI component

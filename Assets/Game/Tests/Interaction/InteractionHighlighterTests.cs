@@ -215,11 +215,47 @@ namespace Ngecor.Interaction.Tests
         [Test]
         public void OutlineWidth_CanBeConfiguredAndClamped()
         {
-            Assert.That(_highlighter.OutlineWidth, Is.GreaterThanOrEqualTo(0.04f));
+            Assert.That(_highlighter.OutlineWidth, Is.EqualTo(0.02f).Within(0.0001f));
             _highlighter.OutlineWidth = 0.05f;
             Assert.That(_highlighter.OutlineWidth, Is.EqualTo(0.05f).Within(0.0001f));
             _highlighter.OutlineWidth = -1f;
             Assert.That(_highlighter.OutlineWidth, Is.EqualTo(0.001f).Within(0.0001f));
+        }
+
+        [Test]
+        public void GetOrCreateOutlineMesh_SmoothesNormalsAtHardCorners()
+        {
+            var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                var mf = cube.GetComponent<MeshFilter>();
+                var sourceMesh = mf.sharedMesh;
+                var outlineMesh = InteractionHighlighter.GetOrCreateOutlineMesh(sourceMesh);
+
+                Assert.That(outlineMesh, Is.Not.Null);
+                Assert.That(outlineMesh, Is.Not.SameAs(sourceMesh));
+                Assert.That(outlineMesh.normals.Length, Is.EqualTo(sourceMesh.normals.Length));
+
+                // On a standard cube, all original normals are cardinal axes (e.g. (1, 0, 0)).
+                // On the smoothed outline mesh, corner vertices must have non-cardinal diagonal normals.
+                bool hasDiagonalNormal = false;
+                foreach (var n in outlineMesh.normals)
+                {
+                    float maxComponent = Mathf.Max(Mathf.Abs(n.x), Mathf.Abs(n.y), Mathf.Abs(n.z));
+                    if (maxComponent < 0.95f)
+                    {
+                        hasDiagonalNormal = true;
+                        break;
+                    }
+                }
+
+                Assert.That(hasDiagonalNormal, Is.True, "Outline mesh must have smoothed diagonal normals at corners to prevent tearing.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cube);
+                InteractionHighlighter.ClearMeshCache();
+            }
         }
     }
 }

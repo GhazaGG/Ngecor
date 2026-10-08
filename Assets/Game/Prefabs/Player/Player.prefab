@@ -284,6 +284,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.InteractionHighlighter
   _outlineMaterial: {fileID: 2100000, guid: 81a12483f9041b146bc81851b806854e, type: 2}
+  _outlineWidth: 0.04
 --- !u!114 &1719012808794113423
 MonoBehaviour:
   m_ObjectHideFlags: 0

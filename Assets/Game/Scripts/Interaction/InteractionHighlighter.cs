@@ -13,9 +13,10 @@ namespace Ngecor.Interaction
     public class InteractionHighlighter : MonoBehaviour
     {
         private static readonly int OutlineWidthId = Shader.PropertyToID("_OutlineWidth");
+        private static readonly Dictionary<Mesh, Mesh> s_OutlineMeshCache = new Dictionary<Mesh, Mesh>();
 
         [SerializeField] private Material _outlineMaterial;
-        [SerializeField, Min(0.001f)] private float _outlineWidth = 0.04f;
+        [SerializeField, Min(0.001f)] private float _outlineWidth = 0.02f;
 
         private InteractionDetector _detector;
         private readonly List<MeshFilter> _cachedMeshFilters = new List<MeshFilter>(16);
@@ -154,15 +155,96 @@ namespace Ngecor.Interaction
                 if (mesh == null)
                     continue;
 
+                var outlineMesh = GetOrCreateOutlineMesh(mesh);
+                if (outlineMesh == null)
+                    continue;
+
                 var matrix = mf.transform.localToWorldMatrix;
                 var layer = mf.gameObject.layer;
-                var subMeshCount = mesh.subMeshCount;
+                var subMeshCount = outlineMesh.subMeshCount;
 
                 for (var s = 0; s < subMeshCount; s++)
                 {
-                    Graphics.DrawMesh(mesh, matrix, _outlineMaterial, layer, null, s, _propertyBlock);
+                    Graphics.DrawMesh(outlineMesh, matrix, _outlineMaterial, layer, null, s, _propertyBlock);
                 }
             }
+        }
+
+        /// <summary>
+        /// Returns an outline mesh with smoothed/welded normals across co-located vertices,
+        /// ensuring corners and hard edges (e.g. on cubes) do not tear or break apart during extrusion.
+        /// Statically cached per source Mesh for zero steady-state GC allocation.
+        /// </summary>
+        public static Mesh GetOrCreateOutlineMesh(Mesh source)
+        {
+            if (source == null)
+                return null;
+
+            if (s_OutlineMeshCache.TryGetValue(source, out var cached) && cached != null)
+                return cached;
+
+            if (!source.isReadable)
+            {
+                s_OutlineMeshCache[source] = source;
+                return source;
+            }
+
+            var vertices = source.vertices;
+            var normals = source.normals;
+
+            if (vertices == null || normals == null || vertices.Length == 0 || vertices.Length != normals.Length)
+            {
+                s_OutlineMeshCache[source] = source;
+                return source;
+            }
+
+            var normalMap = new Dictionary<QuantizedVertex, Vector3>(vertices.Length);
+            for (var i = 0; i < vertices.Length; i++)
+            {
+                var key = new QuantizedVertex(vertices[i]);
+                normalMap.TryGetValue(key, out var sum);
+                normalMap[key] = sum + normals[i];
+            }
+
+            var smoothedNormals = new Vector3[normals.Length];
+            for (var i = 0; i < vertices.Length; i++)
+            {
+                var key = new QuantizedVertex(vertices[i]);
+                var sum = normalMap[key];
+                smoothedNormals[i] = sum.sqrMagnitude > 0.0001f ? sum.normalized : normals[i];
+            }
+
+            var outlineMesh = Object.Instantiate(source);
+            outlineMesh.name = source.name + "_Outline";
+            outlineMesh.hideFlags = HideFlags.DontSave;
+            outlineMesh.normals = smoothedNormals;
+
+            s_OutlineMeshCache[source] = outlineMesh;
+            return outlineMesh;
+        }
+
+        /// <summary>Clears the static outline mesh cache (useful for cleanup and tests).</summary>
+        public static void ClearMeshCache()
+        {
+            s_OutlineMeshCache.Clear();
+        }
+
+        private readonly struct QuantizedVertex : System.IEquatable<QuantizedVertex>
+        {
+            private readonly int _x;
+            private readonly int _y;
+            private readonly int _z;
+
+            public QuantizedVertex(Vector3 v)
+            {
+                _x = Mathf.RoundToInt(v.x * 2000f);
+                _y = Mathf.RoundToInt(v.y * 2000f);
+                _z = Mathf.RoundToInt(v.z * 2000f);
+            }
+
+            public bool Equals(QuantizedVertex other) => _x == other._x && _y == other._y && _z == other._z;
+            public override bool Equals(object obj) => obj is QuantizedVertex other && Equals(other);
+            public override int GetHashCode() => unchecked((_x * 73856093) ^ (_y * 19349663) ^ (_z * 83492791));
         }
 
         /// <summary>Clears cached mesh filters and drops highlight state.</summary>
