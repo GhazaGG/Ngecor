@@ -33,9 +33,69 @@ namespace Ngecor.Material
         }
     }
 
+    public readonly struct ConcreteRecipe
+    {
+        public int CementUnits { get; }
+        public int SandUnits { get; }
+        public int ConcreteUnitsPerBatch => CementUnits + SandUnits;
+
+        public ConcreteRecipe(int cementUnits, int sandUnits)
+        {
+            if (cementUnits <= 0)
+                throw new ArgumentOutOfRangeException(nameof(cementUnits));
+            if (sandUnits <= 0)
+                throw new ArgumentOutOfRangeException(nameof(sandUnits));
+            if ((long)cementUnits + sandUnits > int.MaxValue)
+                throw new ArgumentOutOfRangeException(nameof(sandUnits), "Recipe output exceeds the supported unit count.");
+
+            CementUnits = cementUnits;
+            SandUnits = sandUnits;
+        }
+    }
+
+    public readonly struct ConcreteMixResult
+    {
+        public int Batches { get; }
+        public int ConcreteUnits { get; }
+        public int LeftoverCementUnits { get; }
+        public int LeftoverSandUnits { get; }
+
+        internal ConcreteMixResult(int batches, int concreteUnits, int leftoverCementUnits,
+            int leftoverSandUnits)
+        {
+            Batches = batches;
+            ConcreteUnits = concreteUnits;
+            LeftoverCementUnits = leftoverCementUnits;
+            LeftoverSandUnits = leftoverSandUnits;
+        }
+    }
+
+    public static class ConcreteRecipeCalculator
+    {
+        public static ConcreteMixResult Mix(int cementUnits, int sandUnits, ConcreteRecipe recipe)
+        {
+            if (cementUnits < 0)
+                throw new ArgumentOutOfRangeException(nameof(cementUnits));
+            if (sandUnits < 0)
+                throw new ArgumentOutOfRangeException(nameof(sandUnits));
+            if (recipe.CementUnits <= 0 || recipe.SandUnits <= 0)
+                throw new ArgumentException("Recipe values must be positive.", nameof(recipe));
+
+            var batches = Math.Min(cementUnits / recipe.CementUnits, sandUnits / recipe.SandUnits);
+            var concrete = (long)batches * recipe.ConcreteUnitsPerBatch;
+            if (concrete > int.MaxValue)
+                throw new OverflowException("Concrete output exceeds the supported unit count.");
+
+            return new ConcreteMixResult(batches, (int)concrete,
+                cementUnits - batches * recipe.CementUnits,
+                sandUnits - batches * recipe.SandUnits);
+        }
+    }
+
     public sealed class BulkMaterialContainer : MonoBehaviour
     {
         [SerializeField, Min(1)] private int _capacity = 100;
+        [SerializeField] private bool _unlimitedCapacity;
         [SerializeField] private ContainerMode _mode;
         [SerializeField] private MaterialType _singleType;
         [SerializeField] private List<MaterialType> _acceptedTypes = new List<MaterialType>();
@@ -46,6 +106,8 @@ namespace Ngecor.Material
         [SerializeField] private Transform _fillVisual;
 
         private Rigidbody _body;
+        private GroundMaterialDeposit _groundDeposit;
+        private bool _transferToGround;
         private BulkMaterialContainer _transferTarget;
         private MaterialType _transferType;
         private double _transferCredit;
@@ -55,7 +117,7 @@ namespace Ngecor.Material
         private Vector3 _fullFillScale;
         private Vector3 _fullFillPosition;
 
-        public int Capacity => _capacity;
+        public int Capacity => _unlimitedCapacity ? int.MaxValue : _capacity;
 
         public int TotalUnits
         {
@@ -73,6 +135,7 @@ namespace Ngecor.Material
             _capacity = Mathf.Max(1, _capacity);
             NormalizeContents();
             _body = GetComponent<Rigidbody>();
+            _groundDeposit = GetComponent<GroundMaterialDeposit>();
             _spillCosine = Mathf.Cos(_spillAngleDegrees * Mathf.Deg2Rad);
             UpdateFillVisual();
         }
@@ -95,7 +158,7 @@ namespace Ngecor.Material
                 return;
             }
 
-            var room = _capacity;
+            var room = Capacity;
             for (var i = 0; i < _contents.Count; i++)
             {
                 var amount = _contents[i];
@@ -123,12 +186,38 @@ namespace Ngecor.Material
             return _acceptedTypes != null && _acceptedTypes.Contains(type);
         }
 
+        public bool ConfigureSingleTypeWhenEmpty(MaterialType type)
+        {
+            if (TotalUnits != 0 || !Enum.IsDefined(typeof(MaterialType), type))
+                return false;
+            _mode = ContainerMode.SingleType;
+            _singleType = type;
+            CancelTransfer();
+            return true;
+        }
+
+        public bool TryGetMaterialType(out MaterialType type)
+        {
+            type = default;
+            var found = false;
+            foreach (var amount in _contents)
+            {
+                if (amount.Units <= 0)
+                    continue;
+                if (found && amount.Type != type)
+                    return false;
+                type = amount.Type;
+                found = true;
+            }
+            return found;
+        }
+
         public int AddUnits(MaterialType type, int requestedUnits)
         {
             if (requestedUnits <= 0 || !Accepts(type))
                 return 0;
 
-            var added = Mathf.Min(requestedUnits, Mathf.Max(0, _capacity - TotalUnits));
+            var added = Mathf.Min(requestedUnits, Mathf.Max(0, Capacity - TotalUnits));
             if (added == 0)
                 return 0;
 
@@ -169,13 +258,13 @@ namespace Ngecor.Material
             return result;
         }
 
-        private int TransferUnitsTo(BulkMaterialContainer target, MaterialType type, int requestedUnits)
+        public int TransferUnitsTo(BulkMaterialContainer target, MaterialType type, int requestedUnits)
         {
             if (target == null || target == this || requestedUnits <= 0 || !target.Accepts(type))
                 return 0;
 
             var amount = Math.Min(requestedUnits, Math.Min(GetUnits(type),
-                Mathf.Max(0, target._capacity - target.TotalUnits)));
+                Mathf.Max(0, target.Capacity - target.TotalUnits)));
             if (amount == 0)
                 return 0;
 
@@ -187,17 +276,36 @@ namespace Ngecor.Material
 
         public int TransferForSeconds(BulkMaterialContainer target, MaterialType type, float seconds)
         {
-            if (target != _transferTarget || type != _transferType)
+            return TransferForSeconds(target, type, seconds, false);
+        }
+
+        public int TransferToGroundForSeconds(MaterialType type, float seconds)
+        {
+            return TransferForSeconds(null, type, seconds, true);
+        }
+
+        public void CancelTransfer()
+        {
+            _transferCredit = 0;
+            _transferTarget = null;
+            _transferToGround = false;
+        }
+
+        private int TransferForSeconds(BulkMaterialContainer target, MaterialType type, float seconds, bool ground)
+        {
+            if (target != _transferTarget || type != _transferType || ground != _transferToGround)
             {
                 _transferTarget = target;
                 _transferType = type;
+                _transferToGround = ground;
                 _transferCredit = 0;
             }
 
-            if (target == null || target == this || seconds <= 0f || float.IsNaN(seconds)
+            if (seconds <= 0f || float.IsNaN(seconds)
                 || float.IsInfinity(seconds) || _transferUnitsPerSecond <= 0f
-                || GetUnits(type) == 0 || !target.Accepts(type)
-                || target.TotalUnits >= target._capacity)
+                || GetUnits(type) == 0
+                || (ground ? _groundDeposit == null : target == null || target == this
+                    || !target.Accepts(type) || target.TotalUnits >= target.Capacity))
             {
                 _transferCredit = 0;
                 return 0;
@@ -211,7 +319,8 @@ namespace Ngecor.Material
                 return 0;
             }
 
-            var moved = TransferUnitsTo(target, type, requested);
+            var moved = ground ? _groundDeposit.Deposit(type, requested)
+                : TransferUnitsTo(target, type, requested);
             _transferCredit = moved == requested ? credit - requested : 0;
             return moved;
         }
@@ -235,8 +344,12 @@ namespace Ngecor.Material
             }
 
             var remaining = requested;
-            for (var i = 0; i < _contents.Count && remaining > 0; i++)
-                remaining -= RemoveUnits(_contents[i].Type, remaining);
+            if (_groundDeposit != null)
+            {
+                for (var i = 0; i < _contents.Count && remaining > 0; i++)
+                    remaining -= _groundDeposit.Deposit(_contents[i].Type,
+                        Mathf.Min(remaining, _contents[i].Units));
+            }
 
             _spillCredit = remaining == 0 && requested < available ? credit - requested : 0;
         }
@@ -253,7 +366,7 @@ namespace Ngecor.Material
                 _fullFillPosition = _fillVisual.localPosition;
             }
 
-            var ratio = Mathf.Clamp01((float)TotalUnits / _capacity);
+            var ratio = Mathf.Clamp01((float)TotalUnits / Capacity);
             var scale = _fullFillScale;
             scale.y *= ratio;
             _fillVisual.localScale = scale;

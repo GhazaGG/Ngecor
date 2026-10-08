@@ -823,6 +823,60 @@ namespace Ngecor.Player.Tests
             Assert.That(diagonalDistance, Is.LessThanOrEqualTo(cardinalDistance + 0.05f));
         }
 
+        [UnityTest]
+        public IEnumerator CarriedMass_When25kg_ReducesEffectiveSpeed()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+
+            // Baseline run: 0 kg mass
+            movement.CarriedMass = 0f;
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(10);
+            float distanceBaseline = _player.transform.position.z - TestOrigin.z;
+            Release(keyboard.wKey);
+
+            ResetPlayer();
+
+            // Heavy run: 25 kg mass (should be ~70% speed)
+            movement.CarriedMass = 25f;
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(10);
+            float distanceHeavy = _player.transform.position.z - TestOrigin.z;
+            Release(keyboard.wKey);
+
+            Assert.That(distanceBaseline, Is.GreaterThan(0.5f));
+            Assert.That(distanceHeavy, Is.LessThan(distanceBaseline * 0.75f));
+            Assert.That(distanceHeavy, Is.GreaterThan(distanceBaseline * 0.65f));
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedMass_ClampedAtMaximumPenalty()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+
+            movement.CarriedMass = 0f;
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(10);
+            float distanceBaseline = _player.transform.position.z - TestOrigin.z;
+            Release(keyboard.wKey);
+
+            ResetPlayer();
+
+            // Excessive mass: 200 kg should clamp at 0.6x speed
+            movement.CarriedMass = 200f;
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(10);
+            float distanceCapped = _player.transform.position.z - TestOrigin.z;
+            Release(keyboard.wKey);
+
+            Assert.That(distanceCapped, Is.GreaterThan(distanceBaseline * 0.55f));
+            Assert.That(distanceCapped, Is.LessThan(distanceBaseline * 0.65f));
+        }
+
         private void CreatePlayer(bool? isLocalPlayer = true)
         {
             _actionAsset = ScriptableObject.CreateInstance<InputActionAsset>();

@@ -100,7 +100,7 @@ namespace Ngecor.Material.Tests
         }
 
         [UnityTest]
-        public IEnumerator BucketStaysFilledUprightAndLosesContentsWhenTipped()
+        public IEnumerator BucketStaysFilledWithoutValidGroundEvenWhenTipped()
         {
             var bucket = InstantiatePrefab("Bucket");
             var body = bucket.GetComponent<Rigidbody>();
@@ -115,8 +115,7 @@ namespace Ngecor.Material.Tests
             bucket.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
             Physics.SyncTransforms();
             yield return new WaitForSeconds(0.4f);
-            Assert.That(container.TotalUnits, Is.LessThan(12));
-            Assert.That(container.TotalUnits, Is.GreaterThan(0));
+            Assert.That(container.TotalUnits, Is.EqualTo(12));
         }
 
         [UnityTest]
