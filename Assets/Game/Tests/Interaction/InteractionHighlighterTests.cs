@@ -257,5 +257,32 @@ namespace Ngecor.Interaction.Tests
                 InteractionHighlighter.ClearMeshCache();
             }
         }
+
+        [Test]
+        public void ClearMeshCache_DestroysClonedMeshesWithoutDestroyingSourceMesh()
+        {
+            var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                var mf = cube.GetComponent<MeshFilter>();
+                var sourceMesh = mf.sharedMesh;
+                var outlineMesh = InteractionHighlighter.GetOrCreateOutlineMesh(sourceMesh);
+
+                Assert.That(outlineMesh, Is.Not.Null);
+                Assert.That(outlineMesh, Is.Not.SameAs(sourceMesh));
+
+                InteractionHighlighter.ClearMeshCache();
+
+                // Cloned mesh must be destroyed, evaluating to null via Unity's overloaded == operator
+                Assert.That(outlineMesh == null, Is.True, "Cloned outline mesh must be destroyed when cache is cleared.");
+                // Source mesh must remain untouched
+                Assert.That(sourceMesh != null, Is.True, "Source mesh must NOT be destroyed when cache is cleared.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(cube);
+                InteractionHighlighter.ClearMeshCache();
+            }
+        }
     }
 }

@@ -54,6 +54,28 @@ namespace Ngecor.Interaction
             _propertyBlock = new MaterialPropertyBlock();
         }
 
+        private void OnDisable()
+        {
+            ClearHighlight();
+        }
+
+        private void OnDestroy()
+        {
+            ClearHighlight();
+            if (_outlineMaterial != null && _outlineMaterial.hideFlags == HideFlags.DontSave)
+            {
+                #if UNITY_EDITOR
+                DestroyImmediate(_outlineMaterial);
+                #else
+                if (Application.isPlaying)
+                    Destroy(_outlineMaterial);
+                else
+                    DestroyImmediate(_outlineMaterial);
+                #endif
+                _outlineMaterial = null;
+            }
+        }
+
         private void LateUpdate()
         {
             UpdateHighlight();
@@ -223,9 +245,25 @@ namespace Ngecor.Interaction
             return outlineMesh;
         }
 
-        /// <summary>Clears the static outline mesh cache (useful for cleanup and tests).</summary>
+        /// <summary>Clears the static outline mesh cache and destroys all cloned meshes without destroying source meshes.</summary>
         public static void ClearMeshCache()
         {
+            foreach (var kvp in s_OutlineMeshCache)
+            {
+                var clonedMesh = kvp.Value;
+                var sourceMesh = kvp.Key;
+                if (clonedMesh != null && clonedMesh != sourceMesh)
+                {
+                    #if UNITY_EDITOR
+                    Object.DestroyImmediate(clonedMesh);
+                    #else
+                    if (Application.isPlaying)
+                        Object.Destroy(clonedMesh);
+                    else
+                        Object.DestroyImmediate(clonedMesh);
+                    #endif
+                }
+            }
             s_OutlineMeshCache.Clear();
         }
 

@@ -247,6 +247,8 @@ Owner/source: orang atau link keputusan
 
 **Applies from:** INT-005 (#76), MAT-003 (#46), VEH-002 (#14).
 
+**Owner/source:** Usulan meryzennn di PR #89; disetujui pemilik proyek pada 2026-10-06.
+
 ### 2026-10-08 — Feedback interaksi: outline tepian dan crosshair plus tunggal (INT-006)
 
 **Decision:**
@@ -264,12 +266,15 @@ Owner/source: orang atau link keputusan
    - Begitu objek diambil/digrab (`IsHeld == true`), target hilang dari pandangan, atau target hancur, outline dan prompt teks langsung hilang seketika.
 4. **Authority & performa:**
    - Feedback visual sepenuhnya bersifat lokal (client-side) pada kamera pemain aktif tanpa overhead sinkronisasi jaringan. Alokasi GC steady-state 0 B/frame.
+5. **Konvensi objek interaktif:**
+   - Komponen `IInteractable` (seperti `InteractableObject` atau `GrabbableObject`) ditempatkan di root GameObject yang memiliki collider solid (non-trigger).
+   - Raycast `InteractionDetector` menggunakan `QueryTriggerInteraction.Ignore` sehingga collider berstatus *trigger* tidak terdeteksi sebagai target interaksi.
 
-**Reason:** Memenuhi arahan issue #77 dan masukan playtest: pemain membutuhkan bidikan presisi tanda tambah (+) tunggal tanpa interferensi debug GUI, serta feedback visual tepian objek yang bersih tanpa menutupi rupa fisik material asli objek.
+**Reason:** Memenuhi arahan issue #77 dan masukan visual pemilik proyek: pemain membutuhkan bidikan presisi tanda tambah (+) tunggal tanpa interferensi debug GUI, serta feedback visual tepian objek yang bersih tanpa menutupi rupa fisik material asli objek.
 
 **Applies from:** INT-006 (#77), PLAYER-003 (#73), MAT-001 (#15).
 
-**Owner/source:** Disepakati oleh tim developer berdasarkan issue #77, 2026-10-08.
+**Owner/source:** Arahan dan feedback visual pemilik proyek pada issue #77 / PR #95; diusulkan dan diimplementasikan oleh meryzennn pada 2026-10-08.
 
 ## Anggaran performa
 

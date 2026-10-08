@@ -17,13 +17,7 @@ namespace Ngecor.Editor
         private const string PlayerPrefabPath = "Assets/Game/Prefabs/Player/Player.prefab";
         private const string StatusPath = "Temp/int006_setup_result.txt";
 
-        [InitializeOnLoadMethod]
-        private static void OnDomainReload()
-        {
-            EditorApplication.delayCall += RunSetup;
-        }
-
-        [MenuItem("Ngecor/INT-006 Setup Assets")]
+        [MenuItem("Ngecor/INT-006 Setup Assets (Manual)")]
         public static void RunSetup()
         {
             try

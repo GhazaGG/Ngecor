@@ -211,5 +211,82 @@ namespace Ngecor.Interaction.Tests
             Assert.That(_promptUi.PromptText.enabled, Is.False);
             Assert.That(_promptUi.IsPromptVisible, Is.False);
         }
+
+        [UnityTest]
+        public IEnumerator TwoPlayers_NonLocalPlayerHasNoCrosshairOrPrompt_LocalPlayerHasExactlyOne()
+        {
+            // 1. Setup a remote (non-local) player. Player.prefab sets _isLocalPlayer to false by default.
+            var remotePlayerObject = new GameObject("RemotePlayer");
+            remotePlayerObject.transform.position = new Vector3(5f, 0f, 0f);
+            remotePlayerObject.transform.rotation = Quaternion.identity;
+            remotePlayerObject.SetActive(false);
+
+            var remoteController = remotePlayerObject.AddComponent<CharacterController>();
+            var remotePivot = new GameObject("CameraPivot");
+            remotePivot.transform.SetParent(remotePlayerObject.transform, false);
+            remotePivot.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+
+            var remoteCameraObject = new GameObject("PlayerCamera");
+            remoteCameraObject.transform.SetParent(remotePivot.transform, false);
+            remoteCameraObject.AddComponent<Camera>();
+
+            var remoteMovement = remotePlayerObject.AddComponent<PlayerMovement>();
+            var remoteDetector = remotePlayerObject.AddComponent<InteractionDetector>();
+            var remotePromptUi = remotePlayerObject.AddComponent<InteractionPromptUI>();
+
+            // When activated, remoteMovement remains non-local (default _isLocalPlayer is false)
+            remotePlayerObject.SetActive(true);
+            yield return null;
+
+            // Target in front of both players
+            _targetObject = CreateInteractable(2f, "Grab", grabbable: true);
+            var remoteTarget = CreateInteractable(2f, "Grab", grabbable: true);
+            remoteTarget.transform.position = new Vector3(5f, 1.4f, 2f);
+            Physics.SyncTransforms();
+            yield return null;
+
+            _detector.Detect();
+            remoteDetector.Detect();
+            _promptUi.UpdatePrompt();
+            remotePromptUi.UpdatePrompt();
+            yield return null;
+
+            // Non-local player checks: no active canvas, no crosshair, no prompt
+            Assert.That(remoteMovement.IsLocalPlayer, Is.False, "Remote player must be non-local.");
+            Assert.That(remotePromptUi.Canvas == null || !remotePromptUi.Canvas.gameObject.activeInHierarchy, Is.True,
+                "Non-local player must not have an active canvas.");
+            Assert.That(remotePromptUi.Crosshair, Is.Null,
+                "Non-local player must not display a crosshair.");
+            Assert.That(remotePromptUi.IsPromptVisible, Is.False,
+                "Non-local player must not display prompt.");
+
+            // Local player checks: exactly one active canvas, crosshair visible, prompt visible
+            Assert.That(_playerMovement.IsLocalPlayer, Is.True, "Local player must be local.");
+            Assert.That(_promptUi.Canvas, Is.Not.Null);
+            Assert.That(_promptUi.Canvas.gameObject.activeInHierarchy, Is.True,
+                "Local player must have exactly one active canvas.");
+            Assert.That(_promptUi.Crosshair, Is.Not.Null);
+            Assert.That(_promptUi.Crosshair.enabled, Is.True);
+            Assert.That(_promptUi.IsPromptVisible, Is.True);
+            Assert.That(_promptUi.DisplayedPrompt, Is.EqualTo("Grab"));
+
+            // Transition test: switch remote player to local via SetLocalPlayer
+            remoteMovement.SetLocalPlayer(true);
+            yield return null;
+            remoteDetector.Detect();
+            remotePromptUi.UpdatePrompt();
+            yield return null;
+
+            Assert.That(remoteMovement.IsLocalPlayer, Is.True);
+            Assert.That(remotePromptUi.Canvas, Is.Not.Null);
+            Assert.That(remotePromptUi.Canvas.gameObject.activeInHierarchy, Is.True);
+            Assert.That(remotePromptUi.Crosshair, Is.Not.Null);
+            Assert.That(remotePromptUi.Crosshair.enabled, Is.True);
+            Assert.That(remotePromptUi.IsPromptVisible, Is.True);
+
+            // Clean up
+            Object.DestroyImmediate(remotePlayerObject);
+            Object.DestroyImmediate(remoteTarget);
+        }
     }
 }

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using Ngecor.Player;
 
 namespace Ngecor.Interaction
 {
@@ -21,6 +22,7 @@ namespace Ngecor.Interaction
         [SerializeField] private int _fontSize = 18;
 
         private InteractionDetector _detector;
+        private PlayerMovement _playerMovement;
         private bool _lastPromptVisible;
         private string _lastDisplayedPrompt;
 
@@ -30,8 +32,8 @@ namespace Ngecor.Interaction
         /// <summary>The root transform of the '+' crosshair.</summary>
         public RectTransform CrosshairRoot => _crosshairRoot;
 
-        /// <summary>The crosshair graphic component. Always enabled while active.</summary>
-        public Graphic Crosshair => _crosshairRoot != null ? _crosshairRoot.GetComponentInChildren<Graphic>() : null;
+        /// <summary>The crosshair graphic component. Enabled and active only while local player is active.</summary>
+        public Graphic Crosshair => (_crosshairRoot != null && _crosshairRoot.gameObject.activeInHierarchy) ? _crosshairRoot.GetComponentInChildren<Graphic>() : null;
 
         /// <summary>The text component displaying current interaction prompt.</summary>
         public Text PromptText => _promptText;
@@ -42,14 +44,78 @@ namespace Ngecor.Interaction
         /// <summary>Currently displayed prompt string (null when hidden).</summary>
         public string DisplayedPrompt => _lastDisplayedPrompt;
 
+        /// <summary>True if this UI is attached to the active local player or in standalone test mode without PlayerMovement.</summary>
+        public bool IsLocalPlayer
+        {
+            get
+            {
+                if (_playerMovement == null)
+                    _playerMovement = GetComponent<PlayerMovement>();
+
+                return _playerMovement == null || _playerMovement.IsLocalPlayer;
+            }
+        }
+
         private void Awake()
         {
             _detector = GetComponent<InteractionDetector>();
-            EnsureUi();
+            _playerMovement = GetComponent<PlayerMovement>();
+            if (_playerMovement != null)
+            {
+                _playerMovement.LocalPlayerChanged += OnLocalPlayerChanged;
+            }
+
+            if (IsLocalPlayer)
+            {
+                EnsureUi();
+            }
+            else if (_canvas != null)
+            {
+                _canvas.gameObject.SetActive(false);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (_playerMovement != null)
+            {
+                _playerMovement.LocalPlayerChanged -= OnLocalPlayerChanged;
+            }
+        }
+
+        private void OnLocalPlayerChanged(bool isLocal)
+        {
+            if (isLocal)
+            {
+                EnsureUi();
+                if (_canvas != null)
+                    _canvas.gameObject.SetActive(true);
+                UpdatePrompt();
+            }
+            else
+            {
+                if (_canvas != null)
+                    _canvas.gameObject.SetActive(false);
+                ApplyPrompt(false, null);
+            }
         }
 
         private void LateUpdate()
         {
+            if (!IsLocalPlayer)
+            {
+                if (_canvas != null && _canvas.gameObject.activeSelf)
+                    _canvas.gameObject.SetActive(false);
+                return;
+            }
+
+            if (_canvas == null || !_canvas.gameObject.activeSelf)
+            {
+                EnsureUi();
+                if (_canvas != null)
+                    _canvas.gameObject.SetActive(true);
+            }
+
             UpdatePrompt();
         }
 
@@ -59,6 +125,12 @@ namespace Ngecor.Interaction
         /// </summary>
         public void UpdatePrompt()
         {
+            if (!IsLocalPlayer)
+            {
+                ApplyPrompt(false, null);
+                return;
+            }
+
             if (_detector == null)
                 _detector = GetComponent<InteractionDetector>();
 
