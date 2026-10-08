@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -353,6 +354,7 @@ namespace Ngecor.Interaction.Tests
         {
             _targetObject1 = CreateGrabbable("TargetDestroy", new Vector3(0f, 1.4f, 2f)).gameObject;
             var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            grabbable.Rigidbody.mass = 25f;
 
             Physics.SyncTransforms();
             yield return null;
@@ -362,6 +364,7 @@ namespace Ngecor.Interaction.Tests
 
             _playerGrab.ExecuteGrab(grabbable);
             Assert.That(_playerGrab.IsCarrying, Is.True);
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(25f));
 
             Object.DestroyImmediate(_targetObject1);
             _targetObject1 = null;
@@ -374,6 +377,7 @@ namespace Ngecor.Interaction.Tests
             Assert.DoesNotThrow(() => { bool carrying = _playerGrab.IsCarrying; });
             Assert.That(_playerGrab.IsCarrying, Is.False);
             Assert.That(_playerGrab.CarriedObject, Is.Null);
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(0f));
         }
 
         [UnityTest]
@@ -609,13 +613,24 @@ namespace Ngecor.Interaction.Tests
             Assert.That(body.linearVelocity.magnitude, Is.LessThan(3f),
                 $"Dropped object launched with excessive velocity: {body.linearVelocity.magnitude} m/s ({body.linearVelocity})");
 
-            // 3. Posisi objek tidak berada di dalam kapsul player
+            // 3. Collision with player: if overlapping in tight space, collision must be ignored until separated (anti-launch)
             bool insidePlayer = Physics.ComputePenetration(
                 objectCollider, _targetObject1.transform.position, _targetObject1.transform.rotation,
                 playerCollider, playerCollider.transform.position, playerCollider.transform.rotation,
                 out _, out float playerPenDist);
-            Assert.That(insidePlayer && playerPenDist > 0.01f, Is.False,
-                $"Dropped object is inside player capsule by {playerPenDist}m!");
+            if (insidePlayer && playerPenDist > 0.001f)
+            {
+                Assert.That(Physics.GetIgnoreCollision(playerCollider, objectCollider), Is.True,
+                    "Collision with player must remain ignored while overlapping to prevent launching!");
+
+                // Step player back to clear the overlap
+                _playerObject.transform.position += new Vector3(0f, 0f, -1f);
+                Physics.SyncTransforms();
+                yield return new WaitForFixedUpdate();
+
+                Assert.That(Physics.GetIgnoreCollision(playerCollider, objectCollider), Is.False,
+                    "Collision with player should be restored after separating!");
+            }
         }
 
         [UnityTest]
@@ -1181,6 +1196,463 @@ namespace Ngecor.Interaction.Tests
             moveUpdate.Invoke(_playerMovement, null);
 
             Assert.That(_playerGrab.IsCarrying, Is.False, "Throw click must throw object even when Grab updates before Movement");
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_CarryingHeavyObject_AppliesCarriedMassToMovement()
+        {
+            _targetObject1 = CreateGrabbable("HeavyTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            grabbable.Rigidbody.mass = 25f;
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(0f));
+            _playerGrab.ExecuteGrab(grabbable);
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(25f));
+
+            _playerGrab.ExecuteDrop();
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(0f));
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_PressedAgainstWall_PrioritizesWallOverCameraNearClip()
+        {
+            // Wall placed at 0.55m from player center (camera at Z=0)
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var wall = _obstacleObject;
+            wall.name = "CloseWall";
+            wall.transform.position = new Vector3(0f, 1.4f, 0.55f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+
+            _targetObject1 = CreateGrabbable("SmallBox", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            var boxCol = _targetObject1.GetComponent<Collider>();
+            var wallCol = wall.GetComponent<Collider>();
+
+            bool pen = Physics.ComputePenetration(
+                boxCol, _targetObject1.transform.position, _targetObject1.transform.rotation,
+                wallCol, wall.transform.position, wall.transform.rotation,
+                out _, out float dist);
+
+            Assert.That(pen && dist > 0.01f, Is.False,
+                $"Carried object penetrated wall by {dist}m when pressed close!");
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_PushedTooCloseAgainstPlayer_ExceedingPinchDelay_TriggersAutoDrop()
+        {
+            // Wall placed right at player capsule face (Z=0.25m), leaving no space for 0.4m carried box
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var wall = _obstacleObject;
+            wall.name = "PinchingWall";
+            wall.transform.position = new Vector3(0f, 1.4f, 0.25f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+
+            _targetObject1 = CreateGrabbable("PinchBox", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            // Immediately after 1 frame (< 0.3s delay), object should still be carried
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Object should not immediately drop before pinch delay expires!");
+
+            // Wait until after _pinchDropDelay (0.3s)
+            yield return new WaitForSeconds(_playerGrab.PinchDropDelay + 0.1f);
+            yield return null;
+
+            // After exceeding pinch delay, LateUpdate should drop the object
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Object pinched past delay should auto-drop!");
+            Assert.That(grabbable.IsHeld, Is.False);
+            Assert.That(grabbable.Rigidbody.isKinematic, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_PushedTooCloseAgainstPlayer_BrieflyPinchedThenReleased_DoesNotDrop()
+        {
+            // Wall placed right at player capsule face (Z=0.25m)
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var wall = _obstacleObject;
+            wall.name = "TemporaryPinchingWall";
+            wall.transform.position = new Vector3(0f, 1.4f, 0.25f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+
+            _targetObject1 = CreateGrabbable("BriefPinchBox", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            // Terhimpit selama < jeda (mis. 0.1s saat delay 0.3s)
+            yield return new WaitForSeconds(0.1f);
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Object pinched briefly should not drop!");
+
+            // Dilepas dari dinding (dinding dipindahkan jauh ke belakang)
+            wall.transform.position = new Vector3(0f, 1.4f, 10f);
+            Physics.SyncTransforms();
+
+            // Tunggu melewati durasi jeda awal (0.35s) saat sudah tidak terhimpit
+            yield return new WaitForSeconds(0.35f);
+
+            // Objek harus tetap dibawa karena timer ter-reset saat tidak terhimpit
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Object should remain held after being released from pinch before delay expired!");
+            Assert.That(grabbable.IsHeld, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator OnDisable_WhileCarryingHeavyObject_ResetsCarriedMassToZero()
+        {
+            _targetObject1 = CreateGrabbable("HeavyDisableTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            grabbable.Rigidbody.mass = 25f;
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(25f));
+
+            _playerGrab.enabled = false;
+            yield return null;
+
+            Assert.That(_playerMovement.CarriedMass, Is.EqualTo(0f),
+                "Disabling PlayerGrab should reset CarriedMass on PlayerMovement to 0!");
+            Assert.That(_playerGrab.IsCarrying, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteDrop_WhenOverlappingPlayerCapsule_MaintainsIgnoreCollisionUntilSeparated()
+        {
+            _targetObject1 = CreateGrabbable("OverlapDropTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            var playerCol = _playerObject.GetComponent<Collider>();
+            var targetCol = _targetObject1.GetComponent<Collider>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            // Position target overlapping player capsule (capsule is at origin, radius 0.35, height 1.8)
+            _targetObject1.transform.position = _playerObject.transform.position + new Vector3(0f, 0.9f, 0.2f);
+            Physics.SyncTransforms();
+
+            _playerGrab.ExecuteDrop();
+
+            // Collision must remain ignored while overlapping to prevent launching impulse
+            Assert.That(Physics.GetIgnoreCollision(playerCol, targetCol), Is.True,
+                "Ignore collision must remain active immediately after drop while overlapping capsule!");
+
+            // Move player far away so they are completely separated
+            _playerObject.transform.position += new Vector3(10f, 0f, 0f);
+            Physics.SyncTransforms();
+
+            yield return new WaitForFixedUpdate();
+
+            // Once separated, collision must be restored
+            Assert.That(Physics.GetIgnoreCollision(playerCol, targetCol), Is.False,
+                "Ignore collision should be restored once player and object have separated!");
+        }
+
+        [UnityTest]
+        public IEnumerator SeparationTracking_HandlesDestroyedObjectGracefully()
+        {
+            _targetObject1 = CreateGrabbable("DestroyedDuringSeparation", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            _targetObject1.transform.position = _playerObject.transform.position + new Vector3(0f, 0.9f, 0.2f);
+            Physics.SyncTransforms();
+
+            _playerGrab.ExecuteDrop();
+
+            // Destroy object immediately while in separation tracking queue
+            Object.DestroyImmediate(_targetObject1);
+            _targetObject1 = null;
+
+            Assert.DoesNotThrow(() =>
+            {
+                Physics.SyncTransforms();
+            });
+
+            yield return new WaitForFixedUpdate();
+        }
+
+        [UnityTest]
+        public IEnumerator SeparationTracking_ExceedingInitialQueueCapacity_MonitorsAllAndRestoresCollisionOnceSeparated()
+        {
+            var playerCol = _playerObject.GetComponent<Collider>();
+            var targets = new List<GameObject>();
+            var targetCols = new List<Collider>();
+
+            try
+            {
+                // Create 10 grabbable objects (initial queue capacity is 8)
+                const int count = 10;
+                for (int i = 0; i < count; i++)
+                {
+                    var obj = CreateGrabbable($"OverflowTarget_{i}", new Vector3(0f, 1.4f, 2f)).gameObject;
+                    targets.Add(obj);
+                    var grabbable = obj.GetComponent<GrabbableObject>();
+                    var col = obj.GetComponent<Collider>();
+                    targetCols.Add(col);
+
+                    Physics.SyncTransforms();
+                    yield return null;
+
+                    _playerGrab.ExecuteGrab(grabbable);
+                    yield return null;
+
+                    // Position overlapping player capsule
+                    obj.transform.position = _playerObject.transform.position + new Vector3(0f, 0.9f, 0.2f);
+                    Physics.SyncTransforms();
+
+                    _playerGrab.ExecuteDrop();
+
+                    Assert.That(Physics.GetIgnoreCollision(playerCol, col), Is.True,
+                        $"Object {i} must maintain ignored collision while overlapping player capsule!");
+                }
+
+                // Move player far away so all objects are completely separated
+                _playerObject.transform.position += new Vector3(10f, 0f, 0f);
+                Physics.SyncTransforms();
+
+                yield return new WaitForFixedUpdate();
+
+                // All objects, including those exceeding initial queue capacity (8), must have collision restored
+                for (int i = 0; i < count; i++)
+                {
+                    Assert.That(Physics.GetIgnoreCollision(playerCol, targetCols[i]), Is.False,
+                        $"Collision for object {i} must be restored once separated, even when initial capacity was exceeded!");
+                }
+            }
+            finally
+            {
+                foreach (var obj in targets)
+                {
+                    if (obj != null)
+                        Object.DestroyImmediate(obj);
+                }
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator OnDisable_WhenCarriedObjectOverlapsPlayer_PreservesIgnoreUntilSeparatedAndPreventsLaunch()
+        {
+            _targetObject1 = CreateGrabbable("OverlapOnDisableTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+            var rb = grabbable.Rigidbody;
+            var playerCol = _playerObject.GetComponent<Collider>();
+            var targetCol = _targetObject1.GetComponent<Collider>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            // Position held object deeply overlapping player capsule
+            _targetObject1.transform.position = _playerObject.transform.position + new Vector3(0f, 0.9f, 0.1f);
+            Physics.SyncTransforms();
+
+            // Disable PlayerGrab while object is overlapping
+            _playerGrab.enabled = false;
+            yield return null;
+
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Object should be dropped when component is disabled!");
+            Assert.That(grabbable.IsHeld, Is.False);
+            Assert.That(Physics.GetIgnoreCollision(playerCol, targetCol), Is.True,
+                "Collision must remain ignored while overlapping capsule, even after PlayerGrab is disabled!");
+
+            // Run physics step while overlapping: solver must NOT launch object
+            yield return new WaitForFixedUpdate();
+            Assert.That(rb.linearVelocity.magnitude, Is.LessThan(2f),
+                $"Object launched with excessive velocity on disable: {rb.linearVelocity.magnitude} m/s ({rb.linearVelocity})");
+
+            // Move player far away to separate
+            _playerObject.transform.position += new Vector3(10f, 0f, 0f);
+            Physics.SyncTransforms();
+
+            yield return new WaitForFixedUpdate();
+
+            // Once separated, collision must be restored
+            Assert.That(Physics.GetIgnoreCollision(playerCol, targetCol), Is.False,
+                "Collision should be restored once player and object have separated after disable!");
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_CompoundCollider_IgnoresTriggersWhenCalculatingCarriedRadius()
+        {
+            var compoundRoot = new GameObject("CompoundWithTrigger");
+            compoundRoot.transform.position = new Vector3(0f, 1.4f, 2f);
+            var rb = compoundRoot.AddComponent<Rigidbody>();
+            rb.isKinematic = false;
+            rb.useGravity = true;
+
+            // Solid collider: size 0.4 -> extents 0.2
+            var childSolid = new GameObject("SolidPart");
+            childSolid.transform.SetParent(compoundRoot.transform, false);
+            var solidCol = childSolid.AddComponent<BoxCollider>();
+            solidCol.size = new Vector3(0.4f, 0.4f, 0.4f);
+
+            // Trigger collider: 10m detector trigger
+            var childTrigger = new GameObject("TriggerPart");
+            childTrigger.transform.SetParent(compoundRoot.transform, false);
+            var triggerCol = childTrigger.AddComponent<BoxCollider>();
+            triggerCol.size = new Vector3(10f, 10f, 10f);
+            triggerCol.isTrigger = true;
+
+            var grabbable = compoundRoot.AddComponent<GrabbableObject>();
+            _targetObject1 = compoundRoot;
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            // Carried radius should be computed from solid collider (0.2m), ignoring the 10m trigger
+            Assert.That(_playerGrab.CarriedRadius, Is.EqualTo(0.2f).Within(0.01f),
+                "CarriedRadius must ignore trigger colliders and only use solid collider bounds!");
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_CollidingWithDynamicRigidbody_DoesNotImpartExcessiveImpulse()
+        {
+            // Dynamic prop in front of player
+            var prop = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            prop.name = "DynamicProp";
+            prop.transform.position = new Vector3(0f, 1.4f, 1.0f);
+            prop.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var propRb = prop.AddComponent<Rigidbody>();
+            propRb.mass = 1f;
+            propRb.useGravity = false;
+            _obstacleObject = prop;
+
+            _targetObject1 = CreateGrabbable("HeldTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            yield return null;
+
+            // Simulate physics for 15 frames while held object is near/touching the dynamic prop
+            for (int i = 0; i < 15; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
+
+            // Prop should not receive infinite/wild kinematic impulse
+            Assert.That(propRb.linearVelocity.magnitude, Is.LessThan(3f),
+                $"Dynamic prop launched with excessive velocity: {propRb.linearVelocity.magnitude} m/s ({propRb.linearVelocity})");
+        }
+
+        [UnityTest]
+        public IEnumerator TwoPlayers_WhenPlayerADisablesWhileOverlapping_AndPlayerBGrabsAndMovesAway_PlayerACollisionRestored()
+        {
+            var playerB = new GameObject("PlayerB");
+            try
+            {
+                playerB.transform.position = new Vector3(0f, 0f, 0.5f);
+                var bCol = playerB.AddComponent<CapsuleCollider>();
+                bCol.height = 1.8f;
+                bCol.radius = 0.35f;
+                bCol.center = new Vector3(0f, 0.9f, 0f);
+
+                var pivot = new GameObject("CameraPivot");
+                pivot.transform.SetParent(playerB.transform, false);
+                pivot.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+
+                var cameraObject = new GameObject("PlayerCamera");
+                cameraObject.transform.SetParent(pivot.transform, false);
+                cameraObject.AddComponent<Camera>();
+
+                var bMovement = playerB.AddComponent<PlayerMovement>();
+                var playerBGrab = playerB.AddComponent<PlayerGrab>();
+                playerBGrab.InteractAction = _interactReference;
+                playerBGrab.ThrowAction = _throwReference;
+                bMovement.SetLocalPlayer(false);
+
+                _targetObject1 = CreateGrabbable("SharedTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
+                var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+                var playerACol = _playerObject.GetComponent<Collider>();
+                var targetCol = _targetObject1.GetComponent<Collider>();
+
+                Physics.SyncTransforms();
+                yield return null;
+
+                // Player A grabs target
+                _playerGrab.ExecuteGrab(grabbable);
+                yield return null;
+
+                // Deeply overlap target with Player A capsule
+                _targetObject1.transform.position = _playerObject.transform.position + new Vector3(0f, 0.9f, 0.1f);
+                Physics.SyncTransforms();
+
+                // Player A is disabled while overlapping
+                _playerGrab.enabled = false;
+                yield return null;
+
+                Assert.That(_playerGrab.IsCarrying, Is.False, "Player A must release object when disabled");
+                Assert.That(Physics.GetIgnoreCollision(playerACol, targetCol), Is.True,
+                    "Player A must ignore collision while overlapping after disable!");
+
+                // Player B grabs the object while it still overlaps Player A
+                bool grabBSuccess = playerBGrab.ExecuteGrab(grabbable);
+                yield return null;
+
+                Assert.That(grabBSuccess, Is.True, "Player B must successfully grab the object");
+                Assert.That(playerBGrab.IsCarrying, Is.True);
+                Assert.That(grabbable.IsHeld, Is.True);
+                Assert.That(grabbable.CurrentHolder, Is.EqualTo(playerB));
+
+                // Player B carries object away from Player A
+                playerB.transform.position += new Vector3(10f, 0f, 0f);
+                _targetObject1.transform.position += new Vector3(10f, 0f, 0f);
+                Physics.SyncTransforms();
+
+                yield return new WaitForFixedUpdate();
+
+                // Player A collision with object must be restored once separated, even though Player B re-grabbed it!
+                Assert.That(Physics.GetIgnoreCollision(playerACol, targetCol), Is.False,
+                    "Player A's collision with object must be restored once separated after Player B re-grabs it!");
+
+                // Player B must still have collision ignored with the object it is carrying
+                Assert.That(Physics.GetIgnoreCollision(bCol, targetCol), Is.True,
+                    "Player B must maintain ignored collision while carrying the object!");
+            }
+            finally
+            {
+                if (playerB != null)
+                    Object.DestroyImmediate(playerB);
+            }
         }
     }
 }
