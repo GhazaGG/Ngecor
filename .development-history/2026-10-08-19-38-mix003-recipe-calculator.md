@@ -30,7 +30,7 @@ Implemented reusable pure recipe calculation for cement and sand inputs, with de
 - No manual gameplay or feel test was relevant to this pure logic change.
 
 ## Final result
-PR A's generic calculation and requested automated coverage are implemented locally on `feat/mix-recipe`.
+PR A's generic calculation and requested automated coverage are implemented on `feat/mix-recipe` and published as PR #97: https://github.com/GhazaGG/Ngecor/pull/97. The PR is open and awaiting review.
 
 ## Known limitations
 - The current project has no selected production ratio or explicit sack-to-unit conversion. Consumers must supply a recipe; this change does not configure the production recipe.
@@ -38,4 +38,4 @@ PR A's generic calculation and requested automated coverage are implemented loca
 
 ## Unresolved issues or follow-up work
 - Agree and record the production cement:sand ratio and sack conversion before configuring manual mixing in PR B.
-- PR A is committed locally; it has not been pushed or opened as a pull request.
+- PR #97 has no configured CI checks.
