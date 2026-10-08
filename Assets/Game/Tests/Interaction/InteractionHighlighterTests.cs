@@ -284,5 +284,57 @@ namespace Ngecor.Interaction.Tests
                 InteractionHighlighter.ClearMeshCache();
             }
         }
+
+        [Test]
+        public void PruneDeadMeshes_EvictsDestroyedSourceMeshAndDestroysItsClone_WhilePreservingAliveMeshes()
+        {
+            InteractionHighlighter.ClearMeshCache();
+
+            // 1. Create a persistent source mesh (e.g. shared primitive mesh used by another player)
+            var persistentCube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var persistentMesh = persistentCube.GetComponent<MeshFilter>().sharedMesh;
+            var persistentClone = InteractionHighlighter.GetOrCreateOutlineMesh(persistentMesh);
+
+            // 2. Create a temporary runtime mesh that will be discarded
+            var tempMesh = new Mesh();
+            tempMesh.name = "TempRuntimeMesh";
+            tempMesh.vertices = new[] { Vector3.zero, Vector3.up, Vector3.right };
+            tempMesh.normals = new[] { Vector3.forward, Vector3.forward, Vector3.forward };
+            tempMesh.triangles = new[] { 0, 1, 2 };
+
+            var tempClone = InteractionHighlighter.GetOrCreateOutlineMesh(tempMesh);
+
+            try
+            {
+                // Verify both are in cache
+                Assert.That(InteractionHighlighter.CachedMeshCount, Is.EqualTo(2));
+                Assert.That(tempClone, Is.Not.Null);
+                Assert.That(tempClone, Is.Not.SameAs(tempMesh));
+                Assert.That(InteractionHighlighter.IsMeshCached(tempMesh), Is.True);
+                Assert.That(InteractionHighlighter.IsMeshCached(persistentMesh), Is.True);
+
+                // 3. Destroy/discard the temporary runtime mesh
+                Object.DestroyImmediate(tempMesh);
+                Assert.That(tempMesh == null, Is.True, "Temporary mesh must be destroyed.");
+
+                // 4. Trigger pruning (simulating gameplay lifecycle or calling PruneDeadMeshes)
+                var prunedCount = InteractionHighlighter.PruneDeadMeshes();
+
+                // 5. Verify the cache evicted the dead mesh and destroyed its clone
+                Assert.That(prunedCount, Is.EqualTo(1), "Exactly one dead mesh must be pruned.");
+                Assert.That(InteractionHighlighter.CachedMeshCount, Is.EqualTo(1), "Only persistent mesh must remain in cache.");
+                Assert.That(tempClone == null, Is.True, "Cloned outline mesh of destroyed source must be destroyed.");
+
+                // 6. Verify the persistent mesh and its clone still exist intact for other players
+                Assert.That(persistentMesh != null, Is.True, "Persistent source mesh must remain intact.");
+                Assert.That(persistentClone != null, Is.True, "Persistent outline clone must remain intact for other players.");
+                Assert.That(InteractionHighlighter.IsMeshCached(persistentMesh), Is.True);
+            }
+            finally
+            {
+                Object.DestroyImmediate(persistentCube);
+                InteractionHighlighter.ClearMeshCache();
+            }
+        }
     }
 }

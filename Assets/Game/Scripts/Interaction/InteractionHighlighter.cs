@@ -14,6 +14,7 @@ namespace Ngecor.Interaction
     {
         private static readonly int OutlineWidthId = Shader.PropertyToID("_OutlineWidth");
         private static readonly Dictionary<Mesh, Mesh> s_OutlineMeshCache = new Dictionary<Mesh, Mesh>();
+        private static readonly List<Mesh> s_DeadKeysList = new List<Mesh>();
 
         [SerializeField] private Material _outlineMaterial;
         [SerializeField, Min(0.001f)] private float _outlineWidth = 0.02f;
@@ -27,6 +28,12 @@ namespace Ngecor.Interaction
 
         /// <summary>True while an active target is highlighted.</summary>
         public bool HasHighlight => _hasHighlight;
+
+        /// <summary>Current count of source meshes tracked in the static outline cache.</summary>
+        public static int CachedMeshCount => s_OutlineMeshCache.Count;
+
+        /// <summary>Returns true if the given source mesh has an entry in the outline cache.</summary>
+        public static bool IsMeshCached(Mesh source) => source != null && s_OutlineMeshCache.ContainsKey(source);
 
         /// <summary>Number of mesh filters currently cached for outline drawing.</summary>
         public int HighlightedMeshCount => _cachedMeshFilters.Count;
@@ -57,11 +64,13 @@ namespace Ngecor.Interaction
         private void OnDisable()
         {
             ClearHighlight();
+            PruneDeadMeshes();
         }
 
         private void OnDestroy()
         {
             ClearHighlight();
+            PruneDeadMeshes();
             if (_outlineMaterial != null && _outlineMaterial.hideFlags == HideFlags.DontSave)
             {
                 #if UNITY_EDITOR
@@ -78,6 +87,7 @@ namespace Ngecor.Interaction
 
         private void LateUpdate()
         {
+            PruneDeadMeshes();
             UpdateHighlight();
             RenderOutline();
         }
@@ -202,6 +212,8 @@ namespace Ngecor.Interaction
             if (source == null)
                 return null;
 
+            PruneDeadMeshes();
+
             if (s_OutlineMeshCache.TryGetValue(source, out var cached) && cached != null)
                 return cached;
 
@@ -245,6 +257,86 @@ namespace Ngecor.Interaction
             return outlineMesh;
         }
 
+        private static void DestroyClonedMesh(Mesh mesh)
+        {
+            if (mesh == null)
+                return;
+
+#if UNITY_EDITOR
+            Object.DestroyImmediate(mesh);
+#else
+            if (Application.isPlaying)
+                Object.Destroy(mesh);
+            else
+                Object.DestroyImmediate(mesh);
+#endif
+        }
+
+        /// <summary>
+        /// Prunes any entries whose source mesh or outline mesh has been destroyed,
+        /// destroying the cloned outline mesh to prevent native memory leaks.
+        /// Safe to call during gameplay: does not destroy clones of living source meshes.
+        /// </summary>
+        /// <returns>The number of pruned dead entries.</returns>
+        public static int PruneDeadMeshes()
+        {
+            if (s_OutlineMeshCache.Count == 0)
+                return 0;
+
+            s_DeadKeysList.Clear();
+            foreach (var kvp in s_OutlineMeshCache)
+            {
+                var source = kvp.Key;
+                var clone = kvp.Value;
+                if (source == null || clone == null)
+                {
+                    s_DeadKeysList.Add(source);
+                    if (clone != null && clone != source)
+                    {
+                        DestroyClonedMesh(clone);
+                    }
+                }
+            }
+
+            var count = s_DeadKeysList.Count;
+            if (count > 0)
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    s_OutlineMeshCache.Remove(s_DeadKeysList[i]);
+                }
+
+                // Safety fallback: ensure any dead key is purged even if dictionary equality comparer missed it
+                bool hasDeadRemaining = false;
+                foreach (var kvp in s_OutlineMeshCache)
+                {
+                    if (kvp.Key == null || kvp.Value == null)
+                    {
+                        hasDeadRemaining = true;
+                        break;
+                    }
+                }
+
+                if (hasDeadRemaining)
+                {
+                    var aliveEntries = new List<KeyValuePair<Mesh, Mesh>>(s_OutlineMeshCache.Count);
+                    foreach (var kvp in s_OutlineMeshCache)
+                    {
+                        if (kvp.Key != null && kvp.Value != null)
+                            aliveEntries.Add(kvp);
+                    }
+                    s_OutlineMeshCache.Clear();
+                    for (var i = 0; i < aliveEntries.Count; i++)
+                    {
+                        s_OutlineMeshCache[aliveEntries[i].Key] = aliveEntries[i].Value;
+                    }
+                }
+            }
+
+            s_DeadKeysList.Clear();
+            return count;
+        }
+
         /// <summary>Clears the static outline mesh cache and destroys all cloned meshes without destroying source meshes.</summary>
         public static void ClearMeshCache()
         {
@@ -254,14 +346,7 @@ namespace Ngecor.Interaction
                 var sourceMesh = kvp.Key;
                 if (clonedMesh != null && clonedMesh != sourceMesh)
                 {
-                    #if UNITY_EDITOR
-                    Object.DestroyImmediate(clonedMesh);
-                    #else
-                    if (Application.isPlaying)
-                        Object.Destroy(clonedMesh);
-                    else
-                        Object.DestroyImmediate(clonedMesh);
-                    #endif
+                    DestroyClonedMesh(clonedMesh);
                 }
             }
             s_OutlineMeshCache.Clear();
@@ -291,6 +376,7 @@ namespace Ngecor.Interaction
             _cachedMeshFilters.Clear();
             _currentTargetObject = null;
             _hasHighlight = false;
+            PruneDeadMeshes();
         }
     }
 }

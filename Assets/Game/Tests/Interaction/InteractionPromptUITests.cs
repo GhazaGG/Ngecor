@@ -270,23 +270,56 @@ namespace Ngecor.Interaction.Tests
             Assert.That(_promptUi.IsPromptVisible, Is.True);
             Assert.That(_promptUi.DisplayedPrompt, Is.EqualTo("Grab"));
 
-            // Transition test: switch remote player to local via SetLocalPlayer
+            // Verify total active interaction HUD canvases across the scene is exactly 1 initially
+            Assert.That(CountActiveInteractionCanvases(_promptUi, remotePromptUi), Is.EqualTo(1),
+                "Initially, exactly one player HUD Canvas must be active in the scene.");
+
+            // Ownership transfer: make player 1 non-local, make player 2 local
+            _playerMovement.SetLocalPlayer(false);
             remoteMovement.SetLocalPlayer(true);
             yield return null;
+            _detector.Detect();
             remoteDetector.Detect();
+            _promptUi.UpdatePrompt();
             remotePromptUi.UpdatePrompt();
             yield return null;
 
-            Assert.That(remoteMovement.IsLocalPlayer, Is.True);
+            // Player 1 is now non-local: HUD inactive
+            Assert.That(_playerMovement.IsLocalPlayer, Is.False, "Player 1 must be non-local after transfer.");
+            Assert.That(_promptUi.Canvas == null || !_promptUi.Canvas.gameObject.activeInHierarchy, Is.True,
+                "Player 1 must have inactive canvas after becoming non-local.");
+            Assert.That(_promptUi.Crosshair, Is.Null, "Player 1 must have no visible crosshair.");
+            Assert.That(_promptUi.IsPromptVisible, Is.False, "Player 1 must not display prompt.");
+
+            // Player 2 is now local: HUD active
+            Assert.That(remoteMovement.IsLocalPlayer, Is.True, "Player 2 must be local after transfer.");
             Assert.That(remotePromptUi.Canvas, Is.Not.Null);
-            Assert.That(remotePromptUi.Canvas.gameObject.activeInHierarchy, Is.True);
+            Assert.That(remotePromptUi.Canvas.gameObject.activeInHierarchy, Is.True,
+                "Player 2 must have active canvas after becoming local.");
             Assert.That(remotePromptUi.Crosshair, Is.Not.Null);
             Assert.That(remotePromptUi.Crosshair.enabled, Is.True);
             Assert.That(remotePromptUi.IsPromptVisible, Is.True);
+            Assert.That(remotePromptUi.DisplayedPrompt, Is.EqualTo("Grab"));
+
+            // Assert exactly one active Canvas after transition
+            Assert.That(CountActiveInteractionCanvases(_promptUi, remotePromptUi), Is.EqualTo(1),
+                "After ownership transfer, exactly one player HUD Canvas must be active in the scene.");
 
             // Clean up
             Object.DestroyImmediate(remotePlayerObject);
             Object.DestroyImmediate(remoteTarget);
+        }
+
+        private static int CountActiveInteractionCanvases(params InteractionPromptUI[] uis)
+        {
+            var count = 0;
+            for (var i = 0; i < uis.Length; i++)
+            {
+                var ui = uis[i];
+                if (ui != null && ui.Canvas != null && ui.Canvas.gameObject.activeInHierarchy)
+                    count++;
+            }
+            return count;
         }
     }
 }
