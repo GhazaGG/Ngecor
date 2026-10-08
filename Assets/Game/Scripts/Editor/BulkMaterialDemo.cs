@@ -126,11 +126,11 @@ namespace Ngecor.Editor
                 BindingFlags.NonPublic | BindingFlags.Instance);
             for (var i = 0; i < 11; i++)
                 fixedUpdate.Invoke(sand, null);
-            if (sand.GetUnits(MaterialType.Sand) != 1)
+            if (sand.GetUnits(MaterialType.Sand) != 2)
                 throw new InvalidOperationException("Dev scene tilt spill check failed.");
 
             Debug.Log("MAT-005 dev scene checks passed: serialized state, conserved transfer, "
-                + "type rejection, and tilt spill. Changes were not saved.");
+                + "type rejection, and retention without a ground deposit. Changes were not saved.");
         }
 
         private static void Transfer(string sourceName, string targetName, MaterialType type)

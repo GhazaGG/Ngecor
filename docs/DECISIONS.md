@@ -130,6 +130,14 @@ Owner/source: orang atau link keputusan
 
 **Source:** Permintaan pemilik proyek dalam percakapan 2026-10-04: "bisa kamu execute pembuatan animasinya? sederhana dulu juga gapapa. asal ada keliatan pasir jatuh saat bucket miring".
 
+### 2026-10-06 — Shovel dan pile material yang bisa dipulihkan
+
+**Decision:** MAT-004 (#54) memakai action `Player/Pour` (`R`) yang sudah ada. Satu tekan saat shovel kosong meminta scoop; satu tekan saat berisi meminta dump. Menahan `R` tidak mengulangi aksi shovel. Bucket tetap menuang selama `R` ditahan, termasuk ke tanah ketika tidak ada receiver. `E` tetap grab/drop dan klik kiri tetap throw.
+
+**Batas:** Shovel berkapasitas awal 2 unit, jarak pencarian di depan blade 1 meter, dan radius merge pile 0,5 meter; semuanya dapat dituning. Target terdekat yang penuh atau menolak tipe tidak dialihkan. Exact tie membatalkan aksi, termasuk fallback ke tanah. Tipe shovel hanya berubah ketika kosong. Deposit membutuhkan permukaan statis; jika deposit gagal, unit tetap di sumber. Pile runtime bertipe sama hanya digabung pada permukaan dan ketinggian lantai yang sama, tanpa batas kapasitas gameplay tambahan. Jumlah integer tetap dibatasi representasi `int`.
+
+**Source:** Approved MAT-004 implementation plan from the project owner, 2026-10-06. Freshness, mixing, terrain digging, final VFX, and networking remain with their respective tickets.
+
 ### 2026-10-02 — Player mendorong objek fisika lewat kontak
 
 **Decision:**

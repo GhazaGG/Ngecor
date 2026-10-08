@@ -105,7 +105,7 @@ namespace Ngecor.Material.Tests
         }
 
         [Test]
-        public void TiltSpillsOnlyFromContainerWithRigidbody()
+        public void TiltWithoutGroundDepositDoesNotDestroyUnits()
         {
             var bodyObject = new GameObject("Container With Rigidbody");
             _objects.Add(bodyObject);
@@ -126,8 +126,7 @@ namespace Ngecor.Material.Tests
             InvokePrivate(withBody, "FixedUpdate");
             InvokePrivate(withoutBody, "FixedUpdate");
 
-            var spilled = (int)System.Math.Min(10, System.Math.Floor(100d * Time.fixedDeltaTime));
-            Assert.That(withBody.TotalUnits, Is.EqualTo(10 - spilled));
+            Assert.That(withBody.TotalUnits, Is.EqualTo(10));
             Assert.That(withoutBody.TotalUnits, Is.EqualTo(10));
         }
 
