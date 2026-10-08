@@ -211,5 +211,15 @@ namespace Ngecor.Interaction.Tests
 
             Assert.That(renderer.sharedMaterial, Is.SameAs(_runtimeMaterial));
         }
+
+        [Test]
+        public void OutlineWidth_CanBeConfiguredAndClamped()
+        {
+            Assert.That(_highlighter.OutlineWidth, Is.GreaterThanOrEqualTo(0.04f));
+            _highlighter.OutlineWidth = 0.05f;
+            Assert.That(_highlighter.OutlineWidth, Is.EqualTo(0.05f).Within(0.0001f));
+            _highlighter.OutlineWidth = -1f;
+            Assert.That(_highlighter.OutlineWidth, Is.EqualTo(0.001f).Within(0.0001f));
+        }
     }
 }

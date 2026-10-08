@@ -12,10 +12,14 @@ namespace Ngecor.Interaction
     [RequireComponent(typeof(InteractionDetector))]
     public class InteractionHighlighter : MonoBehaviour
     {
+        private static readonly int OutlineWidthId = Shader.PropertyToID("_OutlineWidth");
+
         [SerializeField] private Material _outlineMaterial;
+        [SerializeField, Min(0.001f)] private float _outlineWidth = 0.04f;
 
         private InteractionDetector _detector;
         private readonly List<MeshFilter> _cachedMeshFilters = new List<MeshFilter>(16);
+        private MaterialPropertyBlock _propertyBlock;
 
         private Object _currentTargetObject;
         private bool _hasHighlight;
@@ -29,6 +33,13 @@ namespace Ngecor.Interaction
         /// <summary>Alias for HighlightedMeshCount for backwards test compatibility.</summary>
         public int HighlightedRendererCount => _cachedMeshFilters.Count;
 
+        /// <summary>The outline width in meters (extrude distance along vertex normal).</summary>
+        public float OutlineWidth
+        {
+            get => _outlineWidth;
+            set => _outlineWidth = Mathf.Max(0.001f, value);
+        }
+
         /// <summary>The outline material assigned to draw the inverted-hull edge.</summary>
         public Material OutlineMaterial
         {
@@ -39,6 +50,7 @@ namespace Ngecor.Interaction
         private void Awake()
         {
             _detector = GetComponent<InteractionDetector>();
+            _propertyBlock = new MaterialPropertyBlock();
         }
 
         private void LateUpdate()
@@ -128,6 +140,10 @@ namespace Ngecor.Interaction
             if (_outlineMaterial == null)
                 return;
 
+            if (_propertyBlock == null)
+                _propertyBlock = new MaterialPropertyBlock();
+            _propertyBlock.SetFloat(OutlineWidthId, _outlineWidth);
+
             for (var i = 0; i < _cachedMeshFilters.Count; i++)
             {
                 var mf = _cachedMeshFilters[i];
@@ -144,7 +160,7 @@ namespace Ngecor.Interaction
 
                 for (var s = 0; s < subMeshCount; s++)
                 {
-                    Graphics.DrawMesh(mesh, matrix, _outlineMaterial, layer, null, s);
+                    Graphics.DrawMesh(mesh, matrix, _outlineMaterial, layer, null, s, _propertyBlock);
                 }
             }
         }

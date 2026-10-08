@@ -17,6 +17,12 @@ namespace Ngecor.Editor
         private const string PlayerPrefabPath = "Assets/Game/Prefabs/Player/Player.prefab";
         private const string StatusPath = "Temp/int006_setup_result.txt";
 
+        [InitializeOnLoadMethod]
+        private static void OnDomainReload()
+        {
+            EditorApplication.delayCall += RunSetup;
+        }
+
         [MenuItem("Ngecor/INT-006 Setup Assets")]
         public static void RunSetup()
         {
@@ -38,14 +44,14 @@ namespace Ngecor.Editor
                 {
                     mat = new UnityEngine.Material(shader);
                     mat.SetColor("_OutlineColor", new Color(1f, 1f, 1f, 0.9f));
-                    mat.SetFloat("_OutlineWidth", 0.012f);
+                    mat.SetFloat("_OutlineWidth", 0.04f);
                     AssetDatabase.CreateAsset(mat, MaterialPath);
                 }
                 else if (shader != null)
                 {
                     mat.shader = shader;
                     mat.SetColor("_OutlineColor", new Color(1f, 1f, 1f, 0.9f));
-                    mat.SetFloat("_OutlineWidth", 0.012f);
+                    mat.SetFloat("_OutlineWidth", 0.04f);
                     EditorUtility.SetDirty(mat);
                 }
 
@@ -154,6 +160,9 @@ namespace Ngecor.Editor
                     var matProp = highlighterSo.FindProperty("_outlineMaterial");
                     if (matProp != null)
                         matProp.objectReferenceValue = mat;
+                    var widthProp = highlighterSo.FindProperty("_outlineWidth");
+                    if (widthProp != null)
+                        widthProp.floatValue = 0.04f;
                     highlighterSo.ApplyModifiedPropertiesWithoutUndo();
 
                     // Ensure InteractionPromptUI component

@@ -3,7 +3,7 @@ Shader "Ngecor/OutlineEdge"
     Properties
     {
         _OutlineColor ("Outline Color", Color) = (1, 1, 1, 0.9)
-        _OutlineWidth ("Outline Width", Float) = 0.012
+        _OutlineWidth ("Outline Width", Float) = 0.04
     }
     SubShader
     {

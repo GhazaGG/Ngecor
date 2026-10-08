@@ -254,7 +254,7 @@ Owner/source: orang atau link keputusan
    - Crosshair menggunakan uGUI dengan dua bar persegi panjang bersilangan (horizontal 12×2 px, vertikal 2×12 px) berwarna putih (`Color(1, 1, 1, 0.9)`), permanen di tengah layar `(0, 0)`.
    - Menggantikan debug OnGUI. Field `_showDebugFeedback` di `InteractionDetector` dan `PlayerGrab` disetel ke `false` secara default di script dan prefab untuk menghilangkan bug tanda ganda (dua crosshair + dan lingkaran/kotak bertumpuk).
 2. **Highlight tepian / edge-only silhouette (bukan solid color):**
-   - Target interaksi yang sedang difokuskan kamera disorot dengan outline siluet putih tipis pada tepiannya saja (*inverted-hull pass* `Ngecor/OutlineEdge`), diekstrusi sepanjang normal vertex sebesar 0.012 m.
+   - Target interaksi yang sedang difokuskan kamera disorot dengan outline siluet putih tipis pada tepiannya saja (*inverted-hull pass* `Ngecor/OutlineEdge`), diekstrusi sepanjang normal vertex sebesar 0.04 m (dapat disetel dinamis via property `OutlineWidth` / `_outlineWidth` pada `InteractionHighlighter`).
    - Interior objek dan tekstur asli (albedo, normal map, roughness) 100% tetap terlihat apa adanya; tidak ada penimpaan warna kuning solid ke seluruh badan objek dan tidak ada kloning material runtime.
    - Digambar via `Graphics.DrawMesh` pada `MeshFilter` target selama `LateUpdate`.
 3. **Prompt teks terpusat di bawah crosshair:**
