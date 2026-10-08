@@ -334,7 +334,7 @@ namespace Ngecor.Player.Tests
                 Is.EqualTo(Vector3.zero), "Disabling movement must clear the last input direction.");
 
             SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_movementDirection", Vector3.forward);
-            movement.ApplyMovementPush(body, body.worldCenterOfMass, 1f / 30f);
+            movement.ApplyMovementPush(body, body.worldCenterOfMass, Vector3.forward, 1f, 1f / 30f);
             yield return WaitForFixedFrames(1);
 
             Assert.That(body.linearVelocity, Is.EqualTo(Vector3.zero),
@@ -487,7 +487,7 @@ namespace Ngecor.Player.Tests
             for (var i = 0; i < 9; i++)
             {
                 InvokePrivateMethod(movement, "ApplyContactPush", body, contactPoint,
-                    Vector3.forward, pushDeltaTime);
+                    Vector3.forward, pushDeltaTime, 1f);
             }
 
             yield return WaitForFixedFrames(1, 30);

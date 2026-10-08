@@ -26,6 +26,8 @@ namespace Ngecor.Player
         private float _cameraPitch;
         private float _remainingPushImpulse;
         private Vector3 _movementDirection;
+        private Vector2 _movementInput;
+        private bool _interactableControlsMovement;
         private readonly HashSet<Rigidbody> _pushedBodies = new HashSet<Rigidbody>();
         private RaycastHit[] _stepProbeHits = new RaycastHit[8];
 
@@ -48,11 +50,18 @@ namespace Ngecor.Player
         public Camera LocalCamera => _isLocalPlayer ? _playerCamera : null;
         public bool IsCursorLocked => _cursorLocked;
         public bool CursorRelockedThisFrame => _cursorRelockedFrame == Time.frameCount;
+        public Vector2 MovementInput => _movementInput;
+        public float MoveSpeed => _moveSpeed;
 
-        public void ApplyMovementPush(Rigidbody body, Vector3 point, float deltaTime)
+        public void ApplyMovementPush(Rigidbody body, Vector3 point, Vector3 pushDirection, float strength, float deltaTime)
         {
             if (_isLocalPlayer && isActiveAndEnabled)
-                ApplyContactPush(body, point, _movementDirection, deltaTime);
+                ApplyContactPush(body, point, pushDirection, deltaTime, strength);
+        }
+
+        public void SetInteractableMovement(bool controlled)
+        {
+            _interactableControlsMovement = controlled;
         }
 
         public void SetLocalPlayer(bool isLocalPlayer)
@@ -67,6 +76,8 @@ namespace Ngecor.Player
         private void OnDisable()
         {
             _movementDirection = Vector3.zero;
+            _movementInput = Vector2.zero;
+            _interactableControlsMovement = false;
             if (_isLocalPlayer)
                 SetCursorLocked(false);
         }
@@ -76,14 +87,16 @@ namespace Ngecor.Player
             if (!_isLocalPlayer || _characterController == null)
             {
                 _movementDirection = Vector3.zero;
+                _movementInput = Vector2.zero;
                 return;
             }
 
             HandleCursorInput();
 
-            if (_moveAction == null)
+            if (_moveAction == null || _moveAction.action == null)
             {
                 _movementDirection = Vector3.zero;
+                _movementInput = Vector2.zero;
                 return;
             }
 
@@ -100,6 +113,7 @@ namespace Ngecor.Player
             }
 
             var input = Vector2.ClampMagnitude(_moveAction.action.ReadValue<Vector2>(), 1f);
+            _movementInput = input;
             var direction = transform.right * input.x + transform.forward * input.y;
             direction.y = 0f;
             _movementDirection = direction.sqrMagnitude > Mathf.Epsilon ? direction.normalized : Vector3.zero;
@@ -110,13 +124,14 @@ namespace Ngecor.Player
             else
                 _verticalVelocity += Physics.gravity.y * deltaTime;
 
-            var movement = direction * _moveSpeed + Vector3.up * _verticalVelocity;
+            var controlledDirection = _interactableControlsMovement ? Vector3.zero : direction;
+            var movement = controlledDirection * _moveSpeed + Vector3.up * _verticalVelocity;
             _remainingPushImpulse = _maxPushForce * deltaTime;
             _pushedBodies.Clear();
 
             var stepOffset = _characterController.stepOffset;
-            var horizontalDistance = direction.magnitude * _moveSpeed * deltaTime;
-            if (ShouldBlockStepOverDynamicBody(direction, horizontalDistance))
+            var horizontalDistance = controlledDirection.magnitude * _moveSpeed * deltaTime;
+            if (ShouldBlockStepOverDynamicBody(controlledDirection, horizontalDistance))
                 _characterController.stepOffset = 0f;
 
             _characterController.Move(movement * deltaTime);
@@ -176,6 +191,9 @@ namespace Ngecor.Player
 
         private void OnControllerColliderHit(ControllerColliderHit hit)
         {
+            if (_interactableControlsMovement)
+                return;
+
             if (hit.moveDirection.y < -0.3f)
                 return;
 
@@ -186,9 +204,10 @@ namespace Ngecor.Player
             ApplyContactPush(hit.rigidbody, hit.point, pushDirection, Time.deltaTime);
         }
 
-        private void ApplyContactPush(Rigidbody body, Vector3 point, Vector3 pushDirection, float deltaTime)
+        private void ApplyContactPush(Rigidbody body, Vector3 point, Vector3 pushDirection, float deltaTime, float strength = 1f)
         {
-            if (body == null || body.isKinematic || _remainingPushImpulse <= 0f || _pushedBodies.Contains(body))
+            strength = Mathf.Clamp01(strength);
+            if (body == null || body.isKinematic || _remainingPushImpulse <= 0f || _pushedBodies.Contains(body) || strength <= 0f)
                 return;
 
             pushDirection = Vector3.ProjectOnPlane(pushDirection, Vector3.up);
@@ -200,11 +219,11 @@ namespace Ngecor.Player
             var currentSpeed = Vector3.Dot(body.GetPointVelocity(point), pushDirection);
             var pushForce = CalculatePushForce(
                 body.mass,
-                CalculatePushTargetSpeed(body.mass, _moveSpeed),
+                CalculatePushTargetSpeed(body.mass, _moveSpeed * strength),
                 currentSpeed,
                 deltaTime,
                 PushResponseTime,
-                _maxPushForce);
+                _maxPushForce * strength);
             var impulse = Mathf.Min(pushForce * deltaTime, _remainingPushImpulse);
             if (impulse <= 0f)
                 return;

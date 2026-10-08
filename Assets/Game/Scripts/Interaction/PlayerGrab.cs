@@ -28,6 +28,8 @@ namespace Ngecor.Interaction
         private IHoldInteractable _heldInteractable;
         private Transform _resolvedHoldPoint;
         private Collider[] _playerColliders;
+        private string _interactionFeedback;
+        private float _interactionFeedbackUntil;
 
         private bool _savedWasKinematic;
         private bool _savedUseGravity;
@@ -36,6 +38,7 @@ namespace Ngecor.Interaction
         public bool IsUsingInteractable => _heldInteractable is Object heldObject && heldObject != null;
         public GrabbableObject CarriedObject => IsCarrying ? _carriedObject : null;
         public Transform HoldPoint => ResolveHoldPoint();
+        public string InteractionFeedback => Time.unscaledTime < _interactionFeedbackUntil ? _interactionFeedback : null;
 
         public float MaxGrabDistance
         {
@@ -127,6 +130,10 @@ namespace Ngecor.Interaction
                 GUI.Box(new Rect(Screen.width / 2f - 120f, Screen.height / 2f + 75f, 240f, 30f),
                     $"[Using]: {objectName} (Release)");
             }
+            else if (!string.IsNullOrEmpty(InteractionFeedback))
+            {
+                GUI.Box(new Rect(Screen.width / 2f - 180f, Screen.height / 2f + 75f, 360f, 42f), InteractionFeedback);
+            }
         }
 
         private void LateUpdate()
@@ -209,10 +216,18 @@ namespace Ngecor.Interaction
             return true;
         }
 
-        public void NotifyInteractionEnded(IHoldInteractable target)
+        public void NotifyInteractionEnded(IHoldInteractable target, string feedback = null)
         {
             if (ReferenceEquals(_heldInteractable, target))
                 _heldInteractable = null;
+            if (!string.IsNullOrEmpty(feedback))
+                ShowInteractionFeedback(feedback);
+        }
+
+        public void ShowInteractionFeedback(string message)
+        {
+            _interactionFeedback = message;
+            _interactionFeedbackUntil = Time.unscaledTime + 3f;
         }
 
         public bool RequestGrab(GrabbableObject target)
