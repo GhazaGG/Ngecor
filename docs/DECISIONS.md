@@ -247,7 +247,28 @@ Owner/source: orang atau link keputusan
 
 **Applies from:** INT-005 (#76), MAT-003 (#46), VEH-002 (#14).
 
-**Owner/source:** Usulan meryzennn di PR #89; disetujui pemilik proyek pada 2026-10-06.
+### 2026-10-08 — Feedback interaksi: outline tepian dan crosshair plus tunggal (INT-006)
+
+**Decision:**
+1. **Crosshair tunggal berbentuk tanda tambah (+):**
+   - Crosshair menggunakan uGUI dengan dua bar persegi panjang bersilangan (horizontal 12×2 px, vertikal 2×12 px) berwarna putih (`Color(1, 1, 1, 0.9)`), permanen di tengah layar `(0, 0)`.
+   - Menggantikan debug OnGUI. Field `_showDebugFeedback` di `InteractionDetector` dan `PlayerGrab` disetel ke `false` secara default di script dan prefab untuk menghilangkan bug tanda ganda (dua crosshair + dan lingkaran/kotak bertumpuk).
+2. **Highlight tepian / edge-only silhouette (bukan solid color):**
+   - Target interaksi yang sedang difokuskan kamera disorot dengan outline siluet putih tipis pada tepiannya saja (*inverted-hull pass* `Ngecor/OutlineEdge`), diekstrusi sepanjang normal vertex sebesar 0.012 m.
+   - Interior objek dan tekstur asli (albedo, normal map, roughness) 100% tetap terlihat apa adanya; tidak ada penimpaan warna kuning solid ke seluruh badan objek dan tidak ada kloning material runtime.
+   - Digambar via `Graphics.DrawMesh` pada `MeshFilter` target selama `LateUpdate`.
+3. **Prompt teks terpusat di bawah crosshair:**
+   - Teks prompt interaksi (`CurrentTarget.InteractionPrompt`, misal: "Grab") ditampilkan tepat di bawah crosshair pada posisi `(0, -35)`.
+   - Menggunakan *dirty-tracking* string sehingga zero allocation GC pada update steady-state.
+   - Begitu objek diambil/digrab (`IsHeld == true`), target hilang dari pandangan, atau target hancur, outline dan prompt teks langsung hilang seketika.
+4. **Authority & performa:**
+   - Feedback visual sepenuhnya bersifat lokal (client-side) pada kamera pemain aktif tanpa overhead sinkronisasi jaringan. Alokasi GC steady-state 0 B/frame.
+
+**Reason:** Memenuhi arahan issue #77 dan masukan playtest: pemain membutuhkan bidikan presisi tanda tambah (+) tunggal tanpa interferensi debug GUI, serta feedback visual tepian objek yang bersih tanpa menutupi rupa fisik material asli objek.
+
+**Applies from:** INT-006 (#77), PLAYER-003 (#73), MAT-001 (#15).
+
+**Owner/source:** Disepakati oleh tim developer berdasarkan issue #77, 2026-10-08.
 
 ## Anggaran performa
 
