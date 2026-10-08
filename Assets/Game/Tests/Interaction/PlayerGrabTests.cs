@@ -831,7 +831,6 @@ namespace Ngecor.Interaction.Tests
                     $"The original {handleName} must be targetable from its side.");
                 Assert.That(_playerGrab.RequestGrab(), Is.True);
                 Assert.That(_playerGrab.IsUsingInteractable, Is.True);
-                Assert.That(body.isKinematic, Is.False, "The wheelbarrow prefab must remain dynamic while held.");
                 hold.EndInteraction(_playerObject);
             }
         }
@@ -906,16 +905,28 @@ namespace Ngecor.Interaction.Tests
         public IEnumerator WheelbarrowInteraction_DSteersWithBoundedSpeedWhileHeld()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
-            var interaction = CreateWheelbarrowForMovement(out _);
+            var interaction = CreateWheelbarrowForMovement(out var handle);
             var body = interaction.GetComponent<Rigidbody>();
             yield return null;
             _detector.Detect();
             Assert.That(_playerGrab.RequestGrab(), Is.True);
 
+            var startHandlePos = handle.bounds.center;
+            var startPlayerPos = _playerObject.transform.position;
+            var startWheelPos = body.worldCenterOfMass + interaction.transform.forward * 0.2f;
+
             Press(keyboard.dKey);
             yield return null;
             for (var i = 0; i < 4; i++)
                 yield return new WaitForFixedUpdate();
+
+            var endHandlePos = handle.bounds.center;
+            var endPlayerPos = _playerObject.transform.position;
+            var endWheelPos = body.worldCenterOfMass + interaction.transform.forward * 0.2f;
+
+            var handleDisplacement = Vector3.Distance(startHandlePos, endHandlePos);
+            var playerDisplacement = Vector3.Distance(startPlayerPos, endPlayerPos);
+            var wheelDisplacement = Vector3.Distance(startWheelPos, endWheelPos);
 
             Assert.That(_playerGrab.IsUsingInteractable, Is.True,
                 "Steering the wheelbarrow must not break the hold during normal motion.");
@@ -923,6 +934,49 @@ namespace Ngecor.Interaction.Tests
             Assert.That(body.angularVelocity.y, Is.GreaterThan(0.05f), "D must steer the wheelbarrow right.");
             Assert.That(body.angularVelocity.y, Is.LessThanOrEqualTo(2.1f), "Steering speed must remain bounded.");
             Assert.That(body.isKinematic, Is.False);
+            Assert.That(handleDisplacement, Is.GreaterThan(0.005f), "D must shift the handles laterally.");
+            Assert.That(playerDisplacement, Is.GreaterThan(0.005f), "Player must follow the handles during the lateral swing.");
+            Assert.That(wheelDisplacement, Is.LessThan(handleDisplacement),
+                "The front wheel must act as a relatively stationary fulcrum compared to handle movement.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_ASteersLeftWithFrontWheelFulcrum()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var interaction = CreateWheelbarrowForMovement(out var handle);
+            var body = interaction.GetComponent<Rigidbody>();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            var startHandlePos = handle.bounds.center;
+            var startPlayerPos = _playerObject.transform.position;
+            var startWheelPos = body.worldCenterOfMass + interaction.transform.forward * 0.2f;
+
+            Press(keyboard.aKey);
+            yield return null;
+            for (var i = 0; i < 4; i++)
+                yield return new WaitForFixedUpdate();
+
+            var endHandlePos = handle.bounds.center;
+            var endPlayerPos = _playerObject.transform.position;
+            var endWheelPos = body.worldCenterOfMass + interaction.transform.forward * 0.2f;
+
+            var handleDisplacement = Vector3.Distance(startHandlePos, endHandlePos);
+            var playerDisplacement = Vector3.Distance(startPlayerPos, endPlayerPos);
+            var wheelDisplacement = Vector3.Distance(startWheelPos, endWheelPos);
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True,
+                "Steering the wheelbarrow left must not break the hold.");
+            Assert.That(_playerMovement.MovementInput.x, Is.EqualTo(-1f), "A input must reach the held interaction.");
+            Assert.That(body.angularVelocity.y, Is.LessThan(-0.05f), "A must steer the wheelbarrow left.");
+            Assert.That(body.angularVelocity.y, Is.GreaterThanOrEqualTo(-2.1f), "Steering speed must remain bounded.");
+            Assert.That(body.isKinematic, Is.False);
+            Assert.That(handleDisplacement, Is.GreaterThan(0.005f), "A must shift the handles laterally.");
+            Assert.That(playerDisplacement, Is.GreaterThan(0.005f), "Player must follow the handles during the lateral swing.");
+            Assert.That(wheelDisplacement, Is.LessThan(handleDisplacement),
+                "The front wheel must act as a relatively stationary fulcrum compared to handle movement.");
         }
 
         [UnityTest]

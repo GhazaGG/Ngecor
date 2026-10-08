@@ -12,8 +12,8 @@ namespace Ngecor.Vehicle
         private const float GripPathGroundClearance = 0.02f;
         private const float MaxSeparationMultiplier = 2f;
         private const float MaxSteeringSpeed = 2f;
-        private const float MaxSteeringTorque = 25f;
-        private const float SteeringResponse = 10f;
+        private const float MaxSteeringForce = 150f;
+        private const float PushResponseTime = 0.08f;
         private const float ReversePushStrength = 0.65f;
 
         [SerializeField] private Collider[] _handleColliders;
@@ -23,6 +23,8 @@ namespace Ngecor.Vehicle
         private PlayerGrab _interactingGrab;
         private CharacterController _interactingController;
         private RaycastHit[] _gripPathHits = new RaycastHit[8];
+        private RaycastHit[] _wheelHits = new RaycastHit[4];
+        private Vector3 _previousHeading;
 
         public string InteractionPrompt => "Push";
 
@@ -92,6 +94,7 @@ namespace Ngecor.Vehicle
             }
 
             player.transform.rotation = Quaternion.LookRotation(-outward, Vector3.up);
+            _previousHeading = -outward;
             _interactingPlayer = player;
             _interactingGrab = grab;
             _interactingController = controller;
@@ -107,7 +110,7 @@ namespace Ngecor.Vehicle
         private void FixedUpdate()
         {
             if (_interactingPlayer != null && _interactingPlayer.isActiveAndEnabled && Rigidbody != null && !Rigidbody.isKinematic)
-                ApplySteering(_interactingPlayer.MovementInput.x);
+                ApplyWheelGripAndSteering();
         }
 
         private void LateUpdate()
@@ -123,7 +126,7 @@ namespace Ngecor.Vehicle
                 return;
             }
 
-            if (!TryGetGripPose(_interactingController, out var handlePoint, out var gripPosition, out _))
+            if (!TryGetGripPose(_interactingController, out var handlePoint, out var gripPosition, out var outward))
             {
                 StopInteraction("The wheelbarrow handle is no longer available.");
                 return;
@@ -140,6 +143,15 @@ namespace Ngecor.Vehicle
             var followStep = Vector3.ClampMagnitude(alignment, _interactingPlayer.MoveSpeed * Time.deltaTime);
             if (followStep.sqrMagnitude > Mathf.Epsilon)
                 _interactingController.Move(followStep);
+
+            var currentHeading = -outward;
+            if (_previousHeading.sqrMagnitude > Mathf.Epsilon)
+            {
+                var deltaYaw = Vector3.SignedAngle(_previousHeading, currentHeading, Vector3.up);
+                if (Mathf.Abs(deltaYaw) > 0.001f)
+                    _interactingPlayer.transform.Rotate(Vector3.up, deltaYaw, Space.World);
+            }
+            _previousHeading = currentHeading;
 
             var input = _interactingPlayer.MovementInput;
             if (Mathf.Abs(input.y) > 0.01f)
@@ -182,13 +194,11 @@ namespace Ngecor.Vehicle
             return false;
         }
 
-        private bool TryGetGripPose(
-            CharacterController controller, out Vector3 handlePoint, out Vector3 playerPosition, out Vector3 outward)
+        private bool TryGetHandlePoint(out Vector3 handlePoint, out Vector3 outward)
         {
             handlePoint = Vector3.zero;
-            playerPosition = Vector3.zero;
             outward = Vector3.zero;
-            if (controller == null || Rigidbody == null || _handleColliders == null)
+            if (Rigidbody == null || _handleColliders == null)
                 return false;
 
             var count = 0;
@@ -209,7 +219,19 @@ namespace Ngecor.Vehicle
             outward = Vector3.ProjectOnPlane(handlePoint - Rigidbody.worldCenterOfMass, Vector3.up);
             if (outward.sqrMagnitude <= Mathf.Epsilon)
                 return false;
+
             outward.Normalize();
+            return true;
+        }
+
+        private bool TryGetGripPose(
+            CharacterController controller, out Vector3 handlePoint, out Vector3 playerPosition, out Vector3 outward)
+        {
+            playerPosition = Vector3.zero;
+            handlePoint = Vector3.zero;
+            outward = Vector3.zero;
+            if (controller == null || !TryGetHandlePoint(out handlePoint, out outward))
+                return false;
 
             var handleDepth = 0f;
             for (var i = 0; i < _handleColliders.Length; i++)
@@ -230,14 +252,111 @@ namespace Ngecor.Vehicle
             return true;
         }
 
-        private void ApplySteering(float input)
+        private void ApplyWheelGripAndSteering()
         {
-            var currentYawSpeed = Vector3.Dot(Rigidbody.angularVelocity, Vector3.up);
-            var torque = Mathf.Clamp(
-                (Mathf.Clamp(input, -1f, 1f) * MaxSteeringSpeed - currentYawSpeed) * SteeringResponse,
-                -MaxSteeringTorque,
-                MaxSteeringTorque);
-            Rigidbody.AddTorque(Vector3.up * torque, ForceMode.Force);
+            if (!TryGetHandlePoint(out var handlePoint, out var outward))
+                return;
+
+            var forward = -outward;
+            var outwardRight = Vector3.Cross(Vector3.up, forward).normalized;
+            var wheelPos = GetWheelPosition(handlePoint);
+
+            // Front wheel acts as fulcrum by resisting lateral sliding
+            Vector3 wheelContactPoint;
+            TryGetWheelGroundContact(wheelPos, out wheelContactPoint);
+
+            var wheelVelocity = Rigidbody.GetPointVelocity(wheelContactPoint);
+            var wheelLateralSpeed = Vector3.Dot(wheelVelocity, outwardRight);
+            if (Mathf.Abs(wheelLateralSpeed) > 0.001f)
+            {
+                var gripMass = Mathf.Max(1f, Rigidbody.mass);
+                var desiredGripForce = -wheelLateralSpeed * gripMass / Time.fixedDeltaTime;
+                var maxGripForce = Mathf.Max(150f, Rigidbody.mass * 30f);
+                var clampedGripForce = Mathf.Clamp(desiredGripForce, -maxGripForce, maxGripForce);
+                Rigidbody.AddForceAtPosition(outwardRight * clampedGripForce, wheelContactPoint, ForceMode.Force);
+            }
+
+            // Player lateral steering at handles
+            var input = _interactingPlayer.MovementInput.x;
+            if (Mathf.Abs(input) > 0.01f)
+            {
+                var swingDir = -outwardRight * Mathf.Sign(input);
+                var radius = Mathf.Max(0.1f, Vector3.ProjectOnPlane(handlePoint - wheelPos, Vector3.up).magnitude);
+                var targetYawSpeed = Mathf.Abs(input) * MaxSteeringSpeed;
+                var currentYawSpeed = Vector3.Dot(Rigidbody.angularVelocity, Vector3.up) * Mathf.Sign(input);
+                var targetSpeed = targetYawSpeed * radius;
+                var currentHandleSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(handlePoint), swingDir);
+
+                if (currentYawSpeed < targetYawSpeed)
+                {
+                    var pushForce = PlayerMovement.CalculatePushForce(
+                        Rigidbody.mass,
+                        targetSpeed,
+                        currentHandleSpeed,
+                        Time.fixedDeltaTime,
+                        PushResponseTime,
+                        MaxSteeringForce);
+
+                    if (pushForce > 0f)
+                        Rigidbody.AddForceAtPosition(swingDir * pushForce, handlePoint, ForceMode.Force);
+                }
+                else if (currentYawSpeed > targetYawSpeed + 0.05f)
+                {
+                    var excessSpeed = (currentYawSpeed - targetYawSpeed) * radius;
+                    var brakeForce = Mathf.Clamp(excessSpeed * Rigidbody.mass / Time.fixedDeltaTime, 0f, MaxSteeringForce);
+                    Rigidbody.AddForceAtPosition(-swingDir * brakeForce, handlePoint, ForceMode.Force);
+                }
+            }
+            else
+            {
+                var handleLateralSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(handlePoint), outwardRight);
+                if (Mathf.Abs(handleLateralSpeed) > 0.01f)
+                {
+                    var dampingForce = -handleLateralSpeed * Rigidbody.mass * 4f;
+                    var maxDamping = Mathf.Max(50f, Rigidbody.mass * 10f);
+                    dampingForce = Mathf.Clamp(dampingForce, -maxDamping, maxDamping);
+                    Rigidbody.AddForceAtPosition(outwardRight * dampingForce, handlePoint, ForceMode.Force);
+                }
+            }
+        }
+
+        private Vector3 GetWheelPosition(Vector3 handlePoint)
+        {
+            var wheelTransform = transform.Find("Wheel");
+            if (wheelTransform != null)
+                return wheelTransform.position;
+
+            var com = Rigidbody.worldCenterOfMass;
+            var toHandle = Vector3.ProjectOnPlane(handlePoint - com, Vector3.up);
+            var handleDist = toHandle.magnitude;
+            if (handleDist > Mathf.Epsilon)
+                return com - toHandle.normalized * (handleDist * 0.5f);
+
+            return com + transform.forward * 0.5f;
+        }
+
+        private bool TryGetWheelGroundContact(Vector3 wheelPosition, out Vector3 groundContactPoint)
+        {
+            groundContactPoint = wheelPosition;
+            var rayStart = wheelPosition + Vector3.up * 0.2f;
+            const float rayDistance = 0.5f;
+            var hitCount = Physics.RaycastNonAlloc(
+                rayStart, Vector3.down, _wheelHits, rayDistance, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+
+            for (var i = 0; i < hitCount; i++)
+            {
+                var col = _wheelHits[i].collider;
+                if (col == null || col.transform == transform || col.transform.IsChildOf(transform))
+                    continue;
+                if (_interactingPlayer != null &&
+                    (col.transform == _interactingPlayer.transform || col.transform.IsChildOf(_interactingPlayer.transform)))
+                    continue;
+
+                groundContactPoint = _wheelHits[i].point;
+                return true;
+            }
+
+            return false;
         }
 
         private bool IsGripPathClear(
@@ -288,6 +407,7 @@ namespace Ngecor.Vehicle
             _interactingPlayer = null;
             _interactingGrab = null;
             _interactingController = null;
+            _previousHeading = Vector3.zero;
             if (player != null)
             {
                 player.SetInteractableMovement(false);
