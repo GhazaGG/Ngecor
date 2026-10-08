@@ -248,6 +248,20 @@ Owner/source: orang atau link keputusan
 **Applies from:** INT-005 (#76), MAT-003 (#46), VEH-002 (#14).
 
 **Owner/source:** Usulan meryzennn di PR #89; disetujui pemilik proyek pada 2026-10-06.
+### 2026-10-08 — Konvensi Objek Interaktif (INT-006)
+
+**Decision:**
+1. **Penempatan komponen:** Komponen `IInteractable` dipasang pada **root GameObject** objek, bukan pada anak (child). Objek interaktif mendeteksi dan melaporkan dirinya sebagai satu kesatuan root; anak-anak hanya membawa visual, collider, dan rigidbody.
+2. **Collider yang dihitung:** Interaksi hanya mengenali collider **non-trigger**. Collider bertipe trigger diabaikan sepenuhnya oleh deteksi interaksi. Semua collider penentu bentuk fisik objek harus non-trigger; trigger dipakai untuk volume bantu (misalnya area), bukan untuk penargetan interaksi.
+3. **Feedback visual:** Sorotan objek yang disasar memakai `MaterialPropertyBlock` lewat `Renderer.SetPropertyBlock`. Kode tidak pernah menyentuh `Renderer.material` atau `sharedMaterial` secara mutasi, sehingga material bersama tidak tercemar dan tidak ada material instance baru yang dibuat per objek.
+4. **Feedback UI:** Crosshair statis di tengah layar dan teks prompt dinamis dibangun dengan uGUI (`UnityEngine.UI`) dan selalu dipakai ulang. Pembaruan tiap frame memakai *dirty tracking* (`_lastPromptVisible`, `_lastDisplayedPrompt`) agar tidak ada alokasi GC per frame.
+5. **Debug legacy:** Feedback debug berbasis `OnGUI` (`InteractionDetector.ShowDebugFeedback`) **mati secara default**. Debug hanya dinyalakan manual saat investigasi di editor dan tidak menjadi perilaku normal build.
+
+**Reason:** Satu konvensi penempatan mencegah deteksi ganda atau tak terduga saat satu objek punya banyak collider, dan membedakan collider fisik dari volume bantu. `MaterialPropertyBlock` adalah cara Unity memberi highlight tanpa menggandakan material, jadi sesuai anggaran performa dan aman untuk objek yang berbagi material. uGUI dengan dirty tracking memenuhi aturan "hindari alokasi di `Update`" pada [Anggaran performa](#anggaran-performa), dan mematikan debug `OnGUI` secara default menjaga build tetap ringan.
+
+**Applies from:** INT-006 dan komponen interaksi berikutnya (`InteractionDetector`, `InteractionHighlighter`, `InteractionPromptUI`).
+
+**Owner/source:** Hasil investigasi dan implementasi INT-006 di branch `feat/interaction-highlight-prompt`, 2026-10-08.
 
 ## Anggaran performa
 

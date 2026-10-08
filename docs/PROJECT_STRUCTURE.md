@@ -59,6 +59,17 @@ Automated Unity tests live under `Assets/Game/Tests/<System>/` and use a test as
 
 File yang benar-benar dipakai dua sistem atau lebih boleh ditaruh di `<Tipe>/Shared/`. "Mungkin nanti dipakai sistem lain" tidak cukup; letakkan di sistem pemiliknya dulu dan pindahkan lewat Editor saat dibutuhkan.
 
+### Prefab UI
+
+Prefab UI (misalnya HUD interaksi) disimpan di `Assets/Game/Prefabs/UI/` dengan sistem `UI`. Ini tempat untuk Canvas, crosshair, teks prompt, dan elemen HUD lain yang dipakai ulang lintas scene. Prefab HUD yang berdiri sendiri tidak menempel pada objek gameplay; ia di-*wiring* ke komponen lewat referensi Inspector (misalnya `InteractionPromptUI` menerima Canvas, crosshair, dan teks prompt), bukan lewat `Resources/`.
+
+### Konvensi objek interaktif (INT-006)
+
+- Komponen `IInteractable` dipasang pada **root GameObject** objek, bukan pada anak. Anak hanya membawa visual, collider, dan rigidbody.
+- Deteksi interaksi hanya mengenali collider **non-trigger**; collider trigger diabaikan (lihat `docs/DECISIONS.md` — *Konvensi Objek Interaktif (INT-006)*).
+- Feedback visual memakai `MaterialPropertyBlock`; jangan pernah mengubah `Renderer.material`/`sharedMaterial` saat runtime.
+- Feedback UI memakai uGUI dari `Assets/Game/Prefabs/UI/` dengan crosshair dan teks prompt yang dipakai ulang tanpa alokasi GC per frame.
+
 ### Aturan
 
 1. **Semua file buatan tim ada di `Assets/Game/`.** Jangan menaruh file langsung di `Assets/` atau di folder `ThirdParty/`.
