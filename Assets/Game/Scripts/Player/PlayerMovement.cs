@@ -48,8 +48,11 @@ namespace Ngecor.Player
         private int _cursorRelockedFrame = -1;
 
         public Camera LocalCamera => _isLocalPlayer ? _playerCamera : null;
+        public bool IsLocalPlayer => _isLocalPlayer;
         public bool IsCursorLocked => _cursorLocked;
         public bool CursorRelockedThisFrame => _cursorRelockedFrame == Time.frameCount;
+
+        public event System.Action<bool> LocalPlayerChanged;
 
         public float CarriedMass
         {
@@ -64,6 +67,7 @@ namespace Ngecor.Player
 
             _isLocalPlayer = isLocalPlayer;
             SetCursorLocked(isLocalPlayer);
+            LocalPlayerChanged?.Invoke(isLocalPlayer);
         }
 
         private void OnDisable()

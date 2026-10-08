@@ -69,6 +69,7 @@ File yang benar-benar dipakai dua sistem atau lebih boleh ditaruh di `<Tipe>/Sha
 6. **Dev scene** milik satu orang dan tidak dimasukkan ke Build Settings. Scene utama langsung di `Scenes/`.
 7. **Pindah dan rename hanya lewat Unity Editor.**
 8. **Folder baru di luar struktur ini** (misalnya `Tests/`, `VFX/`, `Fonts/`) diusulkan di PR yang pertama kali membutuhkannya, lalu dokumen ini diperbarui di PR yang sama.
+9. **Objek Interaktif:** Komponen `IInteractable` (misal: `InteractableObject`, `GrabbableObject`) ditempatkan pada root GameObject yang memiliki collider solid (non-trigger). Raycast `InteractionDetector` mengabaikan collider trigger sehingga tidak dijadikan target interaksi.
 
 ## Penamaan
 
