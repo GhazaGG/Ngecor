@@ -9,6 +9,37 @@ namespace Ngecor.Material.Tests
     {
         private readonly List<GameObject> _objects = new List<GameObject>();
 
+        [Test]
+        public void ConcreteRecipeConservesUnitsWhenOutputMatchesInputs()
+        {
+            var result = ConcreteRecipeCalculator.Mix(7, 10, new ConcreteRecipe(2, 3));
+
+            Assert.That(result.Batches, Is.EqualTo(3));
+            Assert.That(result.ConcreteUnits + result.LeftoverCementUnits + result.LeftoverSandUnits,
+                Is.EqualTo(17));
+        }
+
+        [Test]
+        public void ConcreteRecipeLeavesIngredientsThatDoNotMakeAFullBatch()
+        {
+            var result = ConcreteRecipeCalculator.Mix(7, 10, new ConcreteRecipe(2, 3));
+
+            Assert.That(result.LeftoverCementUnits, Is.EqualTo(1));
+            Assert.That(result.LeftoverSandUnits, Is.EqualTo(1));
+            Assert.That(result.ConcreteUnits, Is.EqualTo(15));
+        }
+
+        [Test]
+        public void ConcreteRecipeWithEmptyInputProducesNoConcreteAndKeepsAllIngredients()
+        {
+            var result = ConcreteRecipeCalculator.Mix(0, 10, new ConcreteRecipe(2, 3));
+
+            Assert.That(result.Batches, Is.Zero);
+            Assert.That(result.ConcreteUnits, Is.Zero);
+            Assert.That(result.LeftoverCementUnits, Is.Zero);
+            Assert.That(result.LeftoverSandUnits, Is.EqualTo(10));
+        }
+
         [TearDown]
         public void TearDown()
         {

@@ -33,6 +33,65 @@ namespace Ngecor.Material
         }
     }
 
+    public readonly struct ConcreteRecipe
+    {
+        public int CementUnits { get; }
+        public int SandUnits { get; }
+        public int ConcreteUnitsPerBatch => CementUnits + SandUnits;
+
+        public ConcreteRecipe(int cementUnits, int sandUnits)
+        {
+            if (cementUnits <= 0)
+                throw new ArgumentOutOfRangeException(nameof(cementUnits));
+            if (sandUnits <= 0)
+                throw new ArgumentOutOfRangeException(nameof(sandUnits));
+            if ((long)cementUnits + sandUnits > int.MaxValue)
+                throw new ArgumentOutOfRangeException(nameof(sandUnits), "Recipe output exceeds the supported unit count.");
+
+            CementUnits = cementUnits;
+            SandUnits = sandUnits;
+        }
+    }
+
+    public readonly struct ConcreteMixResult
+    {
+        public int Batches { get; }
+        public int ConcreteUnits { get; }
+        public int LeftoverCementUnits { get; }
+        public int LeftoverSandUnits { get; }
+
+        internal ConcreteMixResult(int batches, int concreteUnits, int leftoverCementUnits,
+            int leftoverSandUnits)
+        {
+            Batches = batches;
+            ConcreteUnits = concreteUnits;
+            LeftoverCementUnits = leftoverCementUnits;
+            LeftoverSandUnits = leftoverSandUnits;
+        }
+    }
+
+    public static class ConcreteRecipeCalculator
+    {
+        public static ConcreteMixResult Mix(int cementUnits, int sandUnits, ConcreteRecipe recipe)
+        {
+            if (cementUnits < 0)
+                throw new ArgumentOutOfRangeException(nameof(cementUnits));
+            if (sandUnits < 0)
+                throw new ArgumentOutOfRangeException(nameof(sandUnits));
+            if (recipe.CementUnits <= 0 || recipe.SandUnits <= 0)
+                throw new ArgumentException("Recipe values must be positive.", nameof(recipe));
+
+            var batches = Math.Min(cementUnits / recipe.CementUnits, sandUnits / recipe.SandUnits);
+            var concrete = (long)batches * recipe.ConcreteUnitsPerBatch;
+            if (concrete > int.MaxValue)
+                throw new OverflowException("Concrete output exceeds the supported unit count.");
+
+            return new ConcreteMixResult(batches, (int)concrete,
+                cementUnits - batches * recipe.CementUnits,
+                sandUnits - batches * recipe.SandUnits);
+        }
+    }
+
     public sealed class BulkMaterialContainer : MonoBehaviour
     {
         [SerializeField, Min(1)] private int _capacity = 100;
