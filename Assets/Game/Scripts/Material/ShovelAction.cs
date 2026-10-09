@@ -50,11 +50,16 @@ namespace Ngecor.Material
 
         public int RequestStir()
         {
-            if (!HasLocalHolder)
-                return 0;
-            var target = FindTarget(out var cancelled);
-            var spot = !cancelled && target != null ? target.GetComponent<ManualMixingSpot>() : null;
+            var spot = FindAimedMixingSpot();
             return spot != null && spot.ExecuteStirAction() ? 1 : 0;
+        }
+
+        private ManualMixingSpot FindAimedMixingSpot()
+        {
+            if (!HasLocalHolder)
+                return null;
+            var target = FindTarget(out var cancelled);
+            return !cancelled && target != null ? target.GetComponent<ManualMixingSpot>() : null;
         }
 
         public int ExecuteScoop()
@@ -62,7 +67,7 @@ namespace Ngecor.Material
             if (!isActiveAndEnabled || !HasHolder || _container.TotalUnits >= _container.Capacity)
                 return 0;
             var source = FindTarget(out _);
-            if (source == null || !source.TryGetMaterialType(out var type))
+            if (source == null || !CollectOnlyType.TryGetCollectType(source, true, out var type))
                 return 0;
             if (_container.TotalUnits == 0)
                 _container.ConfigureSingleTypeWhenEmpty(type);

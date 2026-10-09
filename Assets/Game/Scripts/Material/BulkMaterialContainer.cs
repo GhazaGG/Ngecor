@@ -8,7 +8,8 @@ namespace Ngecor.Material
     {
         Sand,
         Cement,
-        Concrete
+        Concrete,
+        Water
     }
 
     public enum ContainerMode
@@ -119,6 +120,9 @@ namespace Ngecor.Material
 
         public int Capacity => _unlimitedCapacity ? int.MaxValue : _capacity;
 
+        // Runtime rule set by an owner (e.g. the mixing spot) to refuse a type its current state cannot take.
+        public Func<MaterialType, bool> AcceptFilter { get; set; }
+
         public int TotalUnits
         {
             get
@@ -181,9 +185,9 @@ namespace Ngecor.Material
 
         public bool Accepts(MaterialType type)
         {
-            if (_mode == ContainerMode.SingleType)
-                return type == _singleType;
-            return _acceptedTypes != null && _acceptedTypes.Contains(type);
+            var accepted = _mode == ContainerMode.SingleType ? type == _singleType
+                : _acceptedTypes != null && _acceptedTypes.Contains(type);
+            return accepted && (AcceptFilter == null || AcceptFilter(type));
         }
 
         public bool ConfigureSingleTypeWhenEmpty(MaterialType type)

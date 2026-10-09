@@ -8,9 +8,12 @@ namespace Ngecor.Material
     public sealed class ShovelInput : MonoBehaviour
     {
         [SerializeField] private InputActionReference _useAction;
+        [Tooltip("Detik antar aksi aduk saat R ditahan dengan shovel kosong di spot aduk.")]
+        [SerializeField, Min(0.05f)] private float _stirInterval = 0.5f;
 
         private ShovelAction _shovel;
         private BulkMaterialContainer _container;
+        private float _stirTimer;
 
         private void Awake()
         {
@@ -26,9 +29,29 @@ namespace Ngecor.Material
 
         private void Update()
         {
-            if (_useAction != null && _useAction.action != null && _shovel.HasLocalHolder
-                && _useAction.action.WasPressedThisFrame())
+            if (_useAction == null || _useAction.action == null || !_shovel.HasLocalHolder)
+            {
+                _stirTimer = 0f;
+                return;
+            }
+
+            var action = _useAction.action;
+            if (action.WasPressedThisFrame())
+            {
+                _stirTimer = 0f;
                 RequestUse();
+            }
+            else if (action.IsPressed() && _container.TotalUnits == 0)
+            {
+                _stirTimer += Time.deltaTime;
+                if (_stirTimer >= _stirInterval)
+                {
+                    _stirTimer = 0f;
+                    _shovel.RequestStir();
+                }
+            }
+            else
+                _stirTimer = 0f;
         }
 
         public int RequestUse()

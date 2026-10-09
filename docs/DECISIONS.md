@@ -199,9 +199,9 @@ Owner/source: orang atau link keputusan
 
 ### 2026-10-08 — Nilai awal aduk manual MIX-003
 
-**Decision:** Nilai tuning awal untuk playtest: satu sak semen penuh menjadi 25 unit cement (1 unit = 1 kg), resep satu batch memakai 1 unit cement + 2 unit sand dan menghasilkan 3 unit concrete, serta membutuhkan 5 aksi aduk shovel. Jumlah sak, rasio resep, dan kerja per batch dapat dituning di Inspector. Mixer memakai resep yang sama. Ini nilai awal prototype yang dapat disesuaikan berdasarkan playtest.
+**Decision:** Aduk manual mengikuti urutan kerja di lapangan: (1) pasir dan semen dibawa ke spot (satu sak semen penuh menjadi 25 unit cement, 1 unit = 1 kg); (2) aduk kering 5 aksi untuk meratakan pasir dan semen; (3) air dituang setelah aduk kering selesai; (4) aduk basah 5 aksi per batch. Satu batch memakai 1 cement + 2 sand + 1 water dan menghasilkan 4 unit concrete. Concrete tetap berada di spot dan diambil langsung dengan shovel atau bucket; bahan mentah tidak bisa disekop keluar dari spot. Air hanya diterima setelah aduk kering selesai (air yang ditolak tetap di bucket), dan pasir atau semen yang ditambah setelah aduk kering harus diaduk kering lagi. Air berasal dari drum air berisi terbatas (200 unit) yang diambil dengan bucket. Aduk dilakukan dengan menahan R pada shovel kosong yang membidik spot: satu aksi tiap 0,5 detik. Semua angka dapat dituning di Inspector. Mixer memakai resep yang sama. Ini nilai awal prototype yang dapat disesuaikan berdasarkan playtest. Air (dan kerikil) sebelumnya Out of Scope di MIX-003 (#55); air dimasukkan atas permintaan pemilik proyek, kerikil belum.
 
-**Owner/source:** Disetujui pemilik proyek setelah review PR A MIX-003 dan usulan default dari RyoFPS, 2026-10-08.
+**Owner/source:** Disetujui pemilik proyek setelah review PR A MIX-003 dan usulan default dari RyoFPS, 2026-10-08. Urutan dengan air dan concrete di spot: permintaan pemilik proyek, 2026-10-09.
 
 ### 2026-10-03 — Tenaga dorong player dan massa sak semen
 

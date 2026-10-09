@@ -14,6 +14,7 @@ namespace Ngecor.Material
         private BulkMaterialContainer _requestedReceiver;
         private BulkMaterialContainer _collectSource;
         private bool _collectRequested;
+        private MaterialType _collectType;
         private GrabbableObject _grabbable;
         private GroundMaterialDeposit _ground;
         private bool _groundRequested;
@@ -42,7 +43,7 @@ namespace Ngecor.Material
         {
             if (_collectRequested)
                 return true;
-            if (_source.TotalUnits == 0 && RequestCollectConcrete())
+            if (_source.TotalUnits == 0 && RequestCollect())
                 return true;
 
             var receiver = GetNearbyReceiver(out var tied);
@@ -142,41 +143,44 @@ namespace Ngecor.Material
             if (_collectRequested && _collectSource == null)
                 return;
             var moved = _collectRequested
-                ? _collectSource.TransferForSeconds(_source, MaterialType.Concrete, Time.fixedDeltaTime)
+                ? _collectSource.TransferForSeconds(_source, _collectType, Time.fixedDeltaTime)
                 : _groundRequested ? _source.TransferToGroundForSeconds(CurrentMaterialType, Time.fixedDeltaTime)
                 : _source.TransferForSeconds(_requestedReceiver, CurrentMaterialType, Time.fixedDeltaTime);
             if (moved > 0)
                 _flowUntil = Time.time + 0.2f;
         }
 
-        private bool RequestCollectConcrete()
+        private bool RequestCollect()
         {
             if (_source == null || _source.TotalUnits != 0)
                 return false;
 
             BulkMaterialContainer nearest = null;
+            var nearestType = default(MaterialType);
             var nearestDistance = float.PositiveInfinity;
             var tied = false;
             foreach (var receiver in _nearbyReceivers)
             {
-                var batch = receiver != null ? receiver.GetComponent<ConcreteBatch>() : null;
-                if (batch == null || receiver.GetUnits(MaterialType.Concrete) == 0)
+                if (receiver == null || !receiver.TryGetComponent<CollectOnlyType>(out _)
+                    || !CollectOnlyType.TryGetCollectType(receiver, false, out var type))
                     continue;
                 var distance = (receiver.transform.position - transform.position).sqrMagnitude;
                 if (distance < nearestDistance)
                 {
                     nearest = receiver;
+                    nearestType = type;
                     nearestDistance = distance;
                     tied = false;
                 }
                 else if (distance == nearestDistance)
                     tied = true;
             }
-            if (nearest == null || tied || !_source.ConfigureSingleTypeWhenEmpty(MaterialType.Concrete))
+            if (nearest == null || tied || !_source.ConfigureSingleTypeWhenEmpty(nearestType))
                 return false;
 
             CancelPour();
             _collectSource = nearest;
+            _collectType = nearestType;
             _collectRequested = true;
             return true;
         }
