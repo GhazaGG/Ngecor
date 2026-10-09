@@ -65,20 +65,28 @@ namespace Ngecor.Multiplayer.Tests
         }
 
         [Test]
-        public void ApplyOwnership_ConfiguresRigidbody_KinematicAndCollisionsForRemoteOnly()
+        public void ApplyOwnership_ConfiguresRemoteProxy_ActiveOnlyForNonOwner()
         {
-            var rb = _playerObject.GetComponent<Rigidbody>();
-            Assert.That(rb, Is.Not.Null, "NetworkPlayer should ensure Rigidbody is present.");
+            // Root player must not have Rigidbody on the same GameObject as CharacterController
+            Assert.That(_playerObject.GetComponent<Rigidbody>(), Is.Null,
+                "Root player must not have Rigidbody on the same GameObject as CharacterController.");
 
             _networkPlayer.ApplyOwnership(true);
-            Assert.That(rb.isKinematic, Is.True, "Rigidbody must be kinematic for local player.");
-            Assert.That(rb.useGravity, Is.False, "Gravity must be disabled for local player Rigidbody.");
-            Assert.That(rb.detectCollisions, Is.False, "Local player must disable Rigidbody collisions so CharacterController is undisturbed.");
+            Assert.That(_characterController.enabled, Is.True, "CharacterController must be enabled for owner.");
+            Assert.That(_networkPlayer.RemoteProxy.activeSelf, Is.False, "Remote proxy must be inactive for owner.");
 
             _networkPlayer.ApplyOwnership(false);
-            Assert.That(rb.isKinematic, Is.True, "Rigidbody must be kinematic for remote player.");
-            Assert.That(rb.useGravity, Is.False, "Gravity must be disabled for remote player Rigidbody.");
-            Assert.That(rb.detectCollisions, Is.True, "Remote proxy must detect collisions so physics objects treat it as a kinematic body.");
+            Assert.That(_characterController.enabled, Is.False, "CharacterController must be disabled for non-owner.");
+            Assert.That(_networkPlayer.RemoteProxy.activeSelf, Is.True, "Remote proxy must be active for non-owner.");
+
+            var proxyRb = _networkPlayer.ProxyRigidbody;
+            Assert.That(proxyRb, Is.Not.Null, "Remote proxy must have a Rigidbody.");
+            Assert.That(proxyRb.isKinematic, Is.True, "Remote proxy Rigidbody must be kinematic.");
+            Assert.That(proxyRb.useGravity, Is.False, "Remote proxy Rigidbody must not use gravity.");
+
+            var proxyCol = _networkPlayer.ProxyCollider;
+            Assert.That(proxyCol, Is.Not.Null, "Remote proxy must have a CapsuleCollider.");
+            Assert.That(proxyCol.enabled, Is.True, "Remote proxy CapsuleCollider must be enabled.");
         }
 
         [Test]

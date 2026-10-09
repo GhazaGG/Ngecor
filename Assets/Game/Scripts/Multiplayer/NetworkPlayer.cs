@@ -10,10 +10,15 @@ namespace Ngecor.Multiplayer
     {
         [SerializeField] private PlayerMovement _playerMovement;
         [SerializeField] private CharacterController _characterController;
+        [SerializeField] private GameObject _remoteProxy;
         [SerializeField] private CapsuleCollider _proxyCollider;
-        [SerializeField] private Rigidbody _playerRigidbody;
+        [SerializeField] private Rigidbody _proxyRigidbody;
         [SerializeField] private Camera _playerCamera;
         [SerializeField] private AudioListener _audioListener;
+
+        public GameObject RemoteProxy => _remoteProxy;
+        public CapsuleCollider ProxyCollider => _proxyCollider;
+        public Rigidbody ProxyRigidbody => _proxyRigidbody;
 
         private readonly NetworkVariable<float> _networkCameraPitch = new(
             0f,
@@ -33,35 +38,56 @@ namespace Ngecor.Multiplayer
             if (_characterController == null)
                 _characterController = GetComponent<CharacterController>();
 
-            if (_proxyCollider == null)
+            if (_remoteProxy == null)
             {
-                _proxyCollider = GetComponent<CapsuleCollider>();
-                if (_proxyCollider == null)
+                var proxyTransform = transform.Find("RemoteProxy");
+                if (proxyTransform != null)
                 {
-                    _proxyCollider = gameObject.AddComponent<CapsuleCollider>();
-                    if (_characterController != null)
-                    {
-                        _proxyCollider.height = _characterController.height;
-                        _proxyCollider.radius = _characterController.radius;
-                        _proxyCollider.center = _characterController.center;
-                    }
-                    else
-                    {
-                        _proxyCollider.height = 1.8f;
-                        _proxyCollider.radius = 0.35f;
-                        _proxyCollider.center = new Vector3(0f, 0.9f, 0f);
-                    }
+                    _remoteProxy = proxyTransform.gameObject;
+                }
+                else
+                {
+                    _remoteProxy = new GameObject("RemoteProxy");
+                    _remoteProxy.transform.SetParent(transform, false);
                 }
             }
 
-            if (_playerRigidbody == null)
+            if (_remoteProxy != null)
             {
-                _playerRigidbody = GetComponent<Rigidbody>();
-                if (_playerRigidbody == null)
+                if (_proxyCollider == null)
                 {
-                    _playerRigidbody = gameObject.AddComponent<Rigidbody>();
-                    _playerRigidbody.isKinematic = true;
-                    _playerRigidbody.useGravity = false;
+                    _proxyCollider = _remoteProxy.GetComponent<CapsuleCollider>();
+                    if (_proxyCollider == null)
+                    {
+                        _proxyCollider = _remoteProxy.AddComponent<CapsuleCollider>();
+                        if (_characterController != null)
+                        {
+                            _proxyCollider.height = _characterController.height;
+                            _proxyCollider.radius = _characterController.radius;
+                            _proxyCollider.center = _characterController.center;
+                        }
+                        else
+                        {
+                            _proxyCollider.height = 1.8f;
+                            _proxyCollider.radius = 0.35f;
+                            _proxyCollider.center = new Vector3(0f, 0.9f, 0f);
+                        }
+                    }
+                }
+
+                if (_proxyRigidbody == null)
+                {
+                    _proxyRigidbody = _remoteProxy.GetComponent<Rigidbody>();
+                    if (_proxyRigidbody == null)
+                    {
+                        _proxyRigidbody = _remoteProxy.AddComponent<Rigidbody>();
+                    }
+                }
+
+                if (_proxyRigidbody != null)
+                {
+                    _proxyRigidbody.isKinematic = true;
+                    _proxyRigidbody.useGravity = false;
                 }
             }
 
@@ -127,16 +153,9 @@ namespace Ngecor.Multiplayer
                 _characterController.enabled = isOwner;
             }
 
-            if (_proxyCollider != null)
+            if (_remoteProxy != null)
             {
-                _proxyCollider.enabled = !isOwner;
-            }
-
-            if (_playerRigidbody != null)
-            {
-                _playerRigidbody.isKinematic = true;
-                _playerRigidbody.useGravity = false;
-                _playerRigidbody.detectCollisions = !isOwner;
+                _remoteProxy.SetActive(!isOwner);
             }
 
             if (_playerCamera != null)
