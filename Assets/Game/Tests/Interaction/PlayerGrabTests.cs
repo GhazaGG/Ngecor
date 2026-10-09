@@ -1357,4 +1357,3 @@ namespace Ngecor.Interaction.Tests
         }
     }
 }
-

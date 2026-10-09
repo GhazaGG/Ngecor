@@ -110,5 +110,57 @@ namespace Ngecor.Multiplayer.Tests
             Assert.That(result, Is.True, "Offline fallback throw must succeed.");
             Assert.That(_playerGrab.IsCarrying, Is.False, "Player must no longer carry object after throw.");
         }
+
+        [Test]
+        public void HandleLocalThrowRequest_WithOversizedDirection_NormalizesImpulse()
+        {
+            _playerGrab.MaxGrabDistance = 5f;
+            _interaction.HandleLocalGrabRequest(_grabbable);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            var rb = _targetObject.GetComponent<Rigidbody>();
+            float mass = rb.mass;
+            float expectedSpeed = _playerGrab.ThrowForce / mass;
+
+            // Send huge oversized vector (1000, 0, 0)
+            bool result = _interaction.HandleLocalThrowRequest(new Vector3(1000f, 0f, 0f));
+            Assert.That(result, Is.True);
+            Assert.That(rb.linearVelocity.magnitude, Is.EqualTo(expectedSpeed).Within(0.01f),
+                "Oversized direction vector must be normalized so throw impulse is not exploited.");
+        }
+
+        [Test]
+        public void HandleLocalThrowRequest_WithNonFiniteOrZeroDirection_ReturnsFalse()
+        {
+            _playerGrab.MaxGrabDistance = 5f;
+            _interaction.HandleLocalGrabRequest(_grabbable);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            bool nanResult = _interaction.HandleLocalThrowRequest(new Vector3(float.NaN, 0f, 0f));
+            Assert.That(nanResult, Is.False, "Non-finite direction must be rejected.");
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Player must still carry object after rejected throw.");
+
+            bool zeroResult = _interaction.HandleLocalThrowRequest(Vector3.zero);
+            Assert.That(zeroResult, Is.False, "Zero direction must be rejected.");
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Player must still carry object after rejected throw.");
+        }
+
+        [Test]
+        public void UpdateCarriedTransform_WhenFalse_DoesNotModifyHeldPosition()
+        {
+            _playerGrab.MaxGrabDistance = 5f;
+            _playerGrab.UpdateCarriedTransform = false;
+            _playerGrab.ExecuteGrab(_grabbable);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            Vector3 initialPos = new Vector3(10f, 10f, 10f);
+            _targetObject.transform.position = initialPos;
+
+            // Invoke LateUpdate via SendMessage
+            _playerGrab.SendMessage("LateUpdate");
+
+            Assert.That(_targetObject.transform.position, Is.EqualTo(initialPos),
+                "When UpdateCarriedTransform is false, LateUpdate must not override object transform.");
+        }
     }
 }

@@ -28,11 +28,19 @@ namespace Ngecor.Multiplayer
             base.OnNetworkSpawn();
             EnsurePlayerGrab();
 
-            if (IsOwner && _playerGrab != null)
+            if (_playerGrab != null)
             {
-                _playerGrab.GrabRequestHandler = HandleLocalGrabRequest;
-                _playerGrab.DropRequestHandler = HandleLocalDropRequest;
-                _playerGrab.ThrowRequestHandler = HandleLocalThrowRequest;
+                // In an active network session, the host's server-authority NetworkTransform
+                // controls the physical placement of the carried object in world space.
+                // Clients observe that transform via NetworkTransform instead of overwriting it locally.
+                _playerGrab.UpdateCarriedTransform = IsServer;
+
+                if (IsOwner)
+                {
+                    _playerGrab.GrabRequestHandler = HandleLocalGrabRequest;
+                    _playerGrab.DropRequestHandler = HandleLocalDropRequest;
+                    _playerGrab.ThrowRequestHandler = HandleLocalThrowRequest;
+                }
             }
         }
 
@@ -40,11 +48,16 @@ namespace Ngecor.Multiplayer
         {
             base.OnNetworkDespawn();
 
-            if (IsOwner && _playerGrab != null)
+            if (_playerGrab != null)
             {
-                _playerGrab.GrabRequestHandler = null;
-                _playerGrab.DropRequestHandler = null;
-                _playerGrab.ThrowRequestHandler = null;
+                _playerGrab.UpdateCarriedTransform = true;
+
+                if (IsOwner)
+                {
+                    _playerGrab.GrabRequestHandler = null;
+                    _playerGrab.DropRequestHandler = null;
+                    _playerGrab.ThrowRequestHandler = null;
+                }
             }
 
             if (IsServer && _playerGrab != null && _playerGrab.IsCarrying)
@@ -75,7 +88,11 @@ namespace Ngecor.Multiplayer
             var targetNetObj = target.GetComponent<NetworkObject>();
             if (targetNetObj == null || !targetNetObj.IsSpawned)
             {
-                // Fallback for offline or non-networked objects
+                // In an active network session, non-networked objects cannot be grabbed locally
+                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+                    return false;
+
+                // Fallback for offline single-player mode
                 return _playerGrab.ExecuteGrab(target);
             }
 
@@ -158,6 +175,9 @@ namespace Ngecor.Multiplayer
             var targetNetObj = carried != null ? carried.GetComponent<NetworkObject>() : null;
             if (targetNetObj == null || !targetNetObj.IsSpawned)
             {
+                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+                    return false;
+
                 return _playerGrab.ExecuteDrop();
             }
 
@@ -211,20 +231,27 @@ namespace Ngecor.Multiplayer
             if (_playerGrab == null || !_playerGrab.IsCarrying)
                 return false;
 
+            if (!float.IsFinite(throwDir.x) || !float.IsFinite(throwDir.y) || !float.IsFinite(throwDir.z) || throwDir.sqrMagnitude < 0.0001f)
+                return false;
+
+            Vector3 unitDir = throwDir.normalized;
             var carried = _playerGrab.CarriedObject;
             var targetNetObj = carried != null ? carried.GetComponent<NetworkObject>() : null;
             if (targetNetObj == null || !targetNetObj.IsSpawned)
             {
-                return _playerGrab.ExecuteThrow(throwDir);
+                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+                    return false;
+
+                return _playerGrab.ExecuteThrow(unitDir);
             }
 
             if (IsServer)
             {
-                ExecuteThrowAndReplicate(throwDir);
+                ExecuteThrowAndReplicate(unitDir);
                 return true;
             }
 
-            RequestThrowServerRpc(throwDir);
+            RequestThrowServerRpc(unitDir);
             return true;
         }
 
@@ -235,7 +262,11 @@ namespace Ngecor.Multiplayer
             if (_playerGrab == null || !_playerGrab.IsCarrying)
                 return;
 
-            ExecuteThrowAndReplicate(throwDir);
+            if (!float.IsFinite(throwDir.x) || !float.IsFinite(throwDir.y) || !float.IsFinite(throwDir.z) || throwDir.sqrMagnitude < 0.0001f)
+                return;
+
+            Vector3 unitDir = throwDir.normalized;
+            ExecuteThrowAndReplicate(unitDir);
         }
 
         private void ExecuteThrowAndReplicate(Vector3 throwDir)
@@ -243,9 +274,10 @@ namespace Ngecor.Multiplayer
             if (_playerGrab == null || !_playerGrab.IsCarrying)
                 return;
 
-            if (_playerGrab.ExecuteThrow(throwDir))
+            Vector3 unitDir = throwDir.normalized;
+            if (_playerGrab.ExecuteThrow(unitDir))
             {
-                ReplicateThrowClientRpc(throwDir);
+                ReplicateThrowClientRpc(unitDir);
             }
         }
 

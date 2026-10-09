@@ -37,7 +37,6 @@ namespace Ngecor.Interaction
         {
             public GrabbableObject target;
             public Collider[] colliders;
-            public int frames;
         }
 
         private SeparatingEntry[] _separatingQueue = new SeparatingEntry[8];
@@ -80,6 +79,7 @@ namespace Ngecor.Interaction
         public System.Func<GrabbableObject, bool> GrabRequestHandler { get; set; }
         public System.Func<bool> DropRequestHandler { get; set; }
         public System.Func<Vector3, bool> ThrowRequestHandler { get; set; }
+        public bool UpdateCarriedTransform { get; set; } = true;
 
         private void Awake()
         {
@@ -203,8 +203,11 @@ namespace Ngecor.Interaction
                     _pinchTimer = 0f;
                 }
 
-                Quaternion targetRot = holdPoint.rotation;
-                _carriedObject.transform.SetPositionAndRotation(targetPos, targetRot);
+                if (UpdateCarriedTransform)
+                {
+                    Quaternion targetRot = holdPoint.rotation;
+                    _carriedObject.transform.SetPositionAndRotation(targetPos, targetRot);
+                }
             }
         }
 
@@ -331,6 +334,13 @@ namespace Ngecor.Interaction
             if (!IsCarrying)
                 return false;
 
+            if (!float.IsFinite(throwDir.x) || !float.IsFinite(throwDir.y) || !float.IsFinite(throwDir.z))
+                return false;
+
+            if (throwDir.sqrMagnitude < 0.0001f)
+                return false;
+
+            Vector3 unitDir = throwDir.normalized;
             var target = _carriedObject;
             var rb = target.Rigidbody;
 
@@ -338,7 +348,7 @@ namespace Ngecor.Interaction
 
             if (rb != null && !rb.isKinematic)
             {
-                Vector3 impulseVelocity = throwDir * (_throwForce / Mathf.Max(0.0001f, rb.mass));
+                Vector3 impulseVelocity = unitDir * (_throwForce / Mathf.Max(0.0001f, rb.mass));
                 rb.linearVelocity += impulseVelocity;
             }
 
@@ -441,7 +451,10 @@ namespace Ngecor.Interaction
 
                 Vector3 targetPos = camTransform != null ? ResolveHoldPosition(holdPoint, camTransform, target, out _, nearClip) : holdPoint.position;
                 Quaternion targetRot = holdPoint.rotation;
-                target.transform.SetPositionAndRotation(targetPos, targetRot);
+                if (UpdateCarriedTransform)
+                {
+                    target.transform.SetPositionAndRotation(targetPos, targetRot);
+                }
             }
         }
 
@@ -458,19 +471,6 @@ namespace Ngecor.Interaction
                     _playerMovement = GetComponent<PlayerMovement>();
                 if (_playerMovement != null)
                     _playerMovement.CarriedMass = 0f;
-
-                // Ensure dropped object is pushed safely outside player capsule
-                Vector3 playerCenter = transform.position;
-                Vector3 toTarget = target.transform.position - playerCenter;
-                toTarget.y = 0f;
-                float minSafeDist = 0.75f;
-                if (toTarget.sqrMagnitude < minSafeDist * minSafeDist)
-                {
-                    Vector3 safeDir = transform.forward;
-                    if (toTarget.sqrMagnitude > 0.001f)
-                        safeDir = toTarget.normalized;
-                    target.transform.position = playerCenter + safeDir * minSafeDist + Vector3.up * (target.transform.position.y - playerCenter.y);
-                }
 
                 var rb = target.Rigidbody;
                 if (rb != null)
@@ -603,10 +603,7 @@ namespace Ngecor.Interaction
                 var targetColliders = entry.colliders ?? entry.target.Colliders;
                 bool stillOverlapping = CheckOverlapping(_playerColliders, targetColliders);
 
-                entry.frames++;
-                _separatingQueue[i] = entry;
-
-                if (!stillOverlapping || entry.frames >= 10)
+                if (!stillOverlapping)
                 {
                     SetPlayerCollisionIgnored(entry.target, false);
                     RemoveSeparatingEntryAt(i);
