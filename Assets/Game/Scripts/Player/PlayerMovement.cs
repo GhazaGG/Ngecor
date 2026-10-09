@@ -61,6 +61,17 @@ namespace Ngecor.Player
             set => _carriedMass = Mathf.Max(0f, value);
         }
 
+        public float CameraPitch
+        {
+            get => _cameraPitch;
+            set
+            {
+                _cameraPitch = Mathf.Clamp(value, -89f, 89f);
+                if (_cameraPivot != null)
+                    _cameraPivot.localRotation = Quaternion.Euler(_cameraPitch, 0f, 0f);
+            }
+        }
+
         public void SetLocalPlayer(bool isLocalPlayer)
         {
             if (_isLocalPlayer == isLocalPlayer)

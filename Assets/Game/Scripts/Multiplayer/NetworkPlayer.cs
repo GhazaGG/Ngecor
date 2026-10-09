@@ -14,6 +14,11 @@ namespace Ngecor.Multiplayer
         [SerializeField] private Camera _playerCamera;
         [SerializeField] private AudioListener _audioListener;
 
+        private readonly NetworkVariable<float> _networkCameraPitch = new(
+            0f,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Owner);
+
         private void Awake()
         {
             EnsureComponentReferences();
@@ -59,12 +64,41 @@ namespace Ngecor.Multiplayer
         {
             base.OnNetworkSpawn();
             ApplyOwnership(IsOwner);
+
+            if (!IsOwner && _playerMovement != null)
+            {
+                _playerMovement.CameraPitch = _networkCameraPitch.Value;
+            }
         }
 
         public override void OnNetworkDespawn()
         {
             base.OnNetworkDespawn();
             ApplyOwnership(false);
+        }
+
+        private void Update()
+        {
+            if (IsOwner && _playerMovement != null)
+            {
+                float currentPitch = _playerMovement.CameraPitch;
+                if (Mathf.Abs(_networkCameraPitch.Value - currentPitch) > 0.25f)
+                {
+                    _networkCameraPitch.Value = currentPitch;
+                }
+            }
+            else if (!IsOwner && _playerMovement != null)
+            {
+                float targetPitch = _networkCameraPitch.Value;
+                if (Mathf.Abs(_playerMovement.CameraPitch - targetPitch) < 0.05f)
+                {
+                    _playerMovement.CameraPitch = targetPitch;
+                }
+                else
+                {
+                    _playerMovement.CameraPitch = Mathf.Lerp(_playerMovement.CameraPitch, targetPitch, Time.deltaTime * 25f);
+                }
+            }
         }
 
         public void ApplyOwnership(bool isOwner)
