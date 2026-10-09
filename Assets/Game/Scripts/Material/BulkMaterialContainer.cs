@@ -38,19 +38,23 @@ namespace Ngecor.Material
     {
         public int CementUnits { get; }
         public int SandUnits { get; }
-        public int ConcreteUnitsPerBatch => CementUnits + SandUnits;
+        public int WaterUnits { get; }
+        public int ConcreteUnitsPerBatch => CementUnits + SandUnits + WaterUnits;
 
-        public ConcreteRecipe(int cementUnits, int sandUnits)
+        public ConcreteRecipe(int cementUnits, int sandUnits, int waterUnits)
         {
             if (cementUnits <= 0)
                 throw new ArgumentOutOfRangeException(nameof(cementUnits));
             if (sandUnits <= 0)
                 throw new ArgumentOutOfRangeException(nameof(sandUnits));
-            if ((long)cementUnits + sandUnits > int.MaxValue)
-                throw new ArgumentOutOfRangeException(nameof(sandUnits), "Recipe output exceeds the supported unit count.");
+            if (waterUnits <= 0)
+                throw new ArgumentOutOfRangeException(nameof(waterUnits));
+            if ((long)cementUnits + sandUnits + waterUnits > int.MaxValue)
+                throw new ArgumentOutOfRangeException(nameof(waterUnits), "Recipe output exceeds the supported unit count.");
 
             CementUnits = cementUnits;
             SandUnits = sandUnits;
+            WaterUnits = waterUnits;
         }
     }
 
@@ -60,36 +64,42 @@ namespace Ngecor.Material
         public int ConcreteUnits { get; }
         public int LeftoverCementUnits { get; }
         public int LeftoverSandUnits { get; }
+        public int LeftoverWaterUnits { get; }
 
         internal ConcreteMixResult(int batches, int concreteUnits, int leftoverCementUnits,
-            int leftoverSandUnits)
+            int leftoverSandUnits, int leftoverWaterUnits)
         {
             Batches = batches;
             ConcreteUnits = concreteUnits;
             LeftoverCementUnits = leftoverCementUnits;
             LeftoverSandUnits = leftoverSandUnits;
+            LeftoverWaterUnits = leftoverWaterUnits;
         }
     }
 
     public static class ConcreteRecipeCalculator
     {
-        public static ConcreteMixResult Mix(int cementUnits, int sandUnits, ConcreteRecipe recipe)
+        public static ConcreteMixResult Mix(int cementUnits, int sandUnits, int waterUnits, ConcreteRecipe recipe)
         {
             if (cementUnits < 0)
                 throw new ArgumentOutOfRangeException(nameof(cementUnits));
             if (sandUnits < 0)
                 throw new ArgumentOutOfRangeException(nameof(sandUnits));
-            if (recipe.CementUnits <= 0 || recipe.SandUnits <= 0)
+            if (waterUnits < 0)
+                throw new ArgumentOutOfRangeException(nameof(waterUnits));
+            if (recipe.CementUnits <= 0 || recipe.SandUnits <= 0 || recipe.WaterUnits <= 0)
                 throw new ArgumentException("Recipe values must be positive.", nameof(recipe));
 
-            var batches = Math.Min(cementUnits / recipe.CementUnits, sandUnits / recipe.SandUnits);
+            var batches = Math.Min(Math.Min(cementUnits / recipe.CementUnits, sandUnits / recipe.SandUnits),
+                waterUnits / recipe.WaterUnits);
             var concrete = (long)batches * recipe.ConcreteUnitsPerBatch;
             if (concrete > int.MaxValue)
                 throw new OverflowException("Concrete output exceeds the supported unit count.");
 
             return new ConcreteMixResult(batches, (int)concrete,
                 cementUnits - batches * recipe.CementUnits,
-                sandUnits - batches * recipe.SandUnits);
+                sandUnits - batches * recipe.SandUnits,
+                waterUnits - batches * recipe.WaterUnits);
         }
     }
 

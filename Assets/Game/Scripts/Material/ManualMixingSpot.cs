@@ -72,6 +72,8 @@ namespace Ngecor.Material
         private int Concrete => _ingredients.GetUnits(MaterialType.Concrete);
         private int DryUnits => Cement + Sand;
         private bool HasRecipe => Cement >= _cementUnitsPerBatch && Sand >= _sandUnitsPerBatch;
+        // The mixer (MIX-001) builds the same recipe so both make concrete from one calculation.
+        private ConcreteRecipe Recipe => new ConcreteRecipe(_cementUnitsPerBatch, _sandUnitsPerBatch, _waterUnitsPerBatch);
 
         // What the player should do next; also shown above the spot.
         public string StatusText
@@ -266,12 +268,12 @@ namespace Ngecor.Material
 
         private void ConvertBatch()
         {
-            var concreteUnits = _cementUnitsPerBatch + _sandUnitsPerBatch + _waterUnitsPerBatch;
-            _ingredients.RemoveUnits(MaterialType.Cement, _cementUnitsPerBatch);
-            _ingredients.RemoveUnits(MaterialType.Sand, _sandUnitsPerBatch);
-            _ingredients.RemoveUnits(MaterialType.Water, _waterUnitsPerBatch);
+            var recipe = Recipe;
+            _ingredients.RemoveUnits(MaterialType.Cement, recipe.CementUnits);
+            _ingredients.RemoveUnits(MaterialType.Sand, recipe.SandUnits);
+            _ingredients.RemoveUnits(MaterialType.Water, recipe.WaterUnits);
             _converting = true;
-            _ingredients.AddUnits(MaterialType.Concrete, concreteUnits);
+            _ingredients.AddUnits(MaterialType.Concrete, recipe.ConcreteUnitsPerBatch);
             _converting = false;
             _dryUnitsAtMix = Mathf.Min(_dryUnitsAtMix, DryUnits);
             _wetWork = 0;

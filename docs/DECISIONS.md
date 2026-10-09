@@ -184,7 +184,7 @@ Owner/source: orang atau link keputusan
 - **Tumpah:** container yang miring melewati sudut yang dapat dituning kehilangan isi per detik. Isi yang tumpah menjadi **pile** di tanah (container tanpa Rigidbody) dan digabung ke pile tipe sama dalam radius yang dapat dituning. Pile bisa disekop lagi.
 - **Sak semen** tetap benda diskret dan berubah menjadi N unit cement saat masuk spot aduk atau mixer.
 - **Aduk manual dengan shovel adalah cara dasar membuat concrete** (MIX-003 #55). Mixer (MIX-001 #17) adalah upgrade di M4 yang memakai resep yang sama.
-- Resep MVP: cement + sand. Kerikil dan air ditambah sebagai tipe baru setelah playtest logistik, tanpa sistem baru.
+- Resep MVP: cement + sand + water (nilai di [aduk manual MIX-003](#2026-10-08--nilai-awal-aduk-manual-mix-003)). Kerikil ditambah sebagai tipe baru setelah playtest logistik, tanpa sistem baru.
 - **Concrete** membawa freshness (MIX-002 #45) sejak jadi. Saat dituang freshness ikut pindah; batch tercampur memakai umur tertua. Concrete keras hanya bisa dibuang dengan mengosongkan container.
 - Sand source adalah pile terbatas. Wheelbarrow tidak menjadi container bulk di MVP; ia membawa bucket dan sak.
 - Multiplayer nanti: tipe, jumlah, dan freshness adalah state container milik host; tuang, scoop, dump, dan aduk adalah niat.
@@ -202,6 +202,31 @@ Owner/source: orang atau link keputusan
 **Decision:** Aduk manual mengikuti urutan kerja di lapangan: (1) pasir dan semen dibawa ke spot (satu sak semen penuh menjadi 25 unit cement, 1 unit = 1 kg); (2) aduk kering 5 aksi untuk meratakan pasir dan semen; (3) air dituang setelah aduk kering selesai; (4) aduk basah 5 aksi per batch. Satu batch memakai 1 cement + 2 sand + 1 water dan menghasilkan 4 unit concrete. Concrete tetap berada di spot dan diambil langsung dengan shovel atau bucket; bahan mentah tidak bisa disekop keluar dari spot. Air hanya diterima setelah aduk kering selesai (air yang ditolak tetap di bucket), dan pasir atau semen yang ditambah setelah aduk kering harus diaduk kering lagi. Air berasal dari drum air berisi terbatas (200 unit) yang diambil dengan bucket. Aduk dilakukan dengan menahan R pada shovel kosong yang membidik spot: satu aksi tiap 0,5 detik. Semua angka dapat dituning di Inspector. Mixer memakai resep yang sama. Ini nilai awal prototype yang dapat disesuaikan berdasarkan playtest. Air (dan kerikil) sebelumnya Out of Scope di MIX-003 (#55); air dimasukkan atas permintaan pemilik proyek, kerikil belum.
 
 **Owner/source:** Disetujui pemilik proyek setelah review PR A MIX-003 dan usulan default dari RyoFPS, 2026-10-08. Urutan dengan air dan concrete di spot: permintaan pemilik proyek, 2026-10-09.
+
+### 2026-10-09 — Ekonomi bahan cor Rumah Pak Ujang
+
+**Decision:**
+
+| Item | Nilai | Hitungan |
+| --- | --- | --- |
+| Target cor lantai 2 | **160** unit concrete | 8 bucket penuh (bucket 20) |
+| Batch | 40 | 160 / 4 concrete per batch (1 cement + 2 sand + 1 water) |
+| Kebutuhan | 40 cement, 80 sand, 40 water | 40 batch x resep |
+| Sak semen di level | **3** (75 cement) | 2 sak cukup; 1 cadangan jika sak rusak atau hilang |
+| Sand pile di level | **100** unit | Sisa 20 untuk tumpahan |
+| Drum air dekat spot aduk | Isi awal **20** | Setengah kebutuhan; sisanya diangkut dari kran |
+| Kran | Tanpa batas, di sisi lain site | Lihat MAT-006 (#100) |
+
+- Hitungan bahan memakai `ConcreteRecipe` dan `ConcreteRecipeCalculator` (cement, sand, water). Aduk manual dan mixer memakai resep yang sama.
+- Angka level dipasang di LEVEL-001 (#26) lewat Unity Editor; prefab `SandPile` (80) dan `WaterDrum` (200) tetap nilai uji dev scene.
+
+**Reason:** Tiap bahan punya batas yang terasa tanpa membuat run buntu: pasir cukup dengan sedikit sisa, semen punya satu sak cadangan, dan air harus diangkut sehingga crew punya jalur angkut kedua. Dengan drum 200 di samping spot, air tidak pernah menjadi masalah.
+
+**Revisit:** Setelah playtest MVP. Satu sak menghasilkan sampai 100 concrete, jadi semen hampir bukan kendala; tinjau rasio sak atau resep jika semen terasa tidak berarti.
+
+**Applies from:** BUILD-002 (#19, target), LEVEL-001 (#26, pasokan), VEH-003 (#44, sak di bak), MAT-006 (#100, drum dan kran).
+
+**Owner/source:** Usulan lead, disetujui pemilik proyek 2026-10-09.
 
 ### 2026-10-03 — Tenaga dorong player dan massa sak semen
 
