@@ -78,6 +78,7 @@ namespace Ngecor.Interaction
 
         public System.Func<GrabbableObject, bool> GrabRequestHandler { get; set; }
         public System.Func<bool> DropRequestHandler { get; set; }
+        public System.Func<Vector3, bool> ThrowRequestHandler { get; set; }
 
         private void Awake()
         {
@@ -173,7 +174,7 @@ namespace Ngecor.Interaction
                         if (_pinchTimer >= _pinchDropDelay)
                         {
                             _pinchTimer = 0f;
-                            ExecuteDrop();
+                            RequestDrop();
                             return;
                         }
                     }
@@ -289,24 +290,35 @@ namespace Ngecor.Interaction
 
         public bool RequestThrow()
         {
-            // Offline M1: Direct local execution.
-            // NET-002/003: Will route throw intent to host.
-            return ExecuteThrow();
+            if (_playerMovement == null)
+                _playerMovement = GetComponent<PlayerMovement>();
+
+            var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+            Vector3 throwDir = camera != null ? camera.transform.forward : transform.forward;
+
+            if (ThrowRequestHandler != null)
+                return ThrowRequestHandler(throwDir);
+
+            return ExecuteThrow(throwDir);
         }
 
         public bool ExecuteThrow()
+        {
+            if (_playerMovement == null)
+                _playerMovement = GetComponent<PlayerMovement>();
+
+            var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+            Vector3 throwDir = camera != null ? camera.transform.forward : transform.forward;
+            return ExecuteThrow(throwDir);
+        }
+
+        public bool ExecuteThrow(Vector3 throwDir)
         {
             if (!IsCarrying)
                 return false;
 
             var target = _carriedObject;
             var rb = target.Rigidbody;
-
-            if (_playerMovement == null)
-                _playerMovement = GetComponent<PlayerMovement>();
-
-            var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
-            Vector3 throwDir = camera != null ? camera.transform.forward : transform.forward;
 
             DetachObject();
 

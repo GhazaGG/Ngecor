@@ -32,6 +32,7 @@ namespace Ngecor.Multiplayer
             {
                 _playerGrab.GrabRequestHandler = HandleLocalGrabRequest;
                 _playerGrab.DropRequestHandler = HandleLocalDropRequest;
+                _playerGrab.ThrowRequestHandler = HandleLocalThrowRequest;
             }
         }
 
@@ -43,6 +44,7 @@ namespace Ngecor.Multiplayer
             {
                 _playerGrab.GrabRequestHandler = null;
                 _playerGrab.DropRequestHandler = null;
+                _playerGrab.ThrowRequestHandler = null;
             }
 
             if (IsServer && _playerGrab != null && _playerGrab.IsCarrying)
@@ -152,6 +154,13 @@ namespace Ngecor.Multiplayer
             if (_playerGrab == null || !_playerGrab.IsCarrying)
                 return false;
 
+            var carried = _playerGrab.CarriedObject;
+            var targetNetObj = carried != null ? carried.GetComponent<NetworkObject>() : null;
+            if (targetNetObj == null || !targetNetObj.IsSpawned)
+            {
+                return _playerGrab.ExecuteDrop();
+            }
+
             if (IsServer)
             {
                 ExecuteDropAndReplicate();
@@ -193,6 +202,63 @@ namespace Ngecor.Multiplayer
             if (_playerGrab != null && _playerGrab.IsCarrying)
             {
                 _playerGrab.ExecuteDrop();
+            }
+        }
+
+        public bool HandleLocalThrowRequest(Vector3 throwDir)
+        {
+            EnsurePlayerGrab();
+            if (_playerGrab == null || !_playerGrab.IsCarrying)
+                return false;
+
+            var carried = _playerGrab.CarriedObject;
+            var targetNetObj = carried != null ? carried.GetComponent<NetworkObject>() : null;
+            if (targetNetObj == null || !targetNetObj.IsSpawned)
+            {
+                return _playerGrab.ExecuteThrow(throwDir);
+            }
+
+            if (IsServer)
+            {
+                ExecuteThrowAndReplicate(throwDir);
+                return true;
+            }
+
+            RequestThrowServerRpc(throwDir);
+            return true;
+        }
+
+        [ServerRpc]
+        private void RequestThrowServerRpc(Vector3 throwDir)
+        {
+            EnsurePlayerGrab();
+            if (_playerGrab == null || !_playerGrab.IsCarrying)
+                return;
+
+            ExecuteThrowAndReplicate(throwDir);
+        }
+
+        private void ExecuteThrowAndReplicate(Vector3 throwDir)
+        {
+            if (_playerGrab == null || !_playerGrab.IsCarrying)
+                return;
+
+            if (_playerGrab.ExecuteThrow(throwDir))
+            {
+                ReplicateThrowClientRpc(throwDir);
+            }
+        }
+
+        [ClientRpc]
+        private void ReplicateThrowClientRpc(Vector3 throwDir)
+        {
+            if (IsServer)
+                return;
+
+            EnsurePlayerGrab();
+            if (_playerGrab != null && _playerGrab.IsCarrying)
+            {
+                _playerGrab.ExecuteThrow(throwDir);
             }
         }
     }

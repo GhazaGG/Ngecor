@@ -86,5 +86,29 @@ namespace Ngecor.Multiplayer.Tests
             Assert.That(result, Is.True, "Offline fallback grab must succeed.");
             Assert.That(_playerGrab.IsCarrying, Is.True, "Player must carry object locally when no NetworkObject exists.");
         }
+
+        [Test]
+        public void HandleLocalDropRequest_WhenTargetHasNoNetworkObject_FallsBackToExecuteDrop()
+        {
+            _playerGrab.MaxGrabDistance = 5f;
+            _interaction.HandleLocalGrabRequest(_grabbable);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            bool result = _interaction.HandleLocalDropRequest();
+            Assert.That(result, Is.True, "Offline fallback drop must succeed.");
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Player must no longer carry object after drop.");
+        }
+
+        [Test]
+        public void HandleLocalThrowRequest_WhenTargetHasNoNetworkObject_FallsBackToExecuteThrow()
+        {
+            _playerGrab.MaxGrabDistance = 5f;
+            _interaction.HandleLocalGrabRequest(_grabbable);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            bool result = _interaction.HandleLocalThrowRequest(Vector3.forward);
+            Assert.That(result, Is.True, "Offline fallback throw must succeed.");
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Player must no longer carry object after throw.");
+        }
     }
 }
