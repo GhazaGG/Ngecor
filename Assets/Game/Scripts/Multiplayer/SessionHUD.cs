@@ -86,7 +86,10 @@ namespace Ngecor.Multiplayer
 
             if (netManager != null && !isListening && !string.IsNullOrEmpty(netManager.DisconnectReason))
             {
-                GUILayout.Label($"<color=red>Reason: {netManager.DisconnectReason}</color>");
+                if (!netManager.DisconnectReason.Contains("TransportShutdown"))
+                {
+                    GUILayout.Label($"<color=red>Reason: {netManager.DisconnectReason}</color>");
+                }
             }
             else if (!string.IsNullOrEmpty(_statusMessage))
             {

@@ -10,6 +10,7 @@ namespace Ngecor.Multiplayer
     {
         [SerializeField] private PlayerMovement _playerMovement;
         [SerializeField] private CharacterController _characterController;
+        [SerializeField] private CapsuleCollider _proxyCollider;
         [SerializeField] private Camera _playerCamera;
         [SerializeField] private AudioListener _audioListener;
 
@@ -25,6 +26,27 @@ namespace Ngecor.Multiplayer
 
             if (_characterController == null)
                 _characterController = GetComponent<CharacterController>();
+
+            if (_proxyCollider == null)
+            {
+                _proxyCollider = GetComponent<CapsuleCollider>();
+                if (_proxyCollider == null)
+                {
+                    _proxyCollider = gameObject.AddComponent<CapsuleCollider>();
+                    if (_characterController != null)
+                    {
+                        _proxyCollider.height = _characterController.height;
+                        _proxyCollider.radius = _characterController.radius;
+                        _proxyCollider.center = _characterController.center;
+                    }
+                    else
+                    {
+                        _proxyCollider.height = 1.8f;
+                        _proxyCollider.radius = 0.35f;
+                        _proxyCollider.center = new Vector3(0f, 0.9f, 0f);
+                    }
+                }
+            }
 
             if (_playerCamera == null)
                 _playerCamera = GetComponentInChildren<Camera>(true);
@@ -57,6 +79,11 @@ namespace Ngecor.Multiplayer
             if (_characterController != null)
             {
                 _characterController.enabled = isOwner;
+            }
+
+            if (_proxyCollider != null)
+            {
+                _proxyCollider.enabled = !isOwner;
             }
 
             if (_playerCamera != null)

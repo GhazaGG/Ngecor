@@ -37,6 +37,7 @@ namespace Ngecor.Interaction
         {
             public GrabbableObject target;
             public Collider[] colliders;
+            public int frames;
         }
 
         private SeparatingEntry[] _separatingQueue = new SeparatingEntry[8];
@@ -159,33 +160,46 @@ namespace Ngecor.Interaction
             if (_playerMovement == null)
                 _playerMovement = GetComponent<PlayerMovement>();
 
-            var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+            Transform camTransform = null;
+            float nearClip = 0.3f;
+            if (_playerMovement != null && _playerMovement.LocalCamera != null)
+            {
+                camTransform = _playerMovement.LocalCamera.transform;
+                nearClip = _playerMovement.LocalCamera.nearClipPlane;
+            }
+            else if (_playerMovement != null)
+            {
+                var cam = _playerMovement.GetComponentInChildren<Camera>(true);
+                camTransform = cam != null ? cam.transform : transform;
+                if (cam != null) nearClip = cam.nearClipPlane;
+            }
+            else
+            {
+                var cam = GetComponentInChildren<Camera>(true);
+                camTransform = cam != null ? cam.transform : transform;
+                if (cam != null) nearClip = cam.nearClipPlane;
+            }
 
             var holdPoint = HoldPoint;
             if (holdPoint != null && _carriedObject != null)
             {
-                Vector3 targetPos;
-                if (camera != null)
+                bool isPinched = false;
+                Vector3 targetPos = camTransform != null
+                    ? ResolveHoldPosition(holdPoint, camTransform, _carriedObject, out isPinched, nearClip)
+                    : holdPoint.position;
+
+                if (isPinched)
                 {
-                    targetPos = ResolveHoldPosition(holdPoint, camera, _carriedObject, out bool isPinched);
-                    if (isPinched)
-                    {
-                        _pinchTimer += Time.deltaTime;
-                        if (_pinchTimer >= _pinchDropDelay)
-                        {
-                            _pinchTimer = 0f;
-                            RequestDrop();
-                            return;
-                        }
-                    }
-                    else
+                    _pinchTimer += Time.deltaTime;
+                    if (_pinchTimer >= _pinchDropDelay)
                     {
                         _pinchTimer = 0f;
+                        RequestDrop();
+                        return;
                     }
                 }
                 else
                 {
-                    targetPos = holdPoint.position;
                     _pinchTimer = 0f;
                 }
 
@@ -405,9 +419,27 @@ namespace Ngecor.Interaction
             var holdPoint = HoldPoint;
             if (holdPoint != null)
             {
-                var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+                Transform camTransform = null;
+                float nearClip = 0.3f;
+                if (_playerMovement != null && _playerMovement.LocalCamera != null)
+                {
+                    camTransform = _playerMovement.LocalCamera.transform;
+                    nearClip = _playerMovement.LocalCamera.nearClipPlane;
+                }
+                else if (_playerMovement != null)
+                {
+                    var cam = _playerMovement.GetComponentInChildren<Camera>(true);
+                    camTransform = cam != null ? cam.transform : transform;
+                    if (cam != null) nearClip = cam.nearClipPlane;
+                }
+                else
+                {
+                    var cam = GetComponentInChildren<Camera>(true);
+                    camTransform = cam != null ? cam.transform : transform;
+                    if (cam != null) nearClip = cam.nearClipPlane;
+                }
 
-                Vector3 targetPos = camera != null ? ResolveHoldPosition(holdPoint, camera, target, out _) : holdPoint.position;
+                Vector3 targetPos = camTransform != null ? ResolveHoldPosition(holdPoint, camTransform, target, out _, nearClip) : holdPoint.position;
                 Quaternion targetRot = holdPoint.rotation;
                 target.transform.SetPositionAndRotation(targetPos, targetRot);
             }
@@ -426,6 +458,19 @@ namespace Ngecor.Interaction
                     _playerMovement = GetComponent<PlayerMovement>();
                 if (_playerMovement != null)
                     _playerMovement.CarriedMass = 0f;
+
+                // Ensure dropped object is pushed safely outside player capsule
+                Vector3 playerCenter = transform.position;
+                Vector3 toTarget = target.transform.position - playerCenter;
+                toTarget.y = 0f;
+                float minSafeDist = 0.75f;
+                if (toTarget.sqrMagnitude < minSafeDist * minSafeDist)
+                {
+                    Vector3 safeDir = transform.forward;
+                    if (toTarget.sqrMagnitude > 0.001f)
+                        safeDir = toTarget.normalized;
+                    target.transform.position = playerCenter + safeDir * minSafeDist + Vector3.up * (target.transform.position.y - playerCenter.y);
+                }
 
                 var rb = target.Rigidbody;
                 if (rb != null)
@@ -558,7 +603,10 @@ namespace Ngecor.Interaction
                 var targetColliders = entry.colliders ?? entry.target.Colliders;
                 bool stillOverlapping = CheckOverlapping(_playerColliders, targetColliders);
 
-                if (!stillOverlapping)
+                entry.frames++;
+                _separatingQueue[i] = entry;
+
+                if (!stillOverlapping || entry.frames >= 10)
                 {
                     SetPlayerCollisionIgnored(entry.target, false);
                     RemoveSeparatingEntryAt(i);
@@ -607,9 +655,9 @@ namespace Ngecor.Interaction
             _separatingQueue[_separatingCount] = default;
         }
 
-        private Vector3 ResolveHoldPosition(Transform holdPoint, Camera camera, GrabbableObject held, out bool isPinched)
+        private Vector3 ResolveHoldPosition(Transform holdPoint, Transform cameraTransform, GrabbableObject held, out bool isPinched, float nearClipPlane = 0.3f)
         {
-            var origin = camera.transform.position;
+            var origin = cameraTransform.position;
             var toHold = holdPoint.position - origin;
             var distance = toHold.magnitude;
             if (distance < 0.01f)
@@ -641,12 +689,12 @@ namespace Ngecor.Interaction
                     Ray forwardRay = new Ray(origin, direction);
                     if (!collider.Raycast(forwardRay, out RaycastHit wallHit, distance))
                     {
-                        forwardRay = new Ray(origin, camera.transform.forward);
+                        forwardRay = new Ray(origin, cameraTransform.forward);
                         collider.Raycast(forwardRay, out wallHit, distance);
                     }
 
                     if (wallHit.collider != null && Mathf.Abs(wallHit.normal.y) < 0.7f
-                        && Vector3.Dot(wallHit.normal, camera.transform.forward) < -0.3f)
+                        && Vector3.Dot(wallHit.normal, cameraTransform.forward) < -0.3f)
                     {
                         float clearance = Mathf.Max(0f, wallHit.distance - sweepRadius);
                         nearest = Mathf.Min(nearest, clearance);
@@ -714,11 +762,11 @@ namespace Ngecor.Interaction
             // World obstacle separation takes priority over viewport.
             // Pastikan objek tidak jatuh ke belakang kamera (ramp/slope) KECUALI jika ada rintangan di depan yang menghalangi.
             var toTarget = targetPos - origin;
-            var forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
-            var minDistance = camera.nearClipPlane + 0.02f;
+            var forwardDist = Vector3.Dot(toTarget, cameraTransform.forward);
+            var minDistance = nearClipPlane + 0.02f;
             if (forwardDist < minDistance)
             {
-                var candidatePos = origin + camera.transform.forward * minDistance;
+                var candidatePos = origin + cameraTransform.forward * minDistance;
                 bool penetratesObstacle = false;
                 if (heldColliders != null)
                 {
@@ -757,7 +805,7 @@ namespace Ngecor.Interaction
                 {
                     targetPos = candidatePos;
                     toTarget = targetPos - origin;
-                    forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
+                    forwardDist = Vector3.Dot(toTarget, cameraTransform.forward);
                 }
             }
 
