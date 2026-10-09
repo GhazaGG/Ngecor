@@ -65,6 +65,23 @@ namespace Ngecor.Multiplayer.Tests
         }
 
         [Test]
+        public void ApplyOwnership_ConfiguresRigidbody_KinematicAndCollisionsForRemoteOnly()
+        {
+            var rb = _playerObject.GetComponent<Rigidbody>();
+            Assert.That(rb, Is.Not.Null, "NetworkPlayer should ensure Rigidbody is present.");
+
+            _networkPlayer.ApplyOwnership(true);
+            Assert.That(rb.isKinematic, Is.True, "Rigidbody must be kinematic for local player.");
+            Assert.That(rb.useGravity, Is.False, "Gravity must be disabled for local player Rigidbody.");
+            Assert.That(rb.detectCollisions, Is.False, "Local player must disable Rigidbody collisions so CharacterController is undisturbed.");
+
+            _networkPlayer.ApplyOwnership(false);
+            Assert.That(rb.isKinematic, Is.True, "Rigidbody must be kinematic for remote player.");
+            Assert.That(rb.useGravity, Is.False, "Gravity must be disabled for remote player Rigidbody.");
+            Assert.That(rb.detectCollisions, Is.True, "Remote proxy must detect collisions so physics objects treat it as a kinematic body.");
+        }
+
+        [Test]
         public void GetSafeSpawnPosition_WhenNetManagerNull_ReturnsDefaultOffset()
         {
             var spawnPos = SessionManager.GetSafeSpawnPosition(null);

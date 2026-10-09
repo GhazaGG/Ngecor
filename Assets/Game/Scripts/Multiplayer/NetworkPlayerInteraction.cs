@@ -1,6 +1,7 @@
 using UnityEngine;
 using Unity.Netcode;
 using Ngecor.Interaction;
+using Ngecor.Player;
 
 namespace Ngecor.Multiplayer
 {
@@ -9,24 +10,32 @@ namespace Ngecor.Multiplayer
     public class NetworkPlayerInteraction : NetworkBehaviour
     {
         [SerializeField] private PlayerGrab _playerGrab;
+        [SerializeField] private PlayerMovement _playerMovement;
 
         private void Awake()
         {
-            EnsurePlayerGrab();
+            EnsureDependencies();
         }
 
-        private void EnsurePlayerGrab()
+        private void EnsureDependencies()
         {
             if (_playerGrab == null)
             {
                 _playerGrab = GetComponent<PlayerGrab>();
             }
+
+            if (_playerMovement == null)
+            {
+                _playerMovement = GetComponent<PlayerMovement>();
+            }
         }
+
+        private void EnsurePlayerGrab() => EnsureDependencies();
 
         public override void OnNetworkSpawn()
         {
             base.OnNetworkSpawn();
-            EnsurePlayerGrab();
+            EnsureDependencies();
 
             if (_playerGrab != null)
             {
@@ -67,13 +76,104 @@ namespace Ngecor.Multiplayer
             }
         }
 
+        public Vector3 GetEyePosition()
+        {
+            if (_playerMovement == null)
+                _playerMovement = GetComponent<PlayerMovement>();
+
+            if (_playerMovement != null && _playerMovement.CameraPivot != null)
+                return _playerMovement.CameraPivot.position;
+
+            var cam = GetComponentInChildren<Camera>(true);
+            if (cam != null)
+                return cam.transform.position;
+
+            return transform.position + Vector3.up * 1.5f;
+        }
+
         public bool ValidateGrabTarget(GrabbableObject grabbable, float maxDistance)
         {
             if (grabbable == null || !grabbable.CanInteract(gameObject))
                 return false;
 
             float distance = Vector3.Distance(transform.position, grabbable.transform.position);
-            return distance <= maxDistance;
+            if (distance > maxDistance)
+                return false;
+
+            Physics.SyncTransforms();
+
+            Vector3 eyePos = GetEyePosition();
+            Vector3 targetPos = grabbable.transform.position;
+            if (grabbable.Colliders != null && grabbable.Colliders.Length > 0 && grabbable.Colliders[0] != null)
+            {
+                targetPos = grabbable.Colliders[0].bounds.center;
+            }
+
+            Vector3 toTarget = targetPos - eyePos;
+            float rayDist = toTarget.magnitude;
+            if (rayDist > maxDistance)
+                return false;
+
+            if (rayDist < 0.001f)
+                return true;
+
+            Vector3 dir = toTarget / rayDist;
+
+            // Line-of-sight raycast: ignore player colliders and triggers.
+            // First hit must be target collider (or its children).
+            var hits = Physics.RaycastAll(eyePos, dir, maxDistance, ~0, QueryTriggerInteraction.Ignore);
+            if (hits != null && hits.Length > 0)
+            {
+                System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+                foreach (var hit in hits)
+                {
+                    if (hit.collider == null)
+                        continue;
+
+                    // Abaikan collider milik player sendiri
+                    if (hit.collider.transform.IsChildOf(transform))
+                        continue;
+
+                    // Hit pertama non-player harus target atau anaknya
+                    if (hit.collider.transform.IsChildOf(grabbable.transform))
+                        return true;
+
+                    // Terhalang dinding / rintangan lain
+                    return false;
+                }
+            }
+
+            // Fallback: jika bounds center tidak kena (misal bentuk ireguler), cek ke grabbable.transform.position
+            if (targetPos != grabbable.transform.position)
+            {
+                toTarget = grabbable.transform.position - eyePos;
+                rayDist = toTarget.magnitude;
+                if (rayDist <= maxDistance && rayDist >= 0.001f)
+                {
+                    dir = toTarget / rayDist;
+                    hits = Physics.RaycastAll(eyePos, dir, rayDist, ~0, QueryTriggerInteraction.Ignore);
+                    if (hits != null && hits.Length > 0)
+                    {
+                        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+                        foreach (var hit in hits)
+                        {
+                            if (hit.collider == null)
+                                continue;
+
+                            if (hit.collider.transform.IsChildOf(transform))
+                                continue;
+
+                            if (hit.collider.transform.IsChildOf(grabbable.transform))
+                                return true;
+
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            // Jika tidak ada collider yang terdeteksi di sepanjang raycast (misal grabbable tanpa collider)
+            return grabbable.Colliders == null || grabbable.Colliders.Length == 0;
         }
 
         public bool HandleLocalGrabRequest(GrabbableObject target)

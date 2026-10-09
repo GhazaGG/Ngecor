@@ -11,6 +11,7 @@ namespace Ngecor.Multiplayer
         [SerializeField] private PlayerMovement _playerMovement;
         [SerializeField] private CharacterController _characterController;
         [SerializeField] private CapsuleCollider _proxyCollider;
+        [SerializeField] private Rigidbody _playerRigidbody;
         [SerializeField] private Camera _playerCamera;
         [SerializeField] private AudioListener _audioListener;
 
@@ -50,6 +51,17 @@ namespace Ngecor.Multiplayer
                         _proxyCollider.radius = 0.35f;
                         _proxyCollider.center = new Vector3(0f, 0.9f, 0f);
                     }
+                }
+            }
+
+            if (_playerRigidbody == null)
+            {
+                _playerRigidbody = GetComponent<Rigidbody>();
+                if (_playerRigidbody == null)
+                {
+                    _playerRigidbody = gameObject.AddComponent<Rigidbody>();
+                    _playerRigidbody.isKinematic = true;
+                    _playerRigidbody.useGravity = false;
                 }
             }
 
@@ -118,6 +130,13 @@ namespace Ngecor.Multiplayer
             if (_proxyCollider != null)
             {
                 _proxyCollider.enabled = !isOwner;
+            }
+
+            if (_playerRigidbody != null)
+            {
+                _playerRigidbody.isKinematic = true;
+                _playerRigidbody.useGravity = false;
+                _playerRigidbody.detectCollisions = !isOwner;
             }
 
             if (_playerCamera != null)

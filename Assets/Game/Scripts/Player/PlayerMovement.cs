@@ -72,6 +72,16 @@ namespace Ngecor.Player
             }
         }
 
+        public Transform CameraPivot
+        {
+            get
+            {
+                if (_cameraPivot == null)
+                    _cameraPivot = transform.Find("CameraPivot");
+                return _cameraPivot;
+            }
+        }
+
         public void SetLocalPlayer(bool isLocalPlayer)
         {
             if (_isLocalPlayer == isLocalPlayer)

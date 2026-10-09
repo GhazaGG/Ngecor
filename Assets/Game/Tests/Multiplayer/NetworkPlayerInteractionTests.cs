@@ -28,11 +28,17 @@ namespace Ngecor.Multiplayer.Tests
             _playerGrab = _playerObject.AddComponent<PlayerGrab>();
             _interaction = _playerObject.AddComponent<NetworkPlayerInteraction>();
 
+            var pivot = new GameObject("CameraPivot");
+            pivot.transform.SetParent(_playerObject.transform, false);
+            pivot.transform.localPosition = new Vector3(0f, 1.4f, 0f);
+
             _targetObject = new GameObject("Target");
-            _targetObject.transform.position = new Vector3(0f, 0f, 2f);
+            _targetObject.transform.position = new Vector3(0f, 1.4f, 2f);
             var rb = _targetObject.AddComponent<Rigidbody>();
             var col = _targetObject.AddComponent<BoxCollider>();
             _grabbable = _targetObject.AddComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
         }
 
         [TearDown]
@@ -47,7 +53,7 @@ namespace Ngecor.Multiplayer.Tests
         [Test]
         public void ValidateGrabRequest_WithinDistance_ReturnsTrue()
         {
-            _targetObject.transform.position = new Vector3(0f, 0f, 2f);
+            _targetObject.transform.position = new Vector3(0f, 1.4f, 2f);
             bool isValid = _interaction.ValidateGrabTarget(_grabbable, _playerGrab.MaxGrabDistance);
             Assert.That(isValid, Is.True, "Grab within max distance must be valid.");
         }
@@ -55,7 +61,7 @@ namespace Ngecor.Multiplayer.Tests
         [Test]
         public void ValidateGrabRequest_ExceedingDistance_ReturnsFalse()
         {
-            _targetObject.transform.position = new Vector3(0f, 0f, 10f);
+            _targetObject.transform.position = new Vector3(0f, 1.4f, 10f);
             bool isValid = _interaction.ValidateGrabTarget(_grabbable, _playerGrab.MaxGrabDistance);
             Assert.That(isValid, Is.False, "Grab exceeding max distance must be rejected.");
         }
@@ -161,6 +167,34 @@ namespace Ngecor.Multiplayer.Tests
 
             Assert.That(_targetObject.transform.position, Is.EqualTo(initialPos),
                 "When UpdateCarriedTransform is false, LateUpdate must not override object transform.");
+        }
+
+        [Test]
+        public void ValidateGrabTarget_WhenTargetBehindWall_ReturnsFalse()
+        {
+            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            wall.transform.position = new Vector3(0f, 1.4f, 1f);
+            Physics.SyncTransforms();
+
+            try
+            {
+                bool isValid = _interaction.ValidateGrabTarget(_grabbable, _playerGrab.MaxGrabDistance);
+                Assert.That(isValid, Is.False, "Grab must be rejected when target is blocked behind a wall.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(wall);
+            }
+        }
+
+        [Test]
+        public void ValidateGrabTarget_WhenTargetVisible_ReturnsTrue()
+        {
+            _targetObject.transform.position = new Vector3(0f, 1.4f, 2f);
+            Physics.SyncTransforms();
+
+            bool isValid = _interaction.ValidateGrabTarget(_grabbable, _playerGrab.MaxGrabDistance);
+            Assert.That(isValid, Is.True, "Grab must be accepted when target is directly visible.");
         }
     }
 }
