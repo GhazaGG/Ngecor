@@ -51,6 +51,53 @@ namespace Ngecor.Material.Tests
             Assert.That(spot.Ingredients.TotalUnits, Is.Zero);
         }
 
+        [Test]
+        public void HeldSackIsNotConsumedUntilReleased()
+        {
+            var spot = CreateSpot(50);
+            var bag = Prefab("CementBag");
+            var grabbable = bag.AddComponent<GrabbableObject>();
+            var holder = new GameObject("Test Holder");
+            _objects.Add(holder);
+            grabbable.OnGrab(holder);
+
+            Assert.That(spot.TryReceiveBag(bag.GetComponent<CementBag>()), Is.False);
+            Assert.That(spot.Ingredients.TotalUnits, Is.Zero);
+            grabbable.OnRelease();
+            Assert.That(spot.TryReceiveBag(bag.GetComponent<CementBag>()), Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator FullOutputSlotsPauseMixingUntilABatchIsCollected()
+        {
+            Ground();
+            var spot = CreateSpot(100);
+            Set(spot, "_actionsPerBatch", 1);
+            Set(spot, "_outputSlots", 2);
+            spot.Ingredients.AddUnits(MaterialType.Cement, 10);
+            spot.Ingredients.AddUnits(MaterialType.Sand, 20);
+            Physics.SyncTransforms();
+
+            Assert.That(spot.ExecuteStirAction(), Is.True);
+            Assert.That(spot.ExecuteStirAction(), Is.True);
+            Assert.That(spot.ExecuteStirAction(), Is.True);
+            Assert.That(Object.FindObjectsByType<ConcreteBatch>(FindObjectsSortMode.None).Length, Is.EqualTo(2));
+            Assert.That(spot.Work, Is.EqualTo(1));
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Cement), Is.EqualTo(8));
+
+            var collected = Object.FindObjectsByType<ConcreteBatch>(FindObjectsSortMode.None)[0];
+            collected.GetComponent<BulkMaterialContainer>().RemoveUnits(MaterialType.Concrete, 3);
+            // Empty piles destroy themselves in LateUpdate; wait until the object is gone.
+            yield return null;
+            yield return null;
+            Physics.SyncTransforms();
+
+            Assert.That(spot.ExecuteStirAction(), Is.True);
+            Assert.That(Object.FindObjectsByType<ConcreteBatch>(FindObjectsSortMode.None).Length, Is.EqualTo(2));
+            Assert.That(spot.Work, Is.Zero);
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Cement), Is.EqualTo(7));
+        }
+
         [UnityTest]
         public IEnumerator EachShovelActionAddsWorkAndRecipeLeavesUnmatchedIngredients()
         {

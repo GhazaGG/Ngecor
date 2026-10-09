@@ -14,10 +14,13 @@ namespace Ngecor.Material
         [SerializeField, Min(1)] private int _cementUnitsPerBatch = 1;
         [SerializeField, Min(1)] private int _sandUnitsPerBatch = 2;
         [SerializeField, Min(1)] private int _actionsPerBatch = 5;
+        [Tooltip("Batch yang belum diambil menempati slot; aduk berhenti di progress penuh sampai ada slot kosong.")]
+        [SerializeField, Min(1)] private int _outputSlots = 3;
 
         private BulkMaterialContainer _ingredients;
         private int _work;
         private int _batchNumber;
+        private GroundMaterialPile[] _outputs;
         private Vector3 _progressScale;
         private Vector3 _progressPosition;
 
@@ -41,9 +44,11 @@ namespace Ngecor.Material
             _sandUnitsPerBatch = Mathf.Max(1, _sandUnitsPerBatch);
             _actionsPerBatch = Mathf.Max(1, _actionsPerBatch);
             _cementUnitsPerSack = Mathf.Max(1, _cementUnitsPerSack);
+            _outputSlots = Mathf.Max(1, _outputSlots);
         }
 
-        private void OnCollisionEnter(Collision collision)
+        // Stay, not Enter: a sack released while already touching the spot must still be taken in.
+        private void OnCollisionStay(Collision collision)
         {
             if (collision == null || collision.collider == null)
                 return;
@@ -54,7 +59,8 @@ namespace Ngecor.Material
         {
             if (!isActiveAndEnabled || bag == null || !bag.isActiveAndEnabled || bag.gameObject == gameObject
                 || _ingredients == null || !_ingredients.Accepts(MaterialType.Cement)
-                || _ingredients.Capacity - _ingredients.TotalUnits < _cementUnitsPerSack)
+                || _ingredients.Capacity - _ingredients.TotalUnits < _cementUnitsPerSack
+                || (bag.TryGetComponent<GrabbableObject>(out var grabbable) && grabbable.IsHeld))
                 return false;
 
             if (_ingredients.AddUnits(MaterialType.Cement, _cementUnitsPerSack) != _cementUnitsPerSack)
@@ -69,7 +75,8 @@ namespace Ngecor.Material
             if (!isActiveAndEnabled || _ingredients == null || GetAvailableMix().Batches == 0)
                 return false;
 
-            _work++;
+            if (_work < _actionsPerBatch)
+                _work++;
             UpdateProgressVisual();
             if (_work < _actionsPerBatch)
                 return true;
@@ -106,8 +113,14 @@ namespace Ngecor.Material
             if (_outputPilePrefab == null)
                 return false;
 
+            if (_outputs == null || _outputs.Length != _outputSlots)
+                _outputs = new GroundMaterialPile[_outputSlots];
+            var slot = System.Array.FindIndex(_outputs, pile => pile == null);
+            if (slot < 0)
+                return false;
+
             var basePoint = _outputPoint != null ? _outputPoint.position : transform.position + transform.forward;
-            var origin = basePoint + transform.right * (_batchNumber * 1.4f);
+            var origin = basePoint + transform.right * (slot * 1.4f);
             if (!Physics.Raycast(origin + Vector3.up * 0.5f, Vector3.down, out var surface, 2f,
                     Physics.AllLayers, QueryTriggerInteraction.Ignore)
                 || surface.collider.GetComponentInParent<BulkMaterialContainer>() != null)
@@ -128,6 +141,7 @@ namespace Ngecor.Material
                 Destroy(pile.gameObject);
                 return false;
             }
+            _outputs[slot] = pile;
             return true;
         }
     }
