@@ -30,6 +30,7 @@ namespace Ngecor.Material
         [SerializeField, Min(1)] private int _dryActions = 5;
         [Tooltip("Aksi aduk basah per batch concrete.")]
         [SerializeField, Min(1)] private int _wetActionsPerBatch = 5;
+        [SerializeField, Min(0f)] private float _labelHeight = 1.7f;
 
         [Header("Warna")]
         [SerializeField] private Color _sandColor = new Color(0.78f, 0.66f, 0.42f);
@@ -53,6 +54,10 @@ namespace Ngecor.Material
         private Vector3 _progressScale;
         private Vector3 _progressPosition;
         private int _visualKey = -1;
+        private TextMesh _label;
+        private Camera _camera;
+        private string _notice;
+        private float _noticeUntil;
 
         public BulkMaterialContainer Ingredients => _ingredients;
         public int DryWork => _dryWork;
@@ -67,6 +72,37 @@ namespace Ngecor.Material
         private int Concrete => _ingredients.GetUnits(MaterialType.Concrete);
         private int DryUnits => Cement + Sand;
         private bool HasRecipe => Cement >= _cementUnitsPerBatch && Sand >= _sandUnitsPerBatch;
+
+        // What the player should do next; also shown above the spot.
+        public string StatusText
+        {
+            get
+            {
+                if (_notice != null && Time.time < _noticeUntil)
+                    return _notice;
+                switch (Phase)
+                {
+                    case MixingPhase.Empty:
+                        return "Kosong: bawa pasir dan semen";
+                    case MixingPhase.NeedsIngredients:
+                        if (Cement < _cementUnitsPerBatch && Sand < _sandUnitsPerBatch)
+                            return "Butuh semen dan pasir";
+                        if (Cement < _cementUnitsPerBatch)
+                            return "Butuh semen";
+                        if (Sand < _sandUnitsPerBatch)
+                            return "Butuh pasir (min " + _sandUnitsPerBatch + ")";
+                        return "Siap aduk kering (tahan R)";
+                    case MixingPhase.DryMixing:
+                        return "Aduk kering " + _dryWork + "/" + _dryActions;
+                    case MixingPhase.DryMixed:
+                        return Water < _waterUnitsPerBatch ? "Sudah rata: tuang air" : "Siap aduk basah (tahan R)";
+                    case MixingPhase.WetMixing:
+                        return "Aduk basah " + _wetWork + "/" + _wetActionsPerBatch;
+                    default:
+                        return "Beton siap diambil";
+                }
+            }
+        }
 
         public MixingPhase Phase
         {
@@ -92,7 +128,14 @@ namespace Ngecor.Material
                 _progressScale = _progressVisual.localScale;
                 _progressPosition = _progressVisual.localPosition;
             }
+            CreateLabel();
             RefreshVisuals();
+        }
+
+        private void OnDestroy()
+        {
+            if (_label != null)
+                Destroy(_label.gameObject);
         }
 
         private void OnValidate()
@@ -105,7 +148,49 @@ namespace Ngecor.Material
             _wetActionsPerBatch = Mathf.Max(1, _wetActionsPerBatch);
         }
 
-        private void Update() => RefreshVisuals();
+        private void Update()
+        {
+            if (_notice != null && Time.time >= _noticeUntil)
+            {
+                _notice = null;
+                _visualKey = -1;
+            }
+            RefreshVisuals();
+        }
+
+        private void LateUpdate()
+        {
+            if (_label == null)
+                return;
+            if (_camera == null || !_camera.isActiveAndEnabled)
+                _camera = Camera.main;
+            _label.transform.position = transform.position + Vector3.up * _labelHeight;
+            if (_camera != null)
+                _label.transform.rotation = Quaternion.LookRotation(
+                    _label.transform.position - _camera.transform.position);
+        }
+
+        private void CreateLabel()
+        {
+            if (!Application.isPlaying)
+                return;
+            var go = new GameObject("MixingStatusLabel");
+            _label = go.AddComponent<TextMesh>();
+            _label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            go.GetComponent<MeshRenderer>().sharedMaterial = _label.font.material;
+            _label.anchor = TextAnchor.MiddleCenter;
+            _label.alignment = TextAlignment.Center;
+            _label.fontSize = 64;
+            _label.characterSize = 0.04f;
+            _label.color = Color.white;
+        }
+
+        private void ShowNotice(string text)
+        {
+            _notice = text;
+            _noticeUntil = Time.time + 2.5f;
+            _visualKey = -1;
+        }
 
         // Water only joins a bed that is already dry-mixed; concrete only comes from the bed itself.
         // A refused pour stays in the bucket, so the player can recover it.
@@ -113,7 +198,10 @@ namespace Ngecor.Material
         {
             switch (type)
             {
-                case MaterialType.Water: return IsDryMixed;
+                case MaterialType.Water:
+                    if (!IsDryMixed)
+                        ShowNotice("Air ditolak: aduk kering dulu");
+                    return IsDryMixed;
                 case MaterialType.Concrete: return _converting;
                 default: return true;
             }
@@ -212,6 +300,9 @@ namespace Ngecor.Material
                     SetColor(_bedRenderer, BedColor(dry, total));
             }
             UpdateProgressVisual();
+            if (_label != null)
+                _label.text = "Semen " + Cement + "  Pasir " + Sand + "  Air " + Water + "  Beton " + Concrete
+                    + "\n" + StatusText;
         }
 
         private Color BedColor(int dry, int total)

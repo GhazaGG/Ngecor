@@ -240,6 +240,42 @@ namespace Ngecor.Material.Tests
             Assert.That(stock.GetUnits(MaterialType.Cement) + spot.Ingredients.GetUnits(MaterialType.Cement), Is.EqualTo(10));
         }
 
+        [Test]
+        public void StatusTextTellsThePlayerWhatToDoNext()
+        {
+            var spot = CreateSpot(100);
+            Set(spot, "_dryActions", 1);
+            Assert.That(spot.StatusText, Does.Contain("Kosong"));
+            spot.Ingredients.AddUnits(MaterialType.Cement, 1);
+            Assert.That(spot.StatusText, Does.Contain("pasir"));
+            spot.Ingredients.AddUnits(MaterialType.Sand, 2);
+            Assert.That(spot.StatusText, Does.Contain("aduk kering"));
+            spot.ExecuteStirAction();
+            Assert.That(spot.StatusText, Does.Contain("tuang air"));
+            spot.Ingredients.AddUnits(MaterialType.Water, 1);
+            Assert.That(spot.StatusText, Does.Contain("aduk basah"));
+        }
+
+        [UnityTest]
+        public IEnumerator HeldBucketOfSandPoursIntoTheRealSpotPrefab()
+        {
+            var spot = Prefab("ManualMixingSpot").GetComponent<ManualMixingSpot>();
+            spot.transform.position = new Vector3(0f, 0.075f, 0f);
+            var bucket = HeldBucket();
+            var stock = bucket.GetComponent<BulkMaterialContainer>();
+            Assert.That(stock.ConfigureSingleTypeWhenEmpty(MaterialType.Sand), Is.True);
+            stock.AddUnits(MaterialType.Sand, 10);
+            bucket.transform.position = new Vector3(0f, 1.0f, 0f);
+            Physics.SyncTransforms();
+            for (var i = 0; i < 5; i++)
+                yield return new WaitForFixedUpdate();
+
+            var action = bucket.GetComponent<BucketPourAction>();
+            Assert.That(action.RequestPour(), Is.True, "no receiver registered by the spot trigger");
+            yield return new WaitForSeconds(1.2f);
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Sand), Is.GreaterThan(0));
+        }
+
         // Runs the real dry-mix, water, wet-mix flow; the spot refuses concrete from any other source.
         private static void MakeConcrete(ManualMixingSpot spot)
         {

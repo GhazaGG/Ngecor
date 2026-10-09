@@ -18,7 +18,7 @@ Refactored manual mixing after the developer's feel test: the spot was always sa
 - Tests rewritten for the new flow; `docs/DECISIONS.md` entry updated.
 
 ## Files affected
-- `Assets/Game/Scripts/Material/ManualMixingSpot.cs`, `CollectOnlyType.cs` (new), `BulkMaterialContainer.cs`, `GroundMaterialDeposit.cs`, `ShovelAction.cs`, `ShovelInput.cs`, `BucketPourAction.cs`, `ConcreteBatch.cs` (to be deleted)
+- `Assets/Game/Scripts/Material/ManualMixingSpot.cs`, `CollectOnlyType.cs` (new), `BulkMaterialContainer.cs`, `GroundMaterialDeposit.cs`, `ShovelAction.cs`, `ShovelInput.cs`, `BucketPourAction.cs`, `ConcreteBatch.cs` (deleted)
 - `Assets/Game/Scripts/Editor/ManualMixingSpotSetup.cs`
 - `Assets/Game/Tests/Material/ManualMixingSpotTests.cs`
 - `docs/DECISIONS.md`
@@ -43,3 +43,9 @@ Refactor is implemented and automated tests pass; the full carry, dry mix, water
 
 ## Unresolved issues or follow-up work
 - Feel-test the full flow in `Dev_Ghaza`, then update PR #98 (How to Test, MAT-003 dependency, water scope note).
+
+## Follow-up: status feedback (same day)
+- Feel test showed no sign that cement or water reached the spot and no cue for what to do next.
+- `ManualMixingSpot` now shows a world-space label above it (built-in `TextMesh`, faces the camera) with counts for cement, sand, water, and concrete plus a status line (what is missing, dry mix progress, pour water, wet mix progress, concrete ready). A refused water pour shows a 2.5 second notice.
+- Reported "sand in the bucket cannot be poured": a PlayMode test with the real `ManualMixingSpot.prefab` and a held bucket at 1.0 m pours sand correctly, so it was not reproduced. Likely cause is that 10 units barely changes the bed height (capacity 200); the counts label now shows it. Not confirmed in the editor.
+- Verification: PlayMode suite 174 passed, 0 failed.
