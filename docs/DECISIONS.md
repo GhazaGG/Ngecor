@@ -263,6 +263,33 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Usulan meryzennn di PR #89; disetujui pemilik proyek pada 2026-10-06.
 
+### 2026-10-08 — Feedback interaksi: outline tepian dan crosshair plus tunggal (INT-006)
+
+**Decision:**
+1. **Crosshair tunggal berbentuk tanda tambah (+):**
+   - Crosshair menggunakan uGUI dengan dua bar persegi panjang bersilangan (horizontal 12×2 px, vertikal 2×12 px) berwarna putih (`Color(1, 1, 1, 0.9)`), permanen di tengah layar `(0, 0)`.
+   - Menggantikan debug OnGUI. Field `_showDebugFeedback` di `InteractionDetector` dan `PlayerGrab` disetel ke `false` secara default di script dan prefab untuk menghilangkan bug tanda ganda (dua crosshair + dan lingkaran/kotak bertumpuk).
+2. **Highlight tepian / edge-only silhouette (bukan solid color):**
+   - Target interaksi yang sedang difokuskan kamera disorot dengan outline siluet putih tipis pada tepiannya saja (*inverted-hull pass* `Ngecor/OutlineEdge`), diekstrusi sepanjang normal vertex sebesar 0.02 m (dapat disetel dinamis via property `OutlineWidth` / `_outlineWidth` pada `InteractionHighlighter`).
+   - Vertex normal pada sudut-sudut dan tepian tajam (misal: mesh Cube) dilas/dihaluskan (*smoothed normals*) pada mesh outline cache agar tidak terbelah atau bolong (*tearing/gapping*) pada ujung sudut.
+   - Interior objek dan tekstur asli (albedo, normal map, roughness) 100% tetap terlihat apa adanya; tidak ada penimpaan warna kuning solid ke seluruh badan objek dan tidak ada kloning material runtime.
+   - Digambar via `Graphics.DrawMesh` pada `MeshFilter` target selama `LateUpdate`.
+3. **Prompt teks terpusat di bawah crosshair:**
+   - Teks prompt interaksi (`CurrentTarget.InteractionPrompt`, misal: "Grab") ditampilkan tepat di bawah crosshair pada posisi `(0, -35)`.
+   - Menggunakan *dirty-tracking* string sehingga zero allocation GC pada update steady-state.
+   - Begitu objek diambil/digrab (`IsHeld == true`), target hilang dari pandangan, atau target hancur, outline dan prompt teks langsung hilang seketika.
+4. **Authority & performa:**
+   - Feedback visual sepenuhnya bersifat lokal (client-side) pada kamera pemain aktif tanpa overhead sinkronisasi jaringan. Alokasi GC steady-state 0 B/frame.
+5. **Konvensi objek interaktif:**
+   - Komponen `IInteractable` (seperti `InteractableObject` atau `GrabbableObject`) ditempatkan di root GameObject yang memiliki collider solid (non-trigger).
+   - Raycast `InteractionDetector` menggunakan `QueryTriggerInteraction.Ignore` sehingga collider berstatus *trigger* tidak terdeteksi sebagai target interaksi.
+
+**Reason:** Memenuhi arahan issue #77 dan masukan visual pemilik proyek: pemain membutuhkan bidikan presisi tanda tambah (+) tunggal tanpa interferensi debug GUI, serta feedback visual tepian objek yang bersih tanpa menutupi rupa fisik material asli objek.
+
+**Applies from:** INT-006 (#77), PLAYER-003 (#73), MAT-001 (#15).
+
+**Owner/source:** Arahan dan feedback visual pemilik proyek pada issue #77 / PR #95; diusulkan dan diimplementasikan oleh meryzennn pada 2026-10-08.
+
 ## Anggaran performa
 
 Angka di bawah adalah titik awal. Ubah lewat PR setelah ada data Profiler, jangan diubah karena satu fitur sulit memenuhinya.
