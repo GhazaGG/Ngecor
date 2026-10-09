@@ -8,7 +8,7 @@ namespace Ngecor.Construction
         [SerializeField, Min(1f)] private float _wobbleThreshold = 90f;
         [SerializeField, Min(0f)] private float _wobbleDuration = 2f;
         [SerializeField, Min(0f)] private float _wobbleTorque = 2f;
-        [SerializeField, Min(0f)] private float _maximumImpactImpulse = 50f;
+        [SerializeField, Min(0f)] private float _maximumImpactImpulse = 75f;
         [SerializeField] private Transform _playerLoadProbe;
         [SerializeField] private Transform[] _breakParts = new Transform[4];
         [SerializeField] private float[] _partMasses = { 20f, 20f, 12.5f, 12.5f };
