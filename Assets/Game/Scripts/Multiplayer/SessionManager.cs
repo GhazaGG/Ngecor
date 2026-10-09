@@ -125,6 +125,48 @@ namespace Ngecor.Multiplayer
             }
         }
 
+        private static readonly Vector3[] DefaultSpawnPoints = new Vector3[]
+        {
+            new Vector3(2.5f, 0.05f, 0f),
+            new Vector3(-2.5f, 0.05f, 0f),
+            new Vector3(0f, 0.05f, 2.5f),
+            new Vector3(0f, 0.05f, -2.5f)
+        };
+
+        public static Vector3 GetSafeSpawnPosition(NetworkManager netManager)
+        {
+            if (netManager == null)
+                return new Vector3(2.5f, 0.05f, 0f);
+
+            foreach (var candidate in DefaultSpawnPoints)
+            {
+                bool isOccupied = false;
+                if (netManager.ConnectedClients != null)
+                {
+                    foreach (var connectedClient in netManager.ConnectedClients.Values)
+                    {
+                        if (connectedClient != null && connectedClient.PlayerObject != null)
+                        {
+                            Vector3 playerPos = connectedClient.PlayerObject.transform.position;
+                            playerPos.y = candidate.y;
+                            if (Vector3.Distance(playerPos, candidate) < 1.2f)
+                            {
+                                isOccupied = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!isOccupied)
+                    return candidate;
+            }
+
+            int count = netManager.ConnectedClientsIds != null ? netManager.ConnectedClientsIds.Count : 1;
+            float angle = count * (Mathf.PI * 0.5f);
+            return new Vector3(Mathf.Cos(angle) * 3f, 0.05f, Mathf.Sin(angle) * 3f);
+        }
+
         private void HandleConnectionApproval(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
         {
             var netManager = NetworkManager.Singleton;
@@ -139,8 +181,7 @@ namespace Ngecor.Multiplayer
             }
 
             response.CreatePlayerObject = true;
-            float offset = (float)(request.ClientNetworkId % 4) * 2.0f;
-            response.Position = new Vector3(-2f + offset, 0.05f, 0f);
+            response.Position = GetSafeSpawnPosition(netManager);
             response.Rotation = Quaternion.identity;
         }
 

@@ -63,5 +63,12 @@ namespace Ngecor.Multiplayer.Tests
             Assert.That(_camera.enabled, Is.False, "Camera must be disabled for non-owner.");
             Assert.That(_audioListener.enabled, Is.False, "AudioListener must be disabled for non-owner.");
         }
+
+        [Test]
+        public void GetSafeSpawnPosition_WhenNetManagerNull_ReturnsDefaultOffset()
+        {
+            var spawnPos = SessionManager.GetSafeSpawnPosition(null);
+            Assert.That(spawnPos.x, Is.GreaterThan(1.0f));
+        }
     }
 }
