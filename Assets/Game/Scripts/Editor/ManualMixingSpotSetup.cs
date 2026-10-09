@@ -80,6 +80,24 @@ namespace Ngecor.EditorTools
             Debug.Log("Manual mixing spot prefab and Dev_Ghaza setup created.");
         }
 
+        // Dev scene only: CementBag.prefab becomes grabbable in MAT-003 (#46).
+        [MenuItem("Ngecor/Make Dev_Ghaza Cement Sacks Grabbable")]
+        public static void MakeDevSacksGrabbable()
+        {
+            var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+            var added = 0;
+            foreach (var root in scene.GetRootGameObjects())
+                foreach (var bag in root.GetComponentsInChildren<CementBag>(true))
+                    if (!bag.TryGetComponent<Ngecor.Interaction.GrabbableObject>(out _))
+                    {
+                        bag.gameObject.AddComponent<Ngecor.Interaction.GrabbableObject>();
+                        added++;
+                    }
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+            Debug.Log($"Added GrabbableObject to {added} cement sacks in Dev_Ghaza.");
+        }
+
         private static ManualMixingSpot FindSpot(Scene scene)
         {
             foreach (var root in scene.GetRootGameObjects())
