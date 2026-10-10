@@ -24,11 +24,6 @@ namespace Ngecor.Material
                 _useAction.action.Enable();
         }
 
-        private void OnDisable()
-        {
-            if (_useAction != null && _useAction.action != null)
-                _useAction.action.Disable();
-        }
 
         private void Update()
         {
