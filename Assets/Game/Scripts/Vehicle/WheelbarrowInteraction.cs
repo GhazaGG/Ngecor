@@ -12,8 +12,14 @@ namespace Ngecor.Vehicle
         private const float GripPathGroundClearance = 0.02f;
         private const float MaxSeparationMultiplier = 2f;
         private const float MaxSteeringSpeed = 2f;
-        private const float MaxSteeringForce = 150f;
-        private const float PushResponseTime = 0.08f;
+        // Same human push limit as PlayerMovement's _maxPushForce on the player prefab (docs/DECISIONS.md).
+        private const float MaxSteeringForce = 350f;
+        private const float MaxSteeringTilt = 15f;
+        private const float SteeringLeadSpeed = 1.5f;
+        private const float MaxSteeringLead = 0.5f;
+        private const float SteeringLeadDeadZone = 0.03f;
+        private const float SteeringStiffness = 600f;
+        private const float SteeringDamping = 100f;
         private const float ReversePushStrength = 0.65f;
 
         [SerializeField] private Collider[] _handleColliders;
@@ -24,6 +30,7 @@ namespace Ngecor.Vehicle
         private CharacterController _interactingController;
         private RaycastHit[] _gripPathHits = new RaycastHit[8];
         private RaycastHit[] _wheelHits = new RaycastHit[4];
+        private Transform _wheelTransform;
         private Vector3 _previousHeading;
 
         public string InteractionPrompt => "Push";
@@ -139,10 +146,17 @@ namespace Ngecor.Vehicle
                 return;
             }
 
+            // The player leads sideways within a short leash (CharacterController.Move, so walls and obstacles
+            // stop it); the follow step only restores the lateral part beyond that leash.
+            var right = Vector3.Cross(Vector3.up, -outward).normalized;
             var alignment = gripPosition - _interactingPlayer.transform.position;
-            var followStep = Vector3.ClampMagnitude(alignment, _interactingPlayer.MoveSpeed * Time.deltaTime);
-            if (followStep.sqrMagnitude > Mathf.Epsilon)
-                _interactingController.Move(followStep);
+            var lateralLead = -Vector3.Dot(alignment, right);
+            var excessLead = Mathf.Sign(lateralLead) * Mathf.Max(0f, Mathf.Abs(lateralLead) - MaxSteeringLead);
+            var followTarget = alignment - right * Vector3.Dot(alignment, right) - right * excessLead;
+            var followStep = Vector3.ClampMagnitude(followTarget, _interactingPlayer.MoveSpeed * Time.deltaTime);
+            var moveStep = followStep + GetSteeringLeadStep(right, lateralLead);
+            if (moveStep.sqrMagnitude > Mathf.Epsilon)
+                _interactingController.Move(moveStep);
 
             var currentHeading = -outward;
             if (_previousHeading.sqrMagnitude > Mathf.Epsilon)
@@ -252,79 +266,100 @@ namespace Ngecor.Vehicle
             return true;
         }
 
+        // A/D: the player steps sideways first (see LateUpdate); the handle then chases that position, and the front
+        // wheel contact is the pivot. Both forces act at centre-of-mass height so they yaw the barrow without rolling it.
         private void ApplyWheelGripAndSteering()
         {
-            if (!TryGetHandlePoint(out var handlePoint, out var outward))
+            if (_interactingController == null ||
+                !TryGetGripPose(_interactingController, out var handlePoint, out var gripPosition, out var outward))
                 return;
 
-            var forward = -outward;
-            var outwardRight = Vector3.Cross(Vector3.up, forward).normalized;
-            var wheelPos = GetWheelPosition(handlePoint);
+            var right = Vector3.Cross(Vector3.up, -outward).normalized;
+            var leverHeight = Rigidbody.worldCenterOfMass.y;
+            var wheelPosition = GetWheelPosition(handlePoint);
+            var wheelGrounded = TryGetWheelGroundContact(wheelPosition, out var wheelContactPoint);
 
-            // Front wheel acts as fulcrum by resisting lateral sliding
-            Vector3 wheelContactPoint;
-            TryGetWheelGroundContact(wheelPos, out wheelContactPoint);
-
-            var wheelVelocity = Rigidbody.GetPointVelocity(wheelContactPoint);
-            var wheelLateralSpeed = Vector3.Dot(wheelVelocity, outwardRight);
-            if (Mathf.Abs(wheelLateralSpeed) > 0.001f)
+            // The ground only resists the wheel sideways while it really touches something.
+            if (wheelGrounded)
             {
-                var gripMass = Mathf.Max(1f, Rigidbody.mass);
-                var desiredGripForce = -wheelLateralSpeed * gripMass / Time.fixedDeltaTime;
-                var maxGripForce = Mathf.Max(150f, Rigidbody.mass * 30f);
-                var clampedGripForce = Mathf.Clamp(desiredGripForce, -maxGripForce, maxGripForce);
-                Rigidbody.AddForceAtPosition(outwardRight * clampedGripForce, wheelContactPoint, ForceMode.Force);
-            }
-
-            // Player lateral steering at handles
-            var input = _interactingPlayer.MovementInput.x;
-            if (Mathf.Abs(input) > 0.01f)
-            {
-                var swingDir = -outwardRight * Mathf.Sign(input);
-                var radius = Mathf.Max(0.1f, Vector3.ProjectOnPlane(handlePoint - wheelPos, Vector3.up).magnitude);
-                var targetYawSpeed = Mathf.Abs(input) * MaxSteeringSpeed;
-                var currentYawSpeed = Vector3.Dot(Rigidbody.angularVelocity, Vector3.up) * Mathf.Sign(input);
-                var targetSpeed = targetYawSpeed * radius;
-                var currentHandleSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(handlePoint), swingDir);
-
-                if (currentYawSpeed < targetYawSpeed)
+                var wheelLateralSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(wheelContactPoint), right);
+                if (Mathf.Abs(wheelLateralSpeed) > 0.001f)
                 {
-                    var pushForce = PlayerMovement.CalculatePushForce(
-                        Rigidbody.mass,
-                        targetSpeed,
-                        currentHandleSpeed,
-                        Time.fixedDeltaTime,
-                        PushResponseTime,
-                        MaxSteeringForce);
-
-                    if (pushForce > 0f)
-                        Rigidbody.AddForceAtPosition(swingDir * pushForce, handlePoint, ForceMode.Force);
-                }
-                else if (currentYawSpeed > targetYawSpeed + 0.05f)
-                {
-                    var excessSpeed = (currentYawSpeed - targetYawSpeed) * radius;
-                    var brakeForce = Mathf.Clamp(excessSpeed * Rigidbody.mass / Time.fixedDeltaTime, 0f, MaxSteeringForce);
-                    Rigidbody.AddForceAtPosition(-swingDir * brakeForce, handlePoint, ForceMode.Force);
+                    var desiredGripForce = -wheelLateralSpeed * Mathf.Max(1f, Rigidbody.mass) / Time.fixedDeltaTime;
+                    var maxGripForce = Mathf.Max(MaxSteeringForce * 2f, Rigidbody.mass * 30f);
+                    var gripPoint = new Vector3(wheelContactPoint.x, leverHeight, wheelContactPoint.z);
+                    Rigidbody.AddForceAtPosition(
+                        right * Mathf.Clamp(desiredGripForce, -maxGripForce, maxGripForce), gripPoint, ForceMode.Force);
                 }
             }
-            else
+
+            var leverPoint = new Vector3(handlePoint.x, leverHeight, handlePoint.z);
+            var lateralLead = -Vector3.Dot(gripPosition - _interactingPlayer.transform.position, right);
+            if (Mathf.Abs(lateralLead) > SteeringLeadDeadZone &&
+                Vector3.Angle(transform.up, Vector3.up) < MaxSteeringTilt)
             {
-                var handleLateralSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(handlePoint), outwardRight);
+                // The handle is pulled toward the player's actual sideways position like a leash: force grows with the
+                // lead, so a loaded barrow needs a bigger lead (and answers slower) without measuring its cargo.
+                // A blocked player has no lead, so nothing pushes.
+                var chaseDirection = right * Mathf.Sign(lateralLead);
+                var handleSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(leverPoint), chaseDirection);
+
+                // Effective mass of the handle point: yaw inertia (about the wheel while it touches the ground) over the
+                // lever arm squared. The spring and damper are capped to what stays stable at this physics step; the
+                // light empty barrow otherwise flips its yaw back and forth every step.
+                var wheelArm = wheelGrounded
+                    ? Vector3.ProjectOnPlane(Rigidbody.worldCenterOfMass - wheelPosition, Vector3.up).magnitude
+                    : 0f;
+                var yawInertia = Rigidbody.inertiaTensor.y + Rigidbody.mass * wheelArm * wheelArm;
+                var leverArm = Mathf.Max(0.1f, Vector3.ProjectOnPlane(handlePoint - wheelPosition, Vector3.up).magnitude);
+                var handleMass = yawInertia / (leverArm * leverArm);
+                var dt = Time.fixedDeltaTime;
+                var stiffness = Mathf.Min(SteeringStiffness, 0.25f * handleMass / (dt * dt));
+                var damping = Mathf.Min(SteeringDamping, 0.5f * handleMass / dt);
+                var pushForce = Mathf.Clamp(
+                    Mathf.Abs(lateralLead) * stiffness - handleSpeed * damping, -MaxSteeringForce, MaxSteeringForce);
+
+                // Swinging the handle right turns the nose left (negative yaw), and the other way round. Never push
+                // harder than what keeps this step's yaw below the limit; brake if it is already above it.
+                var yawSpeed = -Rigidbody.angularVelocity.y * Mathf.Sign(lateralLead);
+                var yawHeadroom = Mathf.Max(0f, MaxSteeringSpeed - yawSpeed);
+                pushForce = Mathf.Min(pushForce, yawHeadroom * yawInertia / (leverArm * dt));
+                if (yawSpeed > MaxSteeringSpeed)
+                    pushForce = Mathf.Max(-MaxSteeringForce, Mathf.Min(pushForce, 0f) - (yawSpeed - MaxSteeringSpeed) * MaxSteeringForce);
+                Rigidbody.AddForceAtPosition(chaseDirection * pushForce, leverPoint, ForceMode.Force);
+            }
+            else if (wheelGrounded)
+            {
+                var handleLateralSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(leverPoint), right);
                 if (Mathf.Abs(handleLateralSpeed) > 0.01f)
                 {
-                    var dampingForce = -handleLateralSpeed * Rigidbody.mass * 4f;
                     var maxDamping = Mathf.Max(50f, Rigidbody.mass * 10f);
-                    dampingForce = Mathf.Clamp(dampingForce, -maxDamping, maxDamping);
-                    Rigidbody.AddForceAtPosition(outwardRight * dampingForce, handlePoint, ForceMode.Force);
+                    var dampingForce = Mathf.Clamp(-handleLateralSpeed * Rigidbody.mass * 4f, -maxDamping, maxDamping);
+                    Rigidbody.AddForceAtPosition(right * dampingForce, leverPoint, ForceMode.Force);
                 }
             }
         }
 
+        private Vector3 GetSteeringLeadStep(Vector3 right, float lateralLead)
+        {
+            // A (-1) steps the player left, D (+1) steps right; the wheel pivot swings the nose the other way.
+            var input = _interactingPlayer.MovementInput.x;
+            if (Mathf.Abs(input) <= 0.01f)
+                return Vector3.zero;
+
+            var distance = Mathf.Abs(input) * SteeringLeadSpeed * Time.deltaTime;
+            if (input * lateralLead > 0f)
+                distance = Mathf.Min(distance, Mathf.Max(0f, MaxSteeringLead - Mathf.Abs(lateralLead)));
+
+            return right * (Mathf.Sign(input) * distance);
+        }
+
         private Vector3 GetWheelPosition(Vector3 handlePoint)
         {
-            var wheelTransform = transform.Find("Wheel");
-            if (wheelTransform != null)
-                return wheelTransform.position;
+            if (_wheelTransform == null)
+                _wheelTransform = transform.Find("Wheel");
+            if (_wheelTransform != null)
+                return _wheelTransform.position;
 
             var com = Rigidbody.worldCenterOfMass;
             var toHandle = Vector3.ProjectOnPlane(handlePoint - com, Vector3.up);
