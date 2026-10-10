@@ -319,6 +319,73 @@ namespace Ngecor.Player.Tests
         }
 
         [UnityTest]
+        public IEnumerator NonLocalPlayerExposesRemoteMovementInput()
+        {
+            CreatePlayer(false);
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+
+            movement.SetRemoteMovementInput(new Vector2(0f, 1f));
+            yield return null;
+
+            Assert.That(movement.MovementInput, Is.EqualTo(new Vector2(0f, 1f)),
+                "The host needs a remote holder's W/A/S/D to push a held wheelbarrow.");
+            Assert.That(_player.transform.position.z, Is.EqualTo(0f).Within(0.001f),
+                "Remote input must not move the player on this peer; the owner moves it.");
+        }
+
+        [UnityTest]
+        public IEnumerator RemoteMovementInputIsClampedAndSanitized()
+        {
+            CreatePlayer(false);
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+
+            movement.SetRemoteMovementInput(new Vector2(3f, 4f));
+            yield return null;
+            Assert.That(movement.MovementInput.magnitude, Is.EqualTo(1f).Within(0.0001f));
+
+            movement.SetRemoteMovementInput(new Vector2(float.NaN, 1f));
+            yield return null;
+            Assert.That(movement.MovementInput, Is.EqualTo(Vector2.zero));
+
+            movement.SetRemoteMovementInput(new Vector2(float.PositiveInfinity, 0f));
+            yield return null;
+            Assert.That(movement.MovementInput, Is.EqualTo(Vector2.zero));
+        }
+
+        [UnityTest]
+        public IEnumerator LocalPlayerIgnoresRemoteMovementInput()
+        {
+            CreatePlayer(true);
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+
+            movement.SetRemoteMovementInput(Vector2.up);
+            yield return null;
+
+            Assert.That(movement.MovementInput, Is.EqualTo(Vector2.zero));
+        }
+
+        [UnityTest]
+        public IEnumerator NonLocalPlayerPushUsesTheSameForceLimit()
+        {
+            CreatePlayer(false);
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            var body = CreatePushTarget(size: 0.5f);
+            body.useGravity = false;
+            body.mass = 100f;
+            var maxPushForce = (float)GetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_maxPushForce");
+
+            // The non-local Update refills the push budget from Time.deltaTime; wait at the fixed 60 fps so it is 1/60 s.
+            yield return WaitForFixedFrames(2);
+            movement.ApplyMovementPush(body, body.worldCenterOfMass, Vector3.forward, 1f, 1f / 60f);
+            yield return WaitForFixedFrames(3); // 1/60 s frames are shorter than the 0.02 s physics step
+
+            Assert.That(body.linearVelocity.z, Is.GreaterThan(0.01f),
+                "On the host, a remote player's held-wheelbarrow push must reach the body.");
+            Assert.That(body.linearVelocity.z * body.mass, Is.LessThanOrEqualTo(maxPushForce / 60f + 0.001f),
+                "A remote push must stay under the same force cap as a local push.");
+        }
+
+        [UnityTest]
         public IEnumerator CharacterControllerStopsAtWall()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();

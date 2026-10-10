@@ -30,6 +30,7 @@ namespace Ngecor.Player
         private float _remainingPushImpulse;
         private Vector3 _movementDirection;
         private Vector2 _movementInput;
+        private Vector2 _remoteMovementInput;
         private bool _interactableControlsMovement;
         private readonly HashSet<Rigidbody> _pushedBodies = new HashSet<Rigidbody>();
         private RaycastHit[] _stepProbeHits = new RaycastHit[8];
@@ -57,12 +58,21 @@ namespace Ngecor.Player
         public Vector2 MovementInput => _movementInput;
         public float MoveSpeed => _moveSpeed;
 
+        // W/A/S/D of a player controlled on another peer (replicated intent). Clamped here because the host
+        // must not trust the sender.
+        public void SetRemoteMovementInput(Vector2 input)
+        {
+            _remoteMovementInput = float.IsFinite(input.x) && float.IsFinite(input.y)
+                ? Vector2.ClampMagnitude(input, 1f)
+                : Vector2.zero;
+        }
+
         // surfaceNormal (zero means world up) is the plane the push lies in; the force acts on the line through the
         // body's centre of mass inside that plane, so pushing along a ramp neither lifts nor pitches the body.
         public void ApplyMovementPush(
             Rigidbody body, Vector3 point, Vector3 pushDirection, float strength, float deltaTime, Vector3 surfaceNormal = default)
         {
-            if (_isLocalPlayer && isActiveAndEnabled)
+            if (isActiveAndEnabled)
                 ApplyContactPush(body, point, pushDirection, deltaTime, strength, surfaceNormal);
         }
 
@@ -72,7 +82,7 @@ namespace Ngecor.Player
             Rigidbody body, Vector3 pushDirection, float strength, float deltaTime, Vector3 surfaceNormal = default)
         {
             strength = Mathf.Clamp01(strength);
-            if (!_isLocalPlayer || !isActiveAndEnabled || body == null || body.isKinematic || strength <= 0f)
+            if (!isActiveAndEnabled || body == null || body.isKinematic || strength <= 0f)
                 return;
 
             var direction = Vector3.ProjectOnPlane(pushDirection, NormalOrUp(surfaceNormal));
@@ -144,6 +154,7 @@ namespace Ngecor.Player
         {
             _movementDirection = Vector3.zero;
             _movementInput = Vector2.zero;
+            _remoteMovementInput = Vector2.zero;
             _interactableControlsMovement = false;
             if (_isLocalPlayer)
                 SetCursorLocked(false);
@@ -154,7 +165,10 @@ namespace Ngecor.Player
             if (!_isLocalPlayer || _characterController == null)
             {
                 _movementDirection = Vector3.zero;
-                _movementInput = Vector2.zero;
+                _movementInput = _isLocalPlayer ? Vector2.zero : _remoteMovementInput;
+                // A remote player's held interaction (a wheelbarrow on the host) pushes with the same per-frame budget.
+                _remainingPushImpulse = _maxPushForce * Time.deltaTime;
+                _pushedBodies.Clear();
                 return;
             }
 
