@@ -83,14 +83,31 @@ namespace Ngecor.Interaction.Tests
                 Object.DestroyImmediate(_targetObject2);
             if (_obstacleObject != null)
                 Object.DestroyImmediate(_obstacleObject);
-            if (_interactReference != null)
-                Object.DestroyImmediate(_interactReference);
-            if (_throwReference != null)
-                Object.DestroyImmediate(_throwReference);
+            if (_interactAction != null)
+            {
+                _interactAction.Disable();
+                _interactAction = null;
+            }
+            if (_throwAction != null)
+            {
+                _throwAction.Disable();
+                _throwAction = null;
+            }
             if (_actionAsset != null)
             {
                 _actionAsset.Disable();
                 Object.DestroyImmediate(_actionAsset);
+                _actionAsset = null;
+            }
+            if (_interactReference != null)
+            {
+                Object.DestroyImmediate(_interactReference);
+                _interactReference = null;
+            }
+            if (_throwReference != null)
+            {
+                Object.DestroyImmediate(_throwReference);
+                _throwReference = null;
             }
 
             base.TearDown();

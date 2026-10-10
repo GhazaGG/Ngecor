@@ -52,17 +52,38 @@ namespace Ngecor.Player.Tests
             if (_stepProbeIgnoredColliders != null)
                 UnityEngine.Object.DestroyImmediate(_stepProbeIgnoredColliders);
 
-            if (_moveReference != null)
-                UnityEngine.Object.DestroyImmediate(_moveReference);
+            if (_moveAction != null)
+            {
+                _moveAction.Disable();
+                _moveAction = null;
+            }
 
-            if (_lookReference != null)
-                UnityEngine.Object.DestroyImmediate(_lookReference);
+            if (_lookAction != null)
+            {
+                _lookAction.Disable();
+                _lookAction = null;
+            }
 
             if (_actionAsset != null)
             {
                 _actionAsset.Disable();
                 UnityEngine.Object.DestroyImmediate(_actionAsset);
+                _actionAsset = null;
             }
+
+            if (_moveReference != null)
+            {
+                UnityEngine.Object.DestroyImmediate(_moveReference);
+                _moveReference = null;
+            }
+
+            if (_lookReference != null)
+            {
+                UnityEngine.Object.DestroyImmediate(_lookReference);
+                _lookReference = null;
+            }
+
+            Ngecor.Player.PlayerMovement.IsCursorOverUIHandler = null;
 
             base.TearDown();
         }
