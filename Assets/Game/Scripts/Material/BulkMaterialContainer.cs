@@ -8,7 +8,8 @@ namespace Ngecor.Material
     {
         Sand,
         Cement,
-        Concrete
+        Concrete,
+        Water
     }
 
     public enum ContainerMode
@@ -37,19 +38,23 @@ namespace Ngecor.Material
     {
         public int CementUnits { get; }
         public int SandUnits { get; }
-        public int ConcreteUnitsPerBatch => CementUnits + SandUnits;
+        public int WaterUnits { get; }
+        public int ConcreteUnitsPerBatch => CementUnits + SandUnits + WaterUnits;
 
-        public ConcreteRecipe(int cementUnits, int sandUnits)
+        public ConcreteRecipe(int cementUnits, int sandUnits, int waterUnits)
         {
             if (cementUnits <= 0)
                 throw new ArgumentOutOfRangeException(nameof(cementUnits));
             if (sandUnits <= 0)
                 throw new ArgumentOutOfRangeException(nameof(sandUnits));
-            if ((long)cementUnits + sandUnits > int.MaxValue)
-                throw new ArgumentOutOfRangeException(nameof(sandUnits), "Recipe output exceeds the supported unit count.");
+            if (waterUnits <= 0)
+                throw new ArgumentOutOfRangeException(nameof(waterUnits));
+            if ((long)cementUnits + sandUnits + waterUnits > int.MaxValue)
+                throw new ArgumentOutOfRangeException(nameof(waterUnits), "Recipe output exceeds the supported unit count.");
 
             CementUnits = cementUnits;
             SandUnits = sandUnits;
+            WaterUnits = waterUnits;
         }
     }
 
@@ -59,36 +64,42 @@ namespace Ngecor.Material
         public int ConcreteUnits { get; }
         public int LeftoverCementUnits { get; }
         public int LeftoverSandUnits { get; }
+        public int LeftoverWaterUnits { get; }
 
         internal ConcreteMixResult(int batches, int concreteUnits, int leftoverCementUnits,
-            int leftoverSandUnits)
+            int leftoverSandUnits, int leftoverWaterUnits)
         {
             Batches = batches;
             ConcreteUnits = concreteUnits;
             LeftoverCementUnits = leftoverCementUnits;
             LeftoverSandUnits = leftoverSandUnits;
+            LeftoverWaterUnits = leftoverWaterUnits;
         }
     }
 
     public static class ConcreteRecipeCalculator
     {
-        public static ConcreteMixResult Mix(int cementUnits, int sandUnits, ConcreteRecipe recipe)
+        public static ConcreteMixResult Mix(int cementUnits, int sandUnits, int waterUnits, ConcreteRecipe recipe)
         {
             if (cementUnits < 0)
                 throw new ArgumentOutOfRangeException(nameof(cementUnits));
             if (sandUnits < 0)
                 throw new ArgumentOutOfRangeException(nameof(sandUnits));
-            if (recipe.CementUnits <= 0 || recipe.SandUnits <= 0)
+            if (waterUnits < 0)
+                throw new ArgumentOutOfRangeException(nameof(waterUnits));
+            if (recipe.CementUnits <= 0 || recipe.SandUnits <= 0 || recipe.WaterUnits <= 0)
                 throw new ArgumentException("Recipe values must be positive.", nameof(recipe));
 
-            var batches = Math.Min(cementUnits / recipe.CementUnits, sandUnits / recipe.SandUnits);
+            var batches = Math.Min(Math.Min(cementUnits / recipe.CementUnits, sandUnits / recipe.SandUnits),
+                waterUnits / recipe.WaterUnits);
             var concrete = (long)batches * recipe.ConcreteUnitsPerBatch;
             if (concrete > int.MaxValue)
                 throw new OverflowException("Concrete output exceeds the supported unit count.");
 
             return new ConcreteMixResult(batches, (int)concrete,
                 cementUnits - batches * recipe.CementUnits,
-                sandUnits - batches * recipe.SandUnits);
+                sandUnits - batches * recipe.SandUnits,
+                waterUnits - batches * recipe.WaterUnits);
         }
     }
 
@@ -118,6 +129,10 @@ namespace Ngecor.Material
         private Vector3 _fullFillPosition;
 
         public int Capacity => _unlimitedCapacity ? int.MaxValue : _capacity;
+
+        // Runtime rule set by an owner (e.g. the mixing spot): how many more units of a type its current
+        // state can take. 0 refuses the type.
+        public Func<MaterialType, int> AcceptLimit { get; set; }
 
         public int TotalUnits
         {
@@ -181,9 +196,21 @@ namespace Ngecor.Material
 
         public bool Accepts(MaterialType type)
         {
-            if (_mode == ContainerMode.SingleType)
-                return type == _singleType;
-            return _acceptedTypes != null && _acceptedTypes.Contains(type);
+            var accepted = _mode == ContainerMode.SingleType ? type == _singleType
+                : _acceptedTypes != null && _acceptedTypes.Contains(type);
+            return accepted && (AcceptLimit == null || AcceptLimit(type) > 0);
+        }
+
+        private int RoomFor(MaterialType type)
+        {
+            var room = Mathf.Max(0, Capacity - TotalUnits);
+            return AcceptLimit == null ? room : Mathf.Min(room, Mathf.Max(0, AcceptLimit(type)));
+        }
+
+        public bool TryGetSingleType(out MaterialType type)
+        {
+            type = _singleType;
+            return _mode == ContainerMode.SingleType;
         }
 
         public bool ConfigureSingleTypeWhenEmpty(MaterialType type)
@@ -217,7 +244,7 @@ namespace Ngecor.Material
             if (requestedUnits <= 0 || !Accepts(type))
                 return 0;
 
-            var added = Mathf.Min(requestedUnits, Mathf.Max(0, Capacity - TotalUnits));
+            var added = Mathf.Min(requestedUnits, RoomFor(type));
             if (added == 0)
                 return 0;
 
@@ -263,8 +290,7 @@ namespace Ngecor.Material
             if (target == null || target == this || requestedUnits <= 0 || !target.Accepts(type))
                 return 0;
 
-            var amount = Math.Min(requestedUnits, Math.Min(GetUnits(type),
-                Mathf.Max(0, target.Capacity - target.TotalUnits)));
+            var amount = Math.Min(requestedUnits, Math.Min(GetUnits(type), target.RoomFor(type)));
             if (amount == 0)
                 return 0;
 
@@ -305,7 +331,7 @@ namespace Ngecor.Material
                 || float.IsInfinity(seconds) || _transferUnitsPerSecond <= 0f
                 || GetUnits(type) == 0
                 || (ground ? _groundDeposit == null : target == null || target == this
-                    || !target.Accepts(type) || target.TotalUnits >= target.Capacity))
+                    || !target.Accepts(type) || target.RoomFor(type) == 0))
             {
                 _transferCredit = 0;
                 return 0;

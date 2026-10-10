@@ -12,32 +12,46 @@ namespace Ngecor.Material.Tests
         [Test]
         public void ConcreteRecipeConservesUnitsWhenOutputMatchesInputs()
         {
-            var result = ConcreteRecipeCalculator.Mix(7, 10, new ConcreteRecipe(2, 3));
+            var result = ConcreteRecipeCalculator.Mix(7, 10, 4, new ConcreteRecipe(2, 3, 1));
 
             Assert.That(result.Batches, Is.EqualTo(3));
-            Assert.That(result.ConcreteUnits + result.LeftoverCementUnits + result.LeftoverSandUnits,
-                Is.EqualTo(17));
+            Assert.That(result.ConcreteUnits + result.LeftoverCementUnits + result.LeftoverSandUnits
+                + result.LeftoverWaterUnits, Is.EqualTo(21));
         }
 
         [Test]
         public void ConcreteRecipeLeavesIngredientsThatDoNotMakeAFullBatch()
         {
-            var result = ConcreteRecipeCalculator.Mix(7, 10, new ConcreteRecipe(2, 3));
+            var result = ConcreteRecipeCalculator.Mix(7, 10, 4, new ConcreteRecipe(2, 3, 1));
 
             Assert.That(result.LeftoverCementUnits, Is.EqualTo(1));
             Assert.That(result.LeftoverSandUnits, Is.EqualTo(1));
-            Assert.That(result.ConcreteUnits, Is.EqualTo(15));
+            Assert.That(result.LeftoverWaterUnits, Is.EqualTo(1));
+            Assert.That(result.ConcreteUnits, Is.EqualTo(18));
+        }
+
+        [Test]
+        public void ConcreteRecipeWithoutEnoughWaterMakesFewerBatches()
+        {
+            var result = ConcreteRecipeCalculator.Mix(10, 20, 2, new ConcreteRecipe(1, 2, 1));
+
+            Assert.That(result.Batches, Is.EqualTo(2));
+            Assert.That(result.ConcreteUnits, Is.EqualTo(8));
+            Assert.That(result.LeftoverCementUnits, Is.EqualTo(8));
+            Assert.That(result.LeftoverSandUnits, Is.EqualTo(16));
+            Assert.That(result.LeftoverWaterUnits, Is.Zero);
         }
 
         [Test]
         public void ConcreteRecipeWithEmptyInputProducesNoConcreteAndKeepsAllIngredients()
         {
-            var result = ConcreteRecipeCalculator.Mix(0, 10, new ConcreteRecipe(2, 3));
+            var result = ConcreteRecipeCalculator.Mix(0, 10, 5, new ConcreteRecipe(2, 3, 1));
 
             Assert.That(result.Batches, Is.Zero);
             Assert.That(result.ConcreteUnits, Is.Zero);
             Assert.That(result.LeftoverCementUnits, Is.Zero);
             Assert.That(result.LeftoverSandUnits, Is.EqualTo(10));
+            Assert.That(result.LeftoverWaterUnits, Is.EqualTo(5));
         }
 
         [TearDown]

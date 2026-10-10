@@ -48,12 +48,28 @@ namespace Ngecor.Material
         public int RequestScoop() => HasLocalHolder ? ExecuteScoop() : 0;
         public int RequestDump() => HasLocalHolder ? ExecuteDump() : 0;
 
+        public int RequestStir()
+        {
+            var spot = FindAimedMixingSpot();
+            return spot != null && spot.ExecuteStirAction() ? 1 : 0;
+        }
+
+        public bool IsAimingAtMixingSpot() => FindAimedMixingSpot() != null;
+
+        private ManualMixingSpot FindAimedMixingSpot()
+        {
+            if (!HasLocalHolder)
+                return null;
+            var target = FindTarget(out var cancelled);
+            return !cancelled && target != null ? target.GetComponent<ManualMixingSpot>() : null;
+        }
+
         public int ExecuteScoop()
         {
             if (!isActiveAndEnabled || !HasHolder || _container.TotalUnits >= _container.Capacity)
                 return 0;
             var source = FindTarget(out _);
-            if (source == null || !source.TryGetMaterialType(out var type))
+            if (source == null || !CollectOnlyType.TryGetCollectType(source, true, out var type))
                 return 0;
             if (_container.TotalUnits == 0)
                 _container.ConfigureSingleTypeWhenEmpty(type);
