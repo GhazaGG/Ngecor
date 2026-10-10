@@ -29,6 +29,14 @@ namespace Ngecor.Player.Tests
         private InputActionReference _moveReference;
         private InputActionReference _lookReference;
 
+        [SetUp]
+        public override void Setup()
+        {
+            base.Setup();
+            if (InputSystem.actions != null)
+                InputSystem.actions.Disable();
+        }
+
         public override void TearDown()
         {
             Cursor.lockState = CursorLockMode.None;
@@ -52,14 +60,38 @@ namespace Ngecor.Player.Tests
             if (_stepProbeIgnoredColliders != null)
                 UnityEngine.Object.DestroyImmediate(_stepProbeIgnoredColliders);
 
-            if (_moveReference != null)
-                UnityEngine.Object.DestroyImmediate(_moveReference);
+            if (_moveAction != null)
+            {
+                _moveAction.Disable();
+                _moveAction = null;
+            }
 
-            if (_lookReference != null)
-                UnityEngine.Object.DestroyImmediate(_lookReference);
+            if (_lookAction != null)
+            {
+                _lookAction.Disable();
+                _lookAction = null;
+            }
 
             if (_actionAsset != null)
+            {
+                _actionAsset.Disable();
                 UnityEngine.Object.DestroyImmediate(_actionAsset);
+                _actionAsset = null;
+            }
+
+            if (_moveReference != null)
+            {
+                UnityEngine.Object.DestroyImmediate(_moveReference);
+                _moveReference = null;
+            }
+
+            if (_lookReference != null)
+            {
+                UnityEngine.Object.DestroyImmediate(_lookReference);
+                _lookReference = null;
+            }
+
+            Ngecor.Player.PlayerMovement.IsCursorOverUIHandler = null;
 
             base.TearDown();
         }
@@ -899,6 +931,7 @@ namespace Ngecor.Player.Tests
         public IEnumerator CarriedMass_When25kg_ReducesEffectiveSpeed()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
             CreatePlayer();
             var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
 
@@ -927,6 +960,7 @@ namespace Ngecor.Player.Tests
         public IEnumerator CarriedMass_ClampedAtMaximumPenalty()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
             CreatePlayer();
             var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
 
@@ -951,16 +985,21 @@ namespace Ngecor.Player.Tests
 
         private void CreatePlayer(bool? isLocalPlayer = true)
         {
+            if (Keyboard.current == null)
+                InputSystem.AddDevice<Keyboard>();
+            if (Mouse.current == null)
+                InputSystem.AddDevice<Mouse>();
+
             _actionAsset = ScriptableObject.CreateInstance<InputActionAsset>();
             var playerMap = new InputActionMap("Player");
             _actionAsset.AddActionMap(playerMap);
-            _moveAction = playerMap.AddAction("Move", InputActionType.Value, expectedControlLayout: "Vector2");
+            _moveAction = playerMap.AddAction("Move", InputActionType.PassThrough, expectedControlLayout: "Vector2");
             _moveAction.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/w")
                 .With("Down", "<Keyboard>/s")
                 .With("Left", "<Keyboard>/a")
                 .With("Right", "<Keyboard>/d");
-            _lookAction = playerMap.AddAction("Look", InputActionType.Value, expectedControlLayout: "Vector2");
+            _lookAction = playerMap.AddAction("Look", InputActionType.PassThrough, expectedControlLayout: "Vector2");
             _lookAction.AddBinding("<Mouse>/delta");
             playerMap.Enable();
             _moveReference = InputActionReference.Create(_moveAction);

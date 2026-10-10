@@ -81,6 +81,13 @@ namespace Ngecor.Interaction
             set => _throwForce = Mathf.Max(0f, value);
         }
 
+        public System.Func<GrabbableObject, bool> GrabRequestHandler { get; set; }
+        public System.Func<bool> DropRequestHandler { get; set; }
+        public System.Func<Vector3, bool> ThrowRequestHandler { get; set; }
+        public bool UpdateCarriedTransform { get; set; } = true;
+        public bool AutoDropEnabled { get; set; } = true;
+        public System.Action AutoDropHandler { get; set; }
+
         private void Awake()
         {
             _playerMovement = GetComponent<PlayerMovement>();
@@ -173,21 +180,48 @@ namespace Ngecor.Interaction
             if (_playerMovement == null)
                 _playerMovement = GetComponent<PlayerMovement>();
 
-            var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
-            if (camera == null)
-                return;
+            Transform camTransform = null;
+            float nearClip = 0.3f;
+            if (_playerMovement != null && _playerMovement.LocalCamera != null)
+            {
+                camTransform = _playerMovement.LocalCamera.transform;
+                nearClip = _playerMovement.LocalCamera.nearClipPlane;
+            }
+            else if (_playerMovement != null)
+            {
+                var cam = _playerMovement.GetComponentInChildren<Camera>(true);
+                camTransform = cam != null ? cam.transform : transform;
+                if (cam != null) nearClip = cam.nearClipPlane;
+            }
+            else
+            {
+                var cam = GetComponentInChildren<Camera>(true);
+                camTransform = cam != null ? cam.transform : transform;
+                if (cam != null) nearClip = cam.nearClipPlane;
+            }
 
             var holdPoint = HoldPoint;
             if (holdPoint != null && _carriedObject != null)
             {
-                Vector3 targetPos = ResolveHoldPosition(holdPoint, camera, _carriedObject, out bool isPinched);
-                if (isPinched)
+                bool isPinched = false;
+                Vector3 targetPos = camTransform != null
+                    ? ResolveHoldPosition(holdPoint, camTransform, _carriedObject, out isPinched, nearClip)
+                    : holdPoint.position;
+
+                if (isPinched && AutoDropEnabled)
                 {
                     _pinchTimer += Time.deltaTime;
                     if (_pinchTimer >= _pinchDropDelay)
                     {
                         _pinchTimer = 0f;
-                        ExecuteDrop();
+                        if (AutoDropHandler != null)
+                        {
+                            AutoDropHandler();
+                        }
+                        else
+                        {
+                            ExecuteDrop();
+                        }
                         return;
                     }
                 }
@@ -196,8 +230,11 @@ namespace Ngecor.Interaction
                     _pinchTimer = 0f;
                 }
 
-                Quaternion targetRot = holdPoint.rotation;
-                _carriedObject.transform.SetPositionAndRotation(targetPos, targetRot);
+                if (UpdateCarriedTransform)
+                {
+                    Quaternion targetRot = holdPoint.rotation;
+                    _carriedObject.transform.SetPositionAndRotation(targetPos, targetRot);
+                }
             }
         }
 
@@ -307,8 +344,9 @@ namespace Ngecor.Interaction
             if (target == null)
                 return false;
 
-            // Offline M1: Direct local execution.
-            // NET-002/003: Will route intent to host via ServerRpc.
+            if (GrabRequestHandler != null)
+                return GrabRequestHandler(target);
+
             return ExecuteGrab(target);
         }
 
@@ -330,8 +368,9 @@ namespace Ngecor.Interaction
 
         public bool RequestDrop()
         {
-            // Offline M1: Direct local execution.
-            // NET-002/003: Will route drop intent to host.
+            if (DropRequestHandler != null)
+                return DropRequestHandler();
+
             return ExecuteDrop();
         }
 
@@ -346,30 +385,48 @@ namespace Ngecor.Interaction
 
         public bool RequestThrow()
         {
-            // Offline M1: Direct local execution.
-            // NET-002/003: Will route throw intent to host.
-            return ExecuteThrow();
-        }
-
-        public bool ExecuteThrow()
-        {
-            if (!IsCarrying)
-                return false;
-
-            var target = _carriedObject;
-            var rb = target.Rigidbody;
-
             if (_playerMovement == null)
                 _playerMovement = GetComponent<PlayerMovement>();
 
             var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
             Vector3 throwDir = camera != null ? camera.transform.forward : transform.forward;
 
+            if (ThrowRequestHandler != null)
+                return ThrowRequestHandler(throwDir);
+
+            return ExecuteThrow(throwDir);
+        }
+
+        public bool ExecuteThrow()
+        {
+            if (_playerMovement == null)
+                _playerMovement = GetComponent<PlayerMovement>();
+
+            var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+            Vector3 throwDir = camera != null ? camera.transform.forward : transform.forward;
+            return ExecuteThrow(throwDir);
+        }
+
+        public bool ExecuteThrow(Vector3 throwDir)
+        {
+            if (!IsCarrying)
+                return false;
+
+            if (!float.IsFinite(throwDir.x) || !float.IsFinite(throwDir.y) || !float.IsFinite(throwDir.z))
+                return false;
+
+            if (throwDir.sqrMagnitude < 0.0001f)
+                return false;
+
+            Vector3 unitDir = throwDir.normalized;
+            var target = _carriedObject;
+            var rb = target.Rigidbody;
+
             DetachObject();
 
             if (rb != null && !rb.isKinematic)
             {
-                Vector3 impulseVelocity = throwDir * (_throwForce / Mathf.Max(0.0001f, rb.mass));
+                Vector3 impulseVelocity = unitDir * (_throwForce / Mathf.Max(0.0001f, rb.mass));
                 rb.linearVelocity += impulseVelocity;
             }
 
@@ -450,11 +507,32 @@ namespace Ngecor.Interaction
             var holdPoint = HoldPoint;
             if (holdPoint != null)
             {
-                var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+                Transform camTransform = null;
+                float nearClip = 0.3f;
+                if (_playerMovement != null && _playerMovement.LocalCamera != null)
+                {
+                    camTransform = _playerMovement.LocalCamera.transform;
+                    nearClip = _playerMovement.LocalCamera.nearClipPlane;
+                }
+                else if (_playerMovement != null)
+                {
+                    var cam = _playerMovement.GetComponentInChildren<Camera>(true);
+                    camTransform = cam != null ? cam.transform : transform;
+                    if (cam != null) nearClip = cam.nearClipPlane;
+                }
+                else
+                {
+                    var cam = GetComponentInChildren<Camera>(true);
+                    camTransform = cam != null ? cam.transform : transform;
+                    if (cam != null) nearClip = cam.nearClipPlane;
+                }
 
-                Vector3 targetPos = camera != null ? ResolveHoldPosition(holdPoint, camera, target, out _) : holdPoint.position;
+                Vector3 targetPos = camTransform != null ? ResolveHoldPosition(holdPoint, camTransform, target, out _, nearClip) : holdPoint.position;
                 Quaternion targetRot = holdPoint.rotation;
-                target.transform.SetPositionAndRotation(targetPos, targetRot);
+                if (UpdateCarriedTransform)
+                {
+                    target.transform.SetPositionAndRotation(targetPos, targetRot);
+                }
             }
         }
 
@@ -652,9 +730,9 @@ namespace Ngecor.Interaction
             _separatingQueue[_separatingCount] = default;
         }
 
-        private Vector3 ResolveHoldPosition(Transform holdPoint, Camera camera, GrabbableObject held, out bool isPinched)
+        private Vector3 ResolveHoldPosition(Transform holdPoint, Transform cameraTransform, GrabbableObject held, out bool isPinched, float nearClipPlane = 0.3f)
         {
-            var origin = camera.transform.position;
+            var origin = cameraTransform.position;
             var toHold = holdPoint.position - origin;
             var distance = toHold.magnitude;
             if (distance < 0.01f)
@@ -686,12 +764,12 @@ namespace Ngecor.Interaction
                     Ray forwardRay = new Ray(origin, direction);
                     if (!collider.Raycast(forwardRay, out RaycastHit wallHit, distance))
                     {
-                        forwardRay = new Ray(origin, camera.transform.forward);
+                        forwardRay = new Ray(origin, cameraTransform.forward);
                         collider.Raycast(forwardRay, out wallHit, distance);
                     }
 
                     if (wallHit.collider != null && Mathf.Abs(wallHit.normal.y) < 0.7f
-                        && Vector3.Dot(wallHit.normal, camera.transform.forward) < -0.3f)
+                        && Vector3.Dot(wallHit.normal, cameraTransform.forward) < -0.3f)
                     {
                         float clearance = Mathf.Max(0f, wallHit.distance - sweepRadius);
                         nearest = Mathf.Min(nearest, clearance);
@@ -759,11 +837,11 @@ namespace Ngecor.Interaction
             // World obstacle separation takes priority over viewport.
             // Pastikan objek tidak jatuh ke belakang kamera (ramp/slope) KECUALI jika ada rintangan di depan yang menghalangi.
             var toTarget = targetPos - origin;
-            var forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
-            var minDistance = camera.nearClipPlane + 0.02f;
+            var forwardDist = Vector3.Dot(toTarget, cameraTransform.forward);
+            var minDistance = nearClipPlane + 0.02f;
             if (forwardDist < minDistance)
             {
-                var candidatePos = origin + camera.transform.forward * minDistance;
+                var candidatePos = origin + cameraTransform.forward * minDistance;
                 bool penetratesObstacle = false;
                 if (heldColliders != null)
                 {
@@ -802,7 +880,7 @@ namespace Ngecor.Interaction
                 {
                     targetPos = candidatePos;
                     toTarget = targetPos - origin;
-                    forwardDist = Vector3.Dot(toTarget, camera.transform.forward);
+                    forwardDist = Vector3.Dot(toTarget, cameraTransform.forward);
                 }
             }
 
@@ -851,9 +929,25 @@ namespace Ngecor.Interaction
                 _playerMovement = GetComponent<PlayerMovement>();
 
             var camera = _playerMovement != null ? _playerMovement.LocalCamera : null;
+            Transform parentTransform = null;
             if (camera != null)
             {
-                var existing = camera.transform.Find("HoldPoint");
+                parentTransform = camera.transform;
+            }
+            else if (_playerMovement != null)
+            {
+                var cam = _playerMovement.GetComponentInChildren<Camera>(true);
+                parentTransform = cam != null ? cam.transform : transform;
+            }
+            else
+            {
+                var cam = GetComponentInChildren<Camera>(true);
+                parentTransform = cam != null ? cam.transform : transform;
+            }
+
+            if (parentTransform != null)
+            {
+                var existing = parentTransform.Find("HoldPoint");
                 if (existing != null)
                 {
                     _resolvedHoldPoint = existing;
@@ -861,7 +955,7 @@ namespace Ngecor.Interaction
                 else
                 {
                     var hp = new GameObject("HoldPoint");
-                    hp.transform.SetParent(camera.transform, false);
+                    hp.transform.SetParent(parentTransform, false);
                     hp.transform.localPosition = new Vector3(0.3f, -0.25f, 1.2f);
                     _resolvedHoldPoint = hp.transform;
                 }

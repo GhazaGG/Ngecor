@@ -12,6 +12,30 @@ namespace Ngecor.Multiplayer
         private string _portString = "7777";
         private string _statusMessage = "";
 
+        private static readonly Rect HudArea = new Rect(10, 10, 280, 230);
+        private static bool _isMouseOverHud;
+
+        private void OnEnable()
+        {
+            Ngecor.Player.PlayerMovement.IsCursorOverUIHandler = () =>
+            {
+                if (_isMouseOverHud)
+                    return true;
+                if (UnityEngine.EventSystems.EventSystem.current != null &&
+                    UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
+                    return true;
+                return false;
+            };
+        }
+
+        private void OnDisable()
+        {
+            if (Ngecor.Player.PlayerMovement.IsCursorOverUIHandler != null)
+            {
+                Ngecor.Player.PlayerMovement.IsCursorOverUIHandler = null;
+            }
+        }
+
         private void Awake()
         {
             if (_sessionManager == null)
@@ -31,6 +55,11 @@ namespace Ngecor.Multiplayer
 
         private void OnGUI()
         {
+            if (Event.current != null)
+            {
+                _isMouseOverHud = HudArea.Contains(Event.current.mousePosition);
+            }
+
             if (_sessionManager == null)
             {
                 GUILayout.BeginArea(new Rect(10, 10, 260, 50), GUI.skin.box);
@@ -65,7 +94,10 @@ namespace Ngecor.Multiplayer
 
             if (netManager != null && !isListening && !string.IsNullOrEmpty(netManager.DisconnectReason))
             {
-                GUILayout.Label($"<color=red>Reason: {netManager.DisconnectReason}</color>");
+                if (!netManager.DisconnectReason.Contains("TransportShutdown"))
+                {
+                    GUILayout.Label($"<color=red>Reason: {netManager.DisconnectReason}</color>");
+                }
             }
             else if (!string.IsNullOrEmpty(_statusMessage))
             {

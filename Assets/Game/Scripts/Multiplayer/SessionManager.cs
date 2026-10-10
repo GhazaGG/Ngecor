@@ -18,6 +18,9 @@ namespace Ngecor.Multiplayer
     {
         [SerializeField] private string _defaultAddress = "127.0.0.1";
         [SerializeField] private ushort _defaultPort = 7777;
+        [SerializeField] private Transform[] _spawnPoints;
+
+        public Transform[] SpawnPoints => _spawnPoints;
 
         public SessionState CurrentState { get; private set; } = SessionState.Disconnected;
         public string CurrentAddress => _currentAddress;
@@ -125,6 +128,76 @@ namespace Ngecor.Multiplayer
             }
         }
 
+        // Default fallback spawn points safely clear of Ramp_Gentle footprint (z in [0.97, 8.85])
+        // Default fallback spawn points safely clear of Ramp_Gentle footprint (z in [0.97, 8.85])
+        public static readonly Vector3[] DefaultSpawnPoints = new Vector3[]
+        {
+            new Vector3(2.5f, 0.05f, 0f),
+            new Vector3(-2.5f, 0.05f, 0f),
+            new Vector3(0f, 0.05f, -2.5f),
+            new Vector3(2.5f, 0.05f, -2.5f)
+        };
+
+        public Vector3 GetSafeSpawnPosition(NetworkManager netManager)
+        {
+            var candidates = GetSpawnCandidatePositions();
+            return GetSafeSpawnPosition(netManager, candidates);
+        }
+
+        public static Vector3 GetSafeSpawnPosition(NetworkManager netManager, Vector3[] candidates)
+        {
+            if (candidates == null || candidates.Length == 0)
+                candidates = DefaultSpawnPoints;
+
+            if (netManager == null)
+                return candidates[0];
+
+            foreach (var candidate in candidates)
+            {
+                bool isOccupied = false;
+                if (netManager.ConnectedClients != null)
+                {
+                    foreach (var connectedClient in netManager.ConnectedClients.Values)
+                    {
+                        if (connectedClient != null && connectedClient.PlayerObject != null)
+                        {
+                            Vector3 playerPos = connectedClient.PlayerObject.transform.position;
+                            playerPos.y = candidate.y;
+                            if (Vector3.Distance(playerPos, candidate) < 1.2f)
+                            {
+                                isOccupied = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!isOccupied)
+                    return candidate;
+            }
+
+            int count = netManager.ConnectedClientsIds != null ? netManager.ConnectedClientsIds.Count : 1;
+            float angle = count * (Mathf.PI * 0.5f);
+            return new Vector3(Mathf.Cos(angle) * 3f, 0.05f, -Mathf.Abs(Mathf.Sin(angle) * 3f));
+        }
+
+        public Vector3[] GetSpawnCandidatePositions()
+        {
+            if (_spawnPoints != null && _spawnPoints.Length > 0)
+            {
+                var list = new System.Collections.Generic.List<Vector3>();
+                foreach (var t in _spawnPoints)
+                {
+                    if (t != null)
+                        list.Add(t.position);
+                }
+                if (list.Count > 0)
+                    return list.ToArray();
+            }
+
+            return DefaultSpawnPoints;
+        }
+
         private void HandleConnectionApproval(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
         {
             var netManager = NetworkManager.Singleton;
@@ -139,8 +212,7 @@ namespace Ngecor.Multiplayer
             }
 
             response.CreatePlayerObject = true;
-            float offset = (float)(request.ClientNetworkId % 4) * 2.0f;
-            response.Position = new Vector3(-2f + offset, 0.05f, 0f);
+            response.Position = GetSafeSpawnPosition(netManager);
             response.Rotation = Quaternion.identity;
         }
 

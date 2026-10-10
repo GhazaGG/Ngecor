@@ -37,6 +37,8 @@ namespace Ngecor.Interaction.Tests
         public override void Setup()
         {
             base.Setup();
+            if (InputSystem.actions != null)
+                InputSystem.actions.Disable();
 
             _actionAsset = ScriptableObject.CreateInstance<InputActionAsset>();
             var playerMap = new InputActionMap("Player");
@@ -103,14 +105,41 @@ namespace Ngecor.Interaction.Tests
                 Object.DestroyImmediate(_targetObject2);
             if (_obstacleObject != null)
                 Object.DestroyImmediate(_obstacleObject);
-            if (_interactReference != null)
-                Object.DestroyImmediate(_interactReference);
-            if (_moveReference != null)
-                Object.DestroyImmediate(_moveReference);
-            if (_throwReference != null)
-                Object.DestroyImmediate(_throwReference);
+            if (_interactAction != null)
+            {
+                _interactAction.Disable();
+                _interactAction = null;
+            }
+            if (_throwAction != null)
+            {
+                _throwAction.Disable();
+                _throwAction = null;
+            }
+            if (_moveAction != null)
+            {
+                _moveAction.Disable();
+                _moveAction = null;
+            }
             if (_actionAsset != null)
+            {
                 Object.DestroyImmediate(_actionAsset);
+                _actionAsset = null;
+            }
+            if (_interactReference != null)
+            {
+                Object.DestroyImmediate(_interactReference);
+                _interactReference = null;
+            }
+            if (_moveReference != null)
+            {
+                Object.DestroyImmediate(_moveReference);
+                _moveReference = null;
+            }
+            if (_throwReference != null)
+            {
+                Object.DestroyImmediate(_throwReference);
+                _throwReference = null;
+            }
 
             base.TearDown();
         }
@@ -1924,6 +1953,71 @@ namespace Ngecor.Interaction.Tests
         }
 
         [UnityTest]
+        public IEnumerator CarriedObject_WhenAutoDropDisabled_PushedTooCloseAgainstPlayer_ExceedingPinchDelay_DoesNotDrop()
+        {
+            // Wall placed right at player capsule face (Z=0.25m), leaving no space for 0.4m carried box
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var wall = _obstacleObject;
+            wall.name = "PinchingWall";
+            wall.transform.position = new Vector3(0f, 1.4f, 0.25f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+
+            _targetObject1 = CreateGrabbable("PinchBoxDisabled", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            _playerGrab.AutoDropEnabled = false;
+            yield return null;
+
+            // Wait until after _pinchDropDelay (0.3s)
+            yield return new WaitForSeconds(_playerGrab.PinchDropDelay + 0.1f);
+            yield return null;
+
+            // With AutoDropEnabled = false, carried object must remain held even when pinched
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Carried object must remain held when AutoDropEnabled is false!");
+            Assert.That(grabbable.IsHeld, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_WhenAutoDropHandlerConfigured_PushedTooCloseAgainstPlayer_ExceedingPinchDelay_InvokesHandlerExactlyOnce()
+        {
+            // Wall placed right at player capsule face (Z=0.25m), leaving no space for 0.4m carried box
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var wall = _obstacleObject;
+            wall.name = "PinchingWall";
+            wall.transform.position = new Vector3(0f, 1.4f, 0.25f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+
+            _targetObject1 = CreateGrabbable("PinchBoxHandler", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            int handlerCallCount = 0;
+            _playerGrab.AutoDropHandler = () =>
+            {
+                handlerCallCount++;
+                _playerGrab.ExecuteDrop();
+            };
+            yield return null;
+
+            // Wait until after _pinchDropDelay (0.3s)
+            yield return new WaitForSeconds(_playerGrab.PinchDropDelay + 0.1f);
+            yield return null;
+
+            Assert.That(handlerCallCount, Is.EqualTo(1), "AutoDropHandler must be invoked exactly once when pinched past delay!");
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Carried object must be dropped after handler executes!");
+            Assert.That(grabbable.IsHeld, Is.False);
+        }
+
+        [UnityTest]
         public IEnumerator OnDisable_WhileCarryingHeavyObject_ResetsCarriedMassToZero()
         {
             _targetObject1 = CreateGrabbable("HeavyDisableTarget", new Vector3(0f, 1.4f, 2f)).gameObject;
@@ -2259,6 +2353,58 @@ namespace Ngecor.Interaction.Tests
                 if (playerB != null)
                     Object.DestroyImmediate(playerB);
             }
+        }
+
+        [Test]
+        public void RequestGrab_WithGrabRequestHandler_InvokesHandlerAndReturnsResult()
+        {
+            _targetObject1 = CreateGrabbable("TargetForHandler", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            bool handlerCalled = false;
+            GrabbableObject passedTarget = null;
+            _playerGrab.GrabRequestHandler = target =>
+            {
+                handlerCalled = true;
+                passedTarget = target;
+                return true;
+            };
+
+            bool result = _playerGrab.RequestGrab(grabbable);
+
+            Assert.That(handlerCalled, Is.True, "GrabRequestHandler must be invoked when assigned.");
+            Assert.That(passedTarget, Is.SameAs(grabbable), "Target must match passed GrabbableObject.");
+            Assert.That(result, Is.True, "Result must match handler return value.");
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Local ExecuteGrab must not be called when handler intercepts.");
+        }
+
+        [Test]
+        public void RequestDrop_WithDropRequestHandler_InvokesHandlerAndReturnsResult()
+        {
+            bool handlerCalled = false;
+            _playerGrab.DropRequestHandler = () =>
+            {
+                handlerCalled = true;
+                return true;
+            };
+
+            bool result = _playerGrab.RequestDrop();
+
+            Assert.That(handlerCalled, Is.True, "DropRequestHandler must be invoked when assigned.");
+            Assert.That(result, Is.True, "Result must match handler return value.");
+        }
+
+        [Test]
+        public void RequestGrab_WithoutGrabRequestHandler_ExecutesDirectly()
+        {
+            _targetObject1 = CreateGrabbable("TargetDirect", new Vector3(0f, 1.4f, 2f)).gameObject;
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            _playerGrab.GrabRequestHandler = null;
+            bool result = _playerGrab.RequestGrab(grabbable);
+
+            Assert.That(result, Is.True, "Direct RequestGrab must succeed.");
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Local ExecuteGrab must be executed.");
         }
     }
 }

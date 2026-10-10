@@ -100,11 +100,34 @@ namespace Ngecor.Player
         }
 
         public event System.Action<bool> LocalPlayerChanged;
+        // Note: IsCursorOverUIHandler is a single static delegate; subsequent subscribers will overwrite previous ones.
+        public static System.Func<bool> IsCursorOverUIHandler { get; set; }
 
         public float CarriedMass
         {
             get => _carriedMass;
             set => _carriedMass = Mathf.Max(0f, value);
+        }
+
+        public float CameraPitch
+        {
+            get => _cameraPitch;
+            set
+            {
+                _cameraPitch = Mathf.Clamp(value, -89f, 89f);
+                if (_cameraPivot != null)
+                    _cameraPivot.localRotation = Quaternion.Euler(_cameraPitch, 0f, 0f);
+            }
+        }
+
+        public Transform CameraPivot
+        {
+            get
+            {
+                if (_cameraPivot == null)
+                    _cameraPivot = transform.Find("CameraPivot");
+                return _cameraPivot;
+            }
         }
 
         public void SetLocalPlayer(bool isLocalPlayer)
@@ -315,6 +338,9 @@ namespace Ngecor.Player
 
             if (!_cursorLocked && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             {
+                if (IsCursorOverUIHandler != null && IsCursorOverUIHandler())
+                    return;
+
                 SetCursorLocked(true);
                 _cursorRelockedFrame = Time.frameCount;
             }
