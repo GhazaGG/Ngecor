@@ -311,7 +311,7 @@ Owner/source: orang atau link keputusan
 
 **Reason:** Overload yang berasal dari massa fisik dan rem berbatas memenuhi dua prinsip inti: risikonya punya pemicu yang masuk akal dan bisa dipulihkan pemain (ganjal atau turunkan muatan). Rem berbasis kapasitas gaya dipilih karena `WheelCollider` memakai raycast sehingga ganjal benda fisik tidak menahannya.
 
-**Status:** Nilai awal dari simulasi batchmode, **belum dites di Play Mode**. Menunggu playtest feel dan review PR. Cargo yang jatuh baru terlihat pada kemiringan sekitar 45°; seberapa mudah muatan jatuh masih perlu ditinjau.
+**Status:** Nilai awal dari simulasi batchmode. Playtest manual developer di Playground (2026-10-10): pickup kosong diam di `Ramp_Gentle`, 5 sak tertahan, sak ke-6 membuat pickup merayap turun, mengambil sak ke-6 menghentikannya, dan ganjal kubus menahannya dengan 6 sak; tanpa jitter. Cargo jatuh hanya saat pickup digerakkan manual di scene. Spike FPS sesekali (30 dan 15 FPS) terlihat di Profiler, sumbernya belum dipastikan. Menunggu review PR dan playtest feel tim.
 
 **Applies from:** VEH-003 (#44); LEVEL-001 (unload flow) dan TOOL-001 (#81) memakai pickup ini.
 

@@ -73,3 +73,18 @@ Implemented and simulated; **not yet played in Unity**. Acceptance criteria: 1, 
 - **Verification (batchmode Play Mode in a scratch copy, not the developer's Editor):** after `StartHost` all 9 objects were spawned; `HandleLocalGrabRequest` returned true for a bag and a chock, which were carried and then dropped and settled; no NGO warnings; the empty pickup moved 0.0071 m in 3.5 s and slept. Three "referenced script missing" warnings on `Player` and an editor SearchDatabase exception also appear in a baseline run without this change; their source was not investigated.
 - **Not verified:** the developer's real Editor with real input (the grab was called directly), a second client or RPC replication, and carrying a bag onto the bed by hand.
 - **Not committed:** `Assets/Game/Settings/DefaultNetworkPrefabs.asset` was modified automatically by the developer's Editor (adds `Player_Prototype.prefab`); it is unrelated and left out of the branch.
+
+## Addendum: developer Play Mode playtest
+
+Reported by the developer (not run by me), in `Playground` on `feat/pickup-cargo-bed` after Start Host, with the loose bags moved onto the bed by hand:
+
+- Empty pickup on `Ramp_Gentle` stays still and does not jitter, jump or sink into the ramp. Walking into it pushes it.
+- 1 to 5 bags on the bed: nothing happens. The 6th bag makes the pickup start rolling back down the ramp slowly. Taking the 6th bag off (back to 5) makes it stop again after a short slow slide.
+- With a cube chocked behind the wheels and 6 bags loaded again, the pickup stays stopped.
+- Cargo can fall out when the pickup is moved manually in the scene (not by pushing it in play).
+- Console: only the SessionManager host and client connection log lines; the developer judged them unrelated to this issue.
+- Profiler CPU: mostly stable 60 FPS with occasional spikes down to about 30 and 15 FPS. **The source of the spikes was not identified**; no Profiler frame or marker was inspected, so it is not attributed to the pickup. The pickup script was reviewed for allocations in `FixedUpdate`, `LateUpdate` and `OnCollisionStay` (none found), but it was not profiled.
+
+Comparison with the batchmode simulation: the 5-bag hold and the 6-bag creep match (sim: 5 bags hold, 6 creep, removing bags stops the creep). One mismatch: the simulation applied a 350 N force at the centre of mass and the braked pickup did not move, while in play the pickup can be pushed by walking into it. The real push goes through `PlayerMovement` contact impulses at the contact point and was not simulated that way, and the size of the displacement was not measured.
+
+Acceptance criteria after the playtest (developer-observed): 1, 2 (6 bags loaded), 3 on `Ramp_Gentle` (not tested on `Ramp_20Degree`), 4, 5 (chock and unloading both worked), 7 (not exercised in the Inspector during this test). 6 is only met by moving the pickup manually in the scene, not by a player action. Feel was not rated beyond the notes above.
