@@ -54,7 +54,7 @@ namespace Ngecor.Material.Tests
         [Test]
         public void HeldSackIsNotConsumedUntilReleased()
         {
-            var spot = CreateSpot(50);
+            var spot = CreateSpot(100);
             var bag = Prefab("CementBag");
             var grabbable = bag.AddComponent<GrabbableObject>();
             var holder = new GameObject("Test Holder");
@@ -115,11 +115,51 @@ namespace Ngecor.Material.Tests
             spot.Ingredients.AddUnits(MaterialType.Sand, 2);
             Assert.That(spot.ExecuteStirAction(), Is.True);
             Assert.That(spot.IsDryMixed, Is.True);
+            spot.Ingredients.AddUnits(MaterialType.Water, 1);
+            Assert.That(spot.ExecuteStirAction(), Is.True);
+            Assert.That(spot.WetWork, Is.EqualTo(1));
 
             spot.Ingredients.AddUnits(MaterialType.Sand, 2);
             Assert.That(spot.IsDryMixed, Is.False);
             Assert.That(spot.ExecuteStirAction(), Is.True);
             Assert.That(spot.IsDryMixed, Is.True);
+            Assert.That(spot.WetWork, Is.Zero, "wet mixing starts over after a re-dry-mix");
+        }
+
+        [Test]
+        public void BedOnlyTakesWhatItCanStillTurnIntoConcrete()
+        {
+            var spot = CreateSpot(200);
+            Set(spot, "_dryActions", 1);
+            Set(spot, "_wetActionsPerBatch", 1);
+            var sacks = 0;
+            for (var i = 0; i < 6; i++)
+                if (spot.TryReceiveBag(Prefab("CementBag").GetComponent<CementBag>()))
+                    sacks++;
+            Assert.That(sacks, Is.EqualTo(2), "two sacks reserve the whole bed for their sand and water");
+
+            Assert.That(spot.Ingredients.AddUnits(MaterialType.Sand, 200), Is.EqualTo(100));
+            Assert.That(spot.ExecuteStirAction(), Is.True);
+            Assert.That(spot.Ingredients.AddUnits(MaterialType.Water, 200), Is.EqualTo(50), "water stops at what the mix uses");
+            Assert.That(spot.Ingredients.TotalUnits, Is.EqualTo(200));
+
+            for (var i = 0; i < 50; i++)
+                Assert.That(spot.ExecuteStirAction(), Is.True);
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Concrete), Is.EqualTo(200), "a full bed still finishes");
+            Assert.That(spot.ExecuteStirAction(), Is.False);
+        }
+
+        [Test]
+        public void ExcessWaterIsRefusedSoTheNextSackStillFits()
+        {
+            var spot = CreateSpot(200);
+            Set(spot, "_dryActions", 1);
+            spot.Ingredients.AddUnits(MaterialType.Cement, 1);
+            spot.Ingredients.AddUnits(MaterialType.Sand, 2);
+            spot.ExecuteStirAction();
+
+            Assert.That(spot.Ingredients.AddUnits(MaterialType.Water, 50), Is.EqualTo(1));
+            Assert.That(spot.TryReceiveBag(Prefab("CementBag").GetComponent<CementBag>()), Is.True);
         }
 
         [Test]
@@ -311,6 +351,54 @@ namespace Ngecor.Material.Tests
             Assert.That(spot.Ingredients.GetUnits(MaterialType.Sand), Is.GreaterThan(0));
         }
 
+        [UnityTest]
+        public IEnumerator EmptiedBucketGoesBackToItsOwnTypeAfterAWaterTrip()
+        {
+            var drum = CreateDrum(new Vector3(0f, 0f, 0.5f));
+            var bucket = HeldBucket();
+            var stock = bucket.GetComponent<BulkMaterialContainer>();
+            var action = bucket.GetComponent<BucketPourAction>();
+            action.RegisterNearbyReceiver(drum);
+            for (var i = 0; i < 40; i++)
+            {
+                action.RequestPour();
+                yield return new WaitForFixedUpdate();
+            }
+            action.CancelPour();
+            Assert.That(stock.GetUnits(MaterialType.Water), Is.GreaterThan(0));
+
+            stock.RemoveUnits(MaterialType.Water, stock.TotalUnits);
+            yield return new WaitForFixedUpdate();
+            Assert.That(stock.Accepts(MaterialType.Sand), Is.True, "a shovel can load sand again");
+            Assert.That(stock.Accepts(MaterialType.Water), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator HeldPourThatEmptiesTheBucketDoesNotStartCollecting()
+        {
+            var spot = CreateSpot(100);
+            MakeConcrete(spot);
+            var bucket = HeldBucket();
+            var stock = bucket.GetComponent<BulkMaterialContainer>();
+            Assert.That(stock.ConfigureSingleTypeWhenEmpty(MaterialType.Water), Is.True);
+            stock.AddUnits(MaterialType.Water, 2);
+            var action = bucket.GetComponent<BucketPourAction>();
+            action.RegisterNearbyReceiver(spot.Ingredients);
+
+            for (var i = 0; i < 100; i++)
+            {
+                action.RequestPour();
+                yield return new WaitForFixedUpdate();
+            }
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Water), Is.EqualTo(2));
+            Assert.That(stock.TotalUnits, Is.Zero, "the same hold does not pull concrete back");
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Concrete), Is.EqualTo(4));
+
+            action.CancelPour();
+            Assert.That(action.RequestPour(), Is.True);
+            Assert.That(Read(action, "_collectSource"), Is.SameAs(spot.Ingredients), "a fresh press collects");
+        }
+
         [Test]
         public void TapAndReleaseAtDrumDoesNotLockTheEmptyBucketType()
         {
@@ -425,7 +513,7 @@ namespace Ngecor.Material.Tests
         {
             Set(spot, "_dryActions", 1);
             Set(spot, "_wetActionsPerBatch", 1);
-            spot.Ingredients.AddUnits(MaterialType.Cement, 50);
+            spot.Ingredients.AddUnits(MaterialType.Cement, 10);
             spot.Ingredients.AddUnits(MaterialType.Sand, 2);
             Assert.That(spot.ExecuteStirAction(), Is.True);
             Assert.That(spot.Ingredients.AddUnits(MaterialType.Water, 1), Is.EqualTo(1));

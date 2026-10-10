@@ -15,7 +15,6 @@ namespace Ngecor.EditorTools
         private const string DrumPrefabPath = "Assets/Game/Prefabs/Material/WaterDrum.prefab";
         private const string WaterMaterialPath = "Assets/Game/Materials/Material/Water.mat";
         private const string ScenePath = "Assets/Game/Scenes/Dev/Dev_Ghaza.unity";
-        private const string OldBatchScript = "Assets/Game/Scripts/Material/ConcreteBatch.cs";
         private const string TestSackName = "Mixing Test Cement Sack";
         private const string DrumName = "Water Drum";
 
@@ -24,6 +23,8 @@ namespace Ngecor.EditorTools
         [MenuItem("Ngecor/Setup Manual Mixing Spot")]
         public static void Setup()
         {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                return;
             var sand = AssetDatabase.LoadAssetAtPath<MaterialAsset>("Assets/Game/Materials/Material/Sand.mat");
             var cement = AssetDatabase.LoadAssetAtPath<MaterialAsset>("Assets/Game/Materials/Material/Cement.mat");
             var concrete = AssetDatabase.LoadAssetAtPath<MaterialAsset>("Assets/Game/Materials/Material/Concrete.mat");
@@ -33,8 +34,6 @@ namespace Ngecor.EditorTools
 
             BuildSpotPrefab(sand, cement, concrete);
             BuildDrumPrefab(concrete, water);
-            if (AssetDatabase.LoadAssetAtPath<Object>(OldBatchScript) != null)
-                AssetDatabase.DeleteAsset(OldBatchScript);
 
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             PlaceInScene(scene);
@@ -48,6 +47,8 @@ namespace Ngecor.EditorTools
         [MenuItem("Ngecor/Make Dev_Ghaza Cement Sacks Grabbable")]
         public static void MakeDevSacksGrabbable()
         {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+                return;
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             var added = 0;
             foreach (var root in scene.GetRootGameObjects())

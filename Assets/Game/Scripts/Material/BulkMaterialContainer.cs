@@ -130,8 +130,9 @@ namespace Ngecor.Material
 
         public int Capacity => _unlimitedCapacity ? int.MaxValue : _capacity;
 
-        // Runtime rule set by an owner (e.g. the mixing spot) to refuse a type its current state cannot take.
-        public Func<MaterialType, bool> AcceptFilter { get; set; }
+        // Runtime rule set by an owner (e.g. the mixing spot): how many more units of a type its current
+        // state can take. 0 refuses the type.
+        public Func<MaterialType, int> AcceptLimit { get; set; }
 
         public int TotalUnits
         {
@@ -197,7 +198,13 @@ namespace Ngecor.Material
         {
             var accepted = _mode == ContainerMode.SingleType ? type == _singleType
                 : _acceptedTypes != null && _acceptedTypes.Contains(type);
-            return accepted && (AcceptFilter == null || AcceptFilter(type));
+            return accepted && (AcceptLimit == null || AcceptLimit(type) > 0);
+        }
+
+        private int RoomFor(MaterialType type)
+        {
+            var room = Mathf.Max(0, Capacity - TotalUnits);
+            return AcceptLimit == null ? room : Mathf.Min(room, Mathf.Max(0, AcceptLimit(type)));
         }
 
         public bool TryGetSingleType(out MaterialType type)
@@ -237,7 +244,7 @@ namespace Ngecor.Material
             if (requestedUnits <= 0 || !Accepts(type))
                 return 0;
 
-            var added = Mathf.Min(requestedUnits, Mathf.Max(0, Capacity - TotalUnits));
+            var added = Mathf.Min(requestedUnits, RoomFor(type));
             if (added == 0)
                 return 0;
 
@@ -283,8 +290,7 @@ namespace Ngecor.Material
             if (target == null || target == this || requestedUnits <= 0 || !target.Accepts(type))
                 return 0;
 
-            var amount = Math.Min(requestedUnits, Math.Min(GetUnits(type),
-                Mathf.Max(0, target.Capacity - target.TotalUnits)));
+            var amount = Math.Min(requestedUnits, Math.Min(GetUnits(type), target.RoomFor(type)));
             if (amount == 0)
                 return 0;
 
@@ -325,7 +331,7 @@ namespace Ngecor.Material
                 || float.IsInfinity(seconds) || _transferUnitsPerSecond <= 0f
                 || GetUnits(type) == 0
                 || (ground ? _groundDeposit == null : target == null || target == this
-                    || !target.Accepts(type) || target.TotalUnits >= target.Capacity))
+                    || !target.Accepts(type) || target.RoomFor(type) == 0))
             {
                 _transferCredit = 0;
                 return 0;

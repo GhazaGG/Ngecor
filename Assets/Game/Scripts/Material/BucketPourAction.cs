@@ -15,8 +15,7 @@ namespace Ngecor.Material
         private BulkMaterialContainer _collectSource;
         private bool _collectRequested;
         private MaterialType _collectType;
-        private bool _restoreTypeOnCancel;
-        private MaterialType _typeBeforeCollect;
+        private bool _pourStarted;
         private GrabbableObject _grabbable;
         private GroundMaterialDeposit _ground;
         private bool _groundRequested;
@@ -45,7 +44,8 @@ namespace Ngecor.Material
         {
             if (_collectRequested)
                 return true;
-            if (_source.TotalUnits == 0 && RequestCollect())
+            // A pickup needs a fresh press: one held R that emptied the bucket must not start filling it again.
+            if (_source.TotalUnits == 0 && !_pourStarted && RequestCollect())
                 return true;
 
             var receiver = GetNearbyReceiver(out var tied);
@@ -65,6 +65,7 @@ namespace Ngecor.Material
             _collectRequested = false;
             _requestedReceiver = receiver;
             _groundRequested = ground;
+            _pourStarted |= _source.TotalUnits > 0;
             return true;
         }
 
@@ -76,13 +77,19 @@ namespace Ngecor.Material
             _collectSource = null;
             _collectRequested = false;
             _groundRequested = false;
+            _pourStarted = false;
             _flowUntil = float.NegativeInfinity;
             if (_source != null)
                 _source.CancelTransfer();
-            // A pickup cancelled before its first unit leaves the empty bucket as it was.
-            if (_restoreTypeOnCancel && _source != null && _source.TotalUnits == 0)
-                _source.ConfigureSingleTypeWhenEmpty(_typeBeforeCollect);
-            _restoreTypeOnCancel = false;
+            ResetTypeWhenEmpty();
+        }
+
+        // An empty bucket goes back to its own type, so a shovel can load it again after a water or concrete trip.
+        private void ResetTypeWhenEmpty()
+        {
+            if (!_collectRequested && _source != null && _source.TotalUnits == 0
+                && _source.TryGetSingleType(out var type) && type != _materialType)
+                _source.ConfigureSingleTypeWhenEmpty(_materialType);
         }
 
         public void RegisterNearbyReceiver(BulkMaterialContainer receiver)
@@ -136,6 +143,7 @@ namespace Ngecor.Material
 
         private void FixedUpdate()
         {
+            ResetTypeWhenEmpty();
             if (_grabbable != null && !_grabbable.IsHeld)
             {
                 CancelPour();
@@ -152,11 +160,7 @@ namespace Ngecor.Material
                 : _groundRequested ? _source.TransferToGroundForSeconds(CurrentMaterialType, Time.fixedDeltaTime)
                 : _source.TransferForSeconds(_requestedReceiver, CurrentMaterialType, Time.fixedDeltaTime);
             if (moved > 0)
-            {
                 _flowUntil = Time.time + 0.2f;
-                if (_collectRequested)
-                    _restoreTypeOnCancel = false;
-            }
         }
 
         private bool RequestCollect()
@@ -171,11 +175,8 @@ namespace Ngecor.Material
                 return false;
 
             CancelPour();
-            var hadType = _source.TryGetSingleType(out var previous);
             if (!_source.ConfigureSingleTypeWhenEmpty(nearestType))
                 return false;
-            _restoreTypeOnCancel = hadType && previous != nearestType;
-            _typeBeforeCollect = previous;
             _collectSource = nearest;
             _collectType = nearestType;
             _collectRequested = true;

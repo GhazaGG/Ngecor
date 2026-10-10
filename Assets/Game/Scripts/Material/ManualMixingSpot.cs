@@ -123,7 +123,7 @@ namespace Ngecor.Material
         private void Awake()
         {
             _ingredients = GetComponent<BulkMaterialContainer>();
-            _ingredients.AcceptFilter = AcceptsNow;
+            _ingredients.AcceptLimit = AcceptLimit;
             _block = new MaterialPropertyBlock();
             if (_progressVisual != null)
             {
@@ -194,19 +194,45 @@ namespace Ngecor.Material
             _visualKey = -1;
         }
 
-        // Water only joins a bed that is already dry-mixed; concrete only comes from the bed itself.
-        // A refused pour stays in the bucket, so the player can recover it.
-        private bool AcceptsNow(MaterialType type)
+        private static int CeilDiv(int units, int perBatch) => (units + perBatch - 1) / perBatch;
+
+        // Batches the raw dry material in the bed can still make once the missing ingredients arrive.
+        private int DryBatches => Mathf.Max(CeilDiv(Cement, _cementUnitsPerBatch), CeilDiv(Sand, _sandUnitsPerBatch));
+
+        // Raw material can never leave the bed, so the bed only takes what it can still turn into concrete:
+        // room stays reserved for the missing ingredients of every batch it holds, and water stops at what the
+        // dry mix can use. The bed therefore never gets stuck; a refused pour stays in the bucket.
+        private int AcceptLimit(MaterialType type)
         {
+            var batchUnits = _cementUnitsPerBatch + _sandUnitsPerBatch + _waterUnitsPerBatch;
+            var maxBatches = (_ingredients.Capacity - Concrete) / batchUnits;
+            int limit;
             switch (type)
             {
+                case MaterialType.Concrete:
+                    return _converting ? int.MaxValue : 0;
                 case MaterialType.Water:
                     if (!IsDryMixed)
+                    {
                         ShowNotice("Air ditolak: aduk kering dulu");
-                    return IsDryMixed;
-                case MaterialType.Concrete: return _converting;
-                default: return true;
+                        return 0;
+                    }
+                    limit = DryBatches * _waterUnitsPerBatch - Water;
+                    if (limit <= 0)
+                        ShowNotice("Air cukup: aduk basah dulu");
+                    return limit;
+                case MaterialType.Cement:
+                    limit = maxBatches * _cementUnitsPerBatch - Cement;
+                    break;
+                case MaterialType.Sand:
+                    limit = maxBatches * _sandUnitsPerBatch - Sand;
+                    break;
+                default:
+                    return 0;
             }
+            if (limit <= 0)
+                ShowNotice("Penuh: olah atau ambil beton dulu");
+            return limit;
         }
 
         // Stay, not Enter: a sack released while already touching the spot must still be taken in.
@@ -220,9 +246,11 @@ namespace Ngecor.Material
         public bool TryReceiveBag(CementBag bag)
         {
             if (!isActiveAndEnabled || bag == null || !bag.isActiveAndEnabled || bag.gameObject == gameObject
-                || _ingredients == null || !_ingredients.Accepts(MaterialType.Cement)
-                || _ingredients.Capacity - _ingredients.TotalUnits < _cementUnitsPerSack
-                || (bag.TryGetComponent<GrabbableObject>(out var grabbable) && grabbable.IsHeld))
+                || _ingredients == null || (bag.TryGetComponent<GrabbableObject>(out var grabbable) && grabbable.IsHeld))
+                return false;
+            // A sack that does not fit stays whole beside the bed until concrete is taken out.
+            if (!_ingredients.Accepts(MaterialType.Cement) || AcceptLimit(MaterialType.Cement) < _cementUnitsPerSack
+                || _ingredients.Capacity - _ingredients.TotalUnits < _cementUnitsPerSack)
                 return false;
 
             if (_ingredients.AddUnits(MaterialType.Cement, _cementUnitsPerSack) != _cementUnitsPerSack)
@@ -244,6 +272,7 @@ namespace Ngecor.Material
             {
                 _dryDone = false;
                 _dryWork = 0;
+                _wetWork = 0;
             }
 
             if (!_dryDone)
