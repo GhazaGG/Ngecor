@@ -54,6 +54,8 @@ namespace Ngecor.Material
             return spot != null && spot.ExecuteStirAction() ? 1 : 0;
         }
 
+        public bool IsAimingAtMixingSpot() => FindAimedMixingSpot() != null;
+
         private ManualMixingSpot FindAimedMixingSpot()
         {
             if (!HasLocalHolder)

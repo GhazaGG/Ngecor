@@ -161,6 +161,7 @@ MonoBehaviour:
   _waterUnitsPerBatch: 1
   _dryActions: 5
   _wetActionsPerBatch: 5
+  _labelHeight: 1.7
   _sandColor: {r: 0.78, g: 0.66, b: 0.42, a: 1}
   _cementColor: {r: 0.62, g: 0.62, b: 0.64, a: 1}
   _dryMixColor: {r: 0.66, g: 0.6, b: 0.5, a: 1}

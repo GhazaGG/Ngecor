@@ -128,14 +128,49 @@ namespace Ngecor.Material.Tests
             var spot = CreateSpot(100);
             spot.Ingredients.AddUnits(MaterialType.Cement, 3);
             var shovel = HeldShovelNextTo();
+            var input = shovel.GetComponent<ShovelInput>();
 
-            Assert.That(shovel.GetComponent<ShovelInput>().RequestUse(), Is.Zero, "cement only: no stir, no scoop");
-            Assert.That(spot.Ingredients.GetUnits(MaterialType.Cement), Is.EqualTo(3));
+            Hold(input, 1.2f);
+            Assert.That(spot.DryWork, Is.Zero, "cement only: no stir");
+            Tap(input);
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Cement), Is.EqualTo(3), "raw cement is not scooped");
 
             spot.Ingredients.AddUnits(MaterialType.Sand, 6);
-            Assert.That(shovel.GetComponent<ShovelInput>().RequestUse(), Is.EqualTo(1));
-            Assert.That(spot.DryWork, Is.EqualTo(1));
+            Tap(input);
+            Assert.That(spot.DryWork, Is.Zero, "a tap does not stir");
+            Hold(input, 0.3f);
+            Assert.That(spot.DryWork, Is.EqualTo(1), "hold past the threshold stirs once");
+            Hold(input, 1.0f);
+            Assert.That(spot.DryWork, Is.EqualTo(3), "then once per interval");
             Assert.That(spot.Ingredients.GetUnits(MaterialType.Sand), Is.EqualTo(6));
+            Assert.That(shovel.GetComponent<BulkMaterialContainer>().TotalUnits, Is.Zero);
+        }
+
+        [Test]
+        public void TapCollectsConcreteWhileAnotherBatchIsReadyToStir()
+        {
+            var spot = CreateSpot(100);
+            MakeConcrete(spot);
+            spot.Ingredients.AddUnits(MaterialType.Sand, 4);
+            Assert.That(spot.ExecuteStirAction(), Is.True, "re-dry-mix the added sand");
+            Assert.That(spot.Ingredients.AddUnits(MaterialType.Water, 2), Is.EqualTo(2));
+            var shovel = HeldShovelNextTo();
+            var input = shovel.GetComponent<ShovelInput>();
+            var held = shovel.GetComponent<BulkMaterialContainer>();
+
+            Tap(input);
+            Assert.That(held.GetUnits(MaterialType.Concrete), Is.EqualTo(2));
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Concrete), Is.EqualTo(2));
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Sand), Is.EqualTo(4));
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Water), Is.EqualTo(2));
+            Assert.That(spot.WetWork, Is.Zero);
+
+            held.RemoveUnits(MaterialType.Concrete, 2);
+            var concreteBefore = spot.Ingredients.GetUnits(MaterialType.Concrete);
+            Hold(input, 0.3f);
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Concrete), Is.EqualTo(concreteBefore + 4),
+                "hold still stirs the ready batch (wet actions tuned to 1)");
+            Assert.That(held.TotalUnits, Is.Zero);
         }
 
         [Test]
@@ -351,6 +386,22 @@ namespace Ngecor.Material.Tests
             action.RegisterNearbyReceiver(second);
             Assert.That(action.RequestPour(), Is.True);
             Assert.That(Read(action, "_collectSource"), Is.SameAs(second));
+        }
+
+        private static void Tap(ShovelInput input)
+        {
+            input.ProcessUse(true, true, 0f);
+            input.ProcessUse(false, true, 0.05f);
+            input.ProcessUse(false, false, 0.05f);
+        }
+
+        // Press, hold for the given time in 0.125 s frames (exact in float), then release.
+        private static void Hold(ShovelInput input, float seconds)
+        {
+            input.ProcessUse(true, true, 0f);
+            for (var held = 0f; held < seconds - 0.001f; held += 0.125f)
+                input.ProcessUse(false, true, 0.125f);
+            input.ProcessUse(false, false, 0f);
         }
 
         private BulkMaterialContainer CreateDrum(Vector3 position)

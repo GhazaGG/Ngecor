@@ -17,6 +17,7 @@ namespace Ngecor.EditorTools
         private const string ScenePath = "Assets/Game/Scenes/Dev/Dev_Ghaza.unity";
         private const string OldBatchScript = "Assets/Game/Scripts/Material/ConcreteBatch.cs";
         private const string TestSackName = "Mixing Test Cement Sack";
+        private const string DrumName = "Water Drum";
 
         // Rebuilds the mixing spot, creates the water drum, and cleans Dev_Ghaza so every ingredient
         // has to be carried to the spot.
@@ -195,7 +196,7 @@ namespace Ngecor.EditorTools
                     spotRotation = root.transform.rotation;
                     Object.DestroyImmediate(root);
                 }
-                else if (root.name == TestSackName || root.name == "WaterDrum")
+                else if (root.name == TestSackName || root.name == DrumName)
                     oldSacks.Add(root);
             }
             foreach (var old in oldSacks)
@@ -208,7 +209,7 @@ namespace Ngecor.EditorTools
 
             var drum = (GameObject)PrefabUtility.InstantiatePrefab(
                 AssetDatabase.LoadAssetAtPath<GameObject>(DrumPrefabPath), scene);
-            drum.name = "Water Drum";
+            drum.name = DrumName;
             Physics.SyncTransforms();
             var offsets = new List<Vector3>();
             for (var radius = 3.5f; radius <= 9f; radius += 1.5f)
@@ -226,7 +227,7 @@ namespace Ngecor.EditorTools
                 if (OnlyHitsDrum(position))
                     return;
             }
-            Debug.LogWarning("No free floor found near the mixing spot; move 'Water Drum' by hand.");
+            Debug.LogWarning("No free floor found near the mixing spot; move '" + DrumName + "' by hand.");
         }
 
         private static bool OnlyHitsDrum(Vector3 position)
