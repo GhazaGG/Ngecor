@@ -40,21 +40,6 @@ namespace Ngecor.Material.Tests
             Assert.That(result.LeftoverSandUnits, Is.EqualTo(10));
         }
 
-        [Test]
-        public void ConfigureMultipleTypesWhenEmptyAcceptsInputsUntilMaterialIsAdded()
-        {
-            var container = CreateContainer(10, ContainerMode.SingleType, MaterialType.Sand);
-
-            Assert.That(container.ConfigureMultipleTypesWhenEmpty(
-                MaterialType.Cement, MaterialType.Sand, MaterialType.Concrete), Is.True);
-            Assert.That(container.Accepts(MaterialType.Cement), Is.True);
-            Assert.That(container.Accepts(MaterialType.Sand), Is.True);
-            Assert.That(container.Accepts(MaterialType.Concrete), Is.True);
-            Assert.That(container.AddUnits(MaterialType.Cement, 1), Is.EqualTo(1));
-            Assert.That(container.ConfigureMultipleTypesWhenEmpty(MaterialType.Sand), Is.False);
-            Assert.That(container.Accepts(MaterialType.Cement), Is.True);
-        }
-
         [TearDown]
         public void TearDown()
         {

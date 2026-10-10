@@ -39,13 +39,15 @@ namespace Ngecor.Material
             if (!_pourAction.action.enabled)
                 _pourAction.action.Enable();
 
-            if (_pourAction.action.WasPressedThisFrame())
+            if (_pourAction.action.IsPressed())
                 RequestPour();
+            else
+                CancelPour();
         }
 
         public bool RequestPour()
         {
-            return HasLocalHolder() && _bucketPour != null && _bucketPour.RequestSingleUnitPour();
+            return HasLocalHolder() && _bucketPour != null && _bucketPour.RequestPour();
         }
 
         public void CancelPour()

@@ -196,23 +196,6 @@ namespace Ngecor.Material
             return true;
         }
 
-        public bool ConfigureMultipleTypesWhenEmpty(params MaterialType[] types)
-        {
-            if (TotalUnits != 0 || types == null || types.Length == 0)
-                return false;
-
-            foreach (var type in types)
-            {
-                if (!Enum.IsDefined(typeof(MaterialType), type))
-                    return false;
-            }
-
-            _mode = ContainerMode.MultipleTypes;
-            _acceptedTypes = new List<MaterialType>(types);
-            CancelTransfer();
-            return true;
-        }
-
         public bool TryGetMaterialType(out MaterialType type)
         {
             type = default;

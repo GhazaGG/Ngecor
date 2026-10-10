@@ -291,8 +291,8 @@ namespace Ngecor.Material.Tests
             Assert.That(pourInput.RequestPour(), Is.True);
             yield return new WaitForSeconds(0.6f);
 
-            Assert.That(source.GetUnits(MaterialType.Sand), Is.EqualTo(9));
-            Assert.That(receiver.GetUnits(MaterialType.Sand), Is.EqualTo(1));
+            Assert.That(source.GetUnits(MaterialType.Sand), Is.LessThan(10));
+            Assert.That(receiver.GetUnits(MaterialType.Sand), Is.GreaterThan(0));
             Assert.That(source.TotalUnits + receiver.TotalUnits, Is.EqualTo(10));
 
             pourInput.CancelPour();
@@ -300,14 +300,10 @@ namespace Ngecor.Material.Tests
             var unitsAfterRelease = receiver.TotalUnits;
             yield return new WaitForSeconds(0.3f);
             Assert.That(receiver.TotalUnits, Is.EqualTo(unitsAfterRelease));
-
-            Assert.That(pourInput.RequestPour(), Is.True);
-            Assert.That(source.GetUnits(MaterialType.Sand), Is.EqualTo(8));
-            Assert.That(receiver.GetUnits(MaterialType.Sand), Is.EqualTo(2));
         }
 
         [UnityTest]
-        public IEnumerator DroppingHeldBucketAfterOneShotPourKeepsOnlyTheUnitAlreadyTransferred()
+        public IEnumerator DroppingHeldBucketBeforeNextPhysicsTickCancelsPendingPour()
         {
             var source = CreateBucket(withGrabbable: true);
             var receiver = CreateReceiver(MaterialType.Sand);
@@ -329,8 +325,8 @@ namespace Ngecor.Material.Tests
             yield return new WaitForFixedUpdate();
 
             var action = source.GetComponent<BucketPourAction>();
-            Assert.That(source.TotalUnits, Is.EqualTo(9));
-            Assert.That(receiver.TotalUnits, Is.EqualTo(1));
+            Assert.That(source.TotalUnits, Is.EqualTo(10));
+            Assert.That(receiver.TotalUnits, Is.Zero);
             Assert.That(action.PourReceiver, Is.Null);
             Assert.That(action.IsPouring, Is.False);
         }

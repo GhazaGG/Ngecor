@@ -42,17 +42,17 @@ namespace Ngecor.Player
         private void Start()
         {
             if (_isLocalPlayer)
-            {
-                EnablePlayerActions();
                 SetCursorLocked(true);
-            }
         }
 
         private int _cursorRelockedFrame = -1;
 
         public Camera LocalCamera => _isLocalPlayer ? _playerCamera : null;
+        public bool IsLocalPlayer => _isLocalPlayer;
         public bool IsCursorLocked => _cursorLocked;
         public bool CursorRelockedThisFrame => _cursorRelockedFrame == Time.frameCount;
+
+        public event System.Action<bool> LocalPlayerChanged;
 
         public float CarriedMass
         {
@@ -66,22 +66,8 @@ namespace Ngecor.Player
                 return;
 
             _isLocalPlayer = isLocalPlayer;
-            if (isLocalPlayer)
-                EnablePlayerActions();
             SetCursorLocked(isLocalPlayer);
-        }
-
-        private void EnablePlayerActions()
-        {
-            var action = _moveAction != null ? _moveAction.action : null;
-            if (action == null)
-                return;
-
-            var actionMap = action.actionMap;
-            if (actionMap != null)
-                actionMap.Enable();
-            else
-                action.Enable();
+            LocalPlayerChanged?.Invoke(isLocalPlayer);
         }
 
         private void OnDisable()

@@ -35,9 +35,6 @@ namespace Ngecor.Construction
             if (_container == null)
                 _container = gameObject.AddComponent<BulkMaterialContainer>();
 
-            _container.ConfigureMultipleTypesWhenEmpty(
-                MaterialType.Cement, MaterialType.Sand, MaterialType.Concrete);
-
             var receiver = GetComponent<SphereCollider>();
             if (receiver == null)
                 receiver = gameObject.AddComponent<SphereCollider>();
