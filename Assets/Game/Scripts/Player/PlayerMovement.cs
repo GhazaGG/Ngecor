@@ -53,6 +53,7 @@ namespace Ngecor.Player
         public bool CursorRelockedThisFrame => _cursorRelockedFrame == Time.frameCount;
 
         public event System.Action<bool> LocalPlayerChanged;
+        // Note: IsCursorOverUIHandler is a single static delegate; subsequent subscribers will overwrite previous ones.
         public static System.Func<bool> IsCursorOverUIHandler { get; set; }
 
         public float CarriedMass
@@ -271,10 +272,6 @@ namespace Ngecor.Player
             if (!_cursorLocked && Mouse.current != null && Mouse.current.leftButton.wasPressedThisFrame)
             {
                 if (IsCursorOverUIHandler != null && IsCursorOverUIHandler())
-                    return;
-
-                if (UnityEngine.EventSystems.EventSystem.current != null &&
-                    UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
                     return;
 
                 SetCursorLocked(true);

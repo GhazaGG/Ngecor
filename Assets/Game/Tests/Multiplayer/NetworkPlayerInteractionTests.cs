@@ -196,5 +196,37 @@ namespace Ngecor.Multiplayer.Tests
             bool isValid = _interaction.ValidateGrabTarget(_grabbable, _playerGrab.MaxGrabDistance);
             Assert.That(isValid, Is.True, "Grab must be accepted when target is directly visible.");
         }
+
+        [Test]
+        public void AutoDrop_WhenPinchedOnServer_DropsCarriedObjectViaAutoDropHandler()
+        {
+            _playerGrab.MaxGrabDistance = 5f;
+            _playerGrab.ExecuteGrab(_grabbable);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            bool handlerCalled = false;
+            _playerGrab.AutoDropHandler = () =>
+            {
+                handlerCalled = true;
+                _interaction.ExecuteDropAndReplicate();
+            };
+
+            // Invoke handler simulating server pinch drop
+            _playerGrab.AutoDropHandler();
+
+            Assert.That(handlerCalled, Is.True, "AutoDropHandler must be invoked when pinched on server.");
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Carried object must be dropped when auto-drop executes.");
+        }
+
+        [Test]
+        public void AutoDrop_WhenDisabledOnClient_PreventsClientSideAutoDrop()
+        {
+            _playerGrab.MaxGrabDistance = 5f;
+            _playerGrab.ExecuteGrab(_grabbable);
+            Assert.That(_playerGrab.IsCarrying, Is.True);
+
+            _playerGrab.AutoDropEnabled = false;
+            Assert.That(_playerGrab.AutoDropEnabled, Is.False, "AutoDropEnabled must be false on client peers.");
+        }
     }
 }

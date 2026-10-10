@@ -18,6 +18,10 @@ namespace Ngecor.Multiplayer
     {
         [SerializeField] private string _defaultAddress = "127.0.0.1";
         [SerializeField] private ushort _defaultPort = 7777;
+        [SerializeField] private Transform[] _spawnPoints;
+
+        public static SessionManager Instance { get; private set; }
+        public Transform[] SpawnPoints => _spawnPoints;
 
         public SessionState CurrentState { get; private set; } = SessionState.Disconnected;
         public string CurrentAddress => _currentAddress;
@@ -29,6 +33,7 @@ namespace Ngecor.Multiplayer
 
         private void Awake()
         {
+            Instance = this;
             _currentAddress = _defaultAddress;
             _currentPort = _defaultPort;
         }
@@ -42,6 +47,8 @@ namespace Ngecor.Multiplayer
 
         private void OnDestroy()
         {
+            if (Instance == this)
+                Instance = null;
             UnregisterNetworkCallbacks();
         }
 
@@ -125,20 +132,22 @@ namespace Ngecor.Multiplayer
             }
         }
 
+        // Default fallback spawn points safely clear of Ramp_Gentle footprint (z in [0.97, 8.85])
         private static readonly Vector3[] DefaultSpawnPoints = new Vector3[]
         {
             new Vector3(2.5f, 0.05f, 0f),
             new Vector3(-2.5f, 0.05f, 0f),
-            new Vector3(0f, 0.05f, 2.5f),
-            new Vector3(0f, 0.05f, -2.5f)
+            new Vector3(0f, 0.05f, -2.5f),
+            new Vector3(2.5f, 0.05f, -2.5f)
         };
 
         public static Vector3 GetSafeSpawnPosition(NetworkManager netManager)
         {
+            var candidates = GetSpawnCandidatePositions();
             if (netManager == null)
-                return new Vector3(2.5f, 0.05f, 0f);
+                return candidates != null && candidates.Length > 0 ? candidates[0] : new Vector3(2.5f, 0.05f, 0f);
 
-            foreach (var candidate in DefaultSpawnPoints)
+            foreach (var candidate in candidates)
             {
                 bool isOccupied = false;
                 if (netManager.ConnectedClients != null)
@@ -164,7 +173,24 @@ namespace Ngecor.Multiplayer
 
             int count = netManager.ConnectedClientsIds != null ? netManager.ConnectedClientsIds.Count : 1;
             float angle = count * (Mathf.PI * 0.5f);
-            return new Vector3(Mathf.Cos(angle) * 3f, 0.05f, Mathf.Sin(angle) * 3f);
+            return new Vector3(Mathf.Cos(angle) * 3f, 0.05f, -Mathf.Abs(Mathf.Sin(angle) * 3f));
+        }
+
+        private static Vector3[] GetSpawnCandidatePositions()
+        {
+            if (Instance != null && Instance._spawnPoints != null && Instance._spawnPoints.Length > 0)
+            {
+                var list = new System.Collections.Generic.List<Vector3>();
+                foreach (var t in Instance._spawnPoints)
+                {
+                    if (t != null)
+                        list.Add(t.position);
+                }
+                if (list.Count > 0)
+                    return list.ToArray();
+            }
+
+            return DefaultSpawnPoints;
         }
 
         private void HandleConnectionApproval(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)

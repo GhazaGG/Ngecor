@@ -17,7 +17,15 @@ namespace Ngecor.Multiplayer
 
         private void OnEnable()
         {
-            Ngecor.Player.PlayerMovement.IsCursorOverUIHandler = () => _isMouseOverHud;
+            Ngecor.Player.PlayerMovement.IsCursorOverUIHandler = () =>
+            {
+                if (_isMouseOverHud)
+                    return true;
+                if (UnityEngine.EventSystems.EventSystem.current != null &&
+                    UnityEngine.EventSystems.EventSystem.current.IsPointerOverGameObject())
+                    return true;
+                return false;
+            };
         }
 
         private void OnDisable()

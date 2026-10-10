@@ -80,6 +80,8 @@ namespace Ngecor.Interaction
         public System.Func<bool> DropRequestHandler { get; set; }
         public System.Func<Vector3, bool> ThrowRequestHandler { get; set; }
         public bool UpdateCarriedTransform { get; set; } = true;
+        public bool AutoDropEnabled { get; set; } = true;
+        public System.Action AutoDropHandler { get; set; }
 
         private void Awake()
         {
@@ -188,13 +190,20 @@ namespace Ngecor.Interaction
                     ? ResolveHoldPosition(holdPoint, camTransform, _carriedObject, out isPinched, nearClip)
                     : holdPoint.position;
 
-                if (isPinched)
+                if (isPinched && AutoDropEnabled)
                 {
                     _pinchTimer += Time.deltaTime;
                     if (_pinchTimer >= _pinchDropDelay)
                     {
                         _pinchTimer = 0f;
-                        RequestDrop();
+                        if (AutoDropHandler != null)
+                        {
+                            AutoDropHandler();
+                        }
+                        else
+                        {
+                            ExecuteDrop();
+                        }
                         return;
                     }
                 }

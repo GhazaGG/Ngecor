@@ -44,11 +44,34 @@ namespace Ngecor.Multiplayer
                 // Clients observe that transform via NetworkTransform instead of overwriting it locally.
                 _playerGrab.UpdateCarriedTransform = IsServer;
 
+                if (IsServer)
+                {
+                    _playerGrab.AutoDropEnabled = true;
+                    _playerGrab.AutoDropHandler = ExecuteDropAndReplicate;
+                }
+                else
+                {
+                    _playerGrab.AutoDropEnabled = false;
+                    _playerGrab.AutoDropHandler = null;
+                }
+
                 if (IsOwner)
                 {
                     _playerGrab.GrabRequestHandler = HandleLocalGrabRequest;
                     _playerGrab.DropRequestHandler = HandleLocalDropRequest;
                     _playerGrab.ThrowRequestHandler = HandleLocalThrowRequest;
+                }
+            }
+        }
+
+        public void ExecuteDropAndReplicate()
+        {
+            EnsureDependencies();
+            if (_playerGrab != null && _playerGrab.IsCarrying)
+            {
+                if (_playerGrab.ExecuteDrop())
+                {
+                    ReplicateDropClientRpc();
                 }
             }
         }
@@ -60,6 +83,8 @@ namespace Ngecor.Multiplayer
             if (_playerGrab != null)
             {
                 _playerGrab.UpdateCarriedTransform = true;
+                _playerGrab.AutoDropEnabled = true;
+                _playerGrab.AutoDropHandler = null;
 
                 if (IsOwner)
                 {
@@ -72,7 +97,8 @@ namespace Ngecor.Multiplayer
             if (IsServer && _playerGrab != null && _playerGrab.IsCarrying)
             {
                 _playerGrab.ExecuteDrop();
-                ReplicateDropClientRpc();
+                // Note: ReplicateDropClientRpc is omitted during despawn because the NetworkObject
+                // is already despawning and remote peers automatically drop via PlayerGrab.OnDisable.
             }
         }
 
@@ -299,17 +325,6 @@ namespace Ngecor.Multiplayer
                 return;
 
             ExecuteDropAndReplicate();
-        }
-
-        private void ExecuteDropAndReplicate()
-        {
-            if (_playerGrab == null || !_playerGrab.IsCarrying)
-                return;
-
-            if (_playerGrab.ExecuteDrop())
-            {
-                ReplicateDropClientRpc();
-            }
         }
 
         [ClientRpc]
