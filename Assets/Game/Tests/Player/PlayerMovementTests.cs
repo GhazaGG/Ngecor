@@ -913,13 +913,13 @@ namespace Ngecor.Player.Tests
             _actionAsset = ScriptableObject.CreateInstance<InputActionAsset>();
             var playerMap = new InputActionMap("Player");
             _actionAsset.AddActionMap(playerMap);
-            _moveAction = playerMap.AddAction("Move", InputActionType.Value, expectedControlLayout: "Vector2");
+            _moveAction = playerMap.AddAction("Move", InputActionType.PassThrough, expectedControlLayout: "Vector2");
             _moveAction.AddCompositeBinding("2DVector")
                 .With("Up", "<Keyboard>/w")
                 .With("Down", "<Keyboard>/s")
                 .With("Left", "<Keyboard>/a")
                 .With("Right", "<Keyboard>/d");
-            _lookAction = playerMap.AddAction("Look", InputActionType.Value, expectedControlLayout: "Vector2");
+            _lookAction = playerMap.AddAction("Look", InputActionType.PassThrough, expectedControlLayout: "Vector2");
             _lookAction.AddBinding("<Mouse>/delta");
             playerMap.Enable();
             _moveReference = InputActionReference.Create(_moveAction);
