@@ -12,7 +12,17 @@ namespace Ngecor.Multiplayer
         [SerializeField] private PlayerGrab _playerGrab;
         [SerializeField] private PlayerMovement _playerMovement;
 
-        private bool CanReplicate => IsServer && IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+        private const ulong NoObject = ulong.MaxValue;
+
+        // Host-written mirror of what this player carries. Every client applies it, including one that joins later, so
+        // an object is never free on one peer and held on another.
+        private readonly NetworkVariable<ulong> _carriedObjectId = new(
+            NoObject,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
+
+        private GrabbableObject _mirroredCarried;
+        private ulong _pendingCarriedId = NoObject;
 
         private void Awake()
         {
@@ -64,26 +74,28 @@ namespace Ngecor.Multiplayer
                     _playerGrab.ThrowRequestHandler = HandleLocalThrowRequest;
                 }
             }
+
+            if (!IsServer)
+            {
+                _carriedObjectId.OnValueChanged += OnCarriedObjectChanged;
+                ApplyCarriedObject(_carriedObjectId.Value);
+            }
         }
 
         public void ExecuteDropAndReplicate()
         {
             EnsureDependencies();
             if (_playerGrab != null && _playerGrab.IsCarrying)
-            {
-                if (_playerGrab.ExecuteDrop())
-                {
-                    if (CanReplicate)
-                    {
-                        ReplicateDropClientRpc();
-                    }
-                }
-            }
+                _playerGrab.ExecuteDrop(); // Update mirrors the change to clients.
         }
 
         public override void OnNetworkDespawn()
         {
             base.OnNetworkDespawn();
+
+            _carriedObjectId.OnValueChanged -= OnCarriedObjectChanged;
+            _pendingCarriedId = NoObject;
+            _mirroredCarried = null;
 
             if (_playerGrab != null)
             {
@@ -268,35 +280,7 @@ namespace Ngecor.Multiplayer
             if (grabbable == null)
                 return;
 
-            if (_playerGrab.ExecuteGrab(grabbable))
-            {
-                if (CanReplicate)
-                {
-                    ReplicateGrabClientRpc(targetNetObj.NetworkObjectId);
-                }
-            }
-        }
-
-        [ClientRpc]
-        private void ReplicateGrabClientRpc(ulong networkObjectId)
-        {
-            if (IsServer)
-                return;
-
-            EnsurePlayerGrab();
-            if (_playerGrab == null || _playerGrab.IsCarrying)
-                return;
-
-            if (NetworkManager.Singleton == null || NetworkManager.Singleton.SpawnManager == null)
-                return;
-
-            if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(networkObjectId, out var targetNetObj))
-            {
-                if (targetNetObj != null && targetNetObj.TryGetComponent<GrabbableObject>(out var grabbable))
-                {
-                    _playerGrab.ExecuteGrab(grabbable);
-                }
-            }
+            _playerGrab.ExecuteGrab(grabbable);
         }
 
         public bool HandleLocalDropRequest()
@@ -333,19 +317,6 @@ namespace Ngecor.Multiplayer
                 return;
 
             ExecuteDropAndReplicate();
-        }
-
-        [ClientRpc]
-        private void ReplicateDropClientRpc()
-        {
-            if (IsServer)
-                return;
-
-            EnsurePlayerGrab();
-            if (_playerGrab != null && _playerGrab.IsCarrying)
-            {
-                _playerGrab.ExecuteDrop();
-            }
         }
 
         public bool HandleLocalThrowRequest(Vector3 throwDir)
@@ -398,26 +369,77 @@ namespace Ngecor.Multiplayer
                 return;
 
             Vector3 unitDir = throwDir.normalized;
-            if (_playerGrab.ExecuteThrow(unitDir))
-            {
-                if (CanReplicate)
-                {
-                    ReplicateThrowClientRpc(unitDir);
-                }
-            }
+            // A client's copy is kinematic under NetworkRigidbody, so to the client a throw is just a release;
+            // the flight arrives through NetworkTransform.
+            _playerGrab.ExecuteThrow(unitDir);
         }
 
-        [ClientRpc]
-        private void ReplicateThrowClientRpc(Vector3 throwDir)
+        private void Update()
         {
-            if (IsServer)
+            if (!IsSpawned || _playerGrab == null)
                 return;
 
-            EnsurePlayerGrab();
-            if (_playerGrab != null && _playerGrab.IsCarrying)
+            if (IsServer)
+                MirrorCarriedObject();
+            else if (_pendingCarriedId != NoObject)
+                ApplyCarriedObject(_pendingCarriedId);
+        }
+
+        private void MirrorCarriedObject()
+        {
+            var carried = _playerGrab.CarriedObject;
+            // ReferenceEquals: a destroyed carried object compares equal to null under Unity's ==, and must still
+            // publish NoObject.
+            if (ReferenceEquals(carried, _mirroredCarried))
+                return;
+
+            _mirroredCarried = carried;
+            var id = NoObject;
+            if (carried != null && carried.TryGetComponent<NetworkObject>(out var networkObject) && networkObject.IsSpawned)
+                id = networkObject.NetworkObjectId;
+            _carriedObjectId.Value = id;
+        }
+
+        private void OnCarriedObjectChanged(ulong previous, ulong current) => ApplyCarriedObject(current);
+
+        private void ApplyCarriedObject(ulong networkObjectId)
+        {
+            _pendingCarriedId = NoObject;
+            EnsureDependencies();
+            if (_playerGrab == null)
+                return;
+
+            var current = _playerGrab.CarriedObject;
+            if (networkObjectId == NoObject)
             {
-                _playerGrab.ExecuteThrow(throwDir);
+                if (current != null)
+                    _playerGrab.ExecuteDrop();
+                return;
             }
+
+            GrabbableObject target = null;
+            if (TryGetSpawned(networkObjectId, out var networkObject))
+                networkObject.TryGetComponent(out target);
+
+            if (target != null && ReferenceEquals(current, target))
+                return;
+
+            if (current != null)
+                _playerGrab.ExecuteDrop();
+
+            // Late join or out-of-order updates: the object may not be spawned yet, or its previous holder's drop may
+            // not have arrived. Update retries until it applies.
+            if (target == null || !_playerGrab.ExecuteReplicatedGrab(target))
+                _pendingCarriedId = networkObjectId;
+        }
+
+        private static bool TryGetSpawned(ulong networkObjectId, out NetworkObject networkObject)
+        {
+            networkObject = null;
+            var manager = NetworkManager.Singleton;
+            return manager != null && manager.SpawnManager != null &&
+                   manager.SpawnManager.SpawnedObjects.TryGetValue(networkObjectId, out networkObject) &&
+                   networkObject != null;
         }
     }
 }
