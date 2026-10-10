@@ -144,11 +144,13 @@ namespace Ngecor.Construction
             for (int i = 0; i < collision.contactCount; i++)
             {
                 ContactPoint contact = collision.GetContact(i);
+                if (Mathf.Abs(contact.normal.y) >= 0.5f)
+                    continue;
+
                 float horizontalMomentum = collision.rigidbody.mass *
-                    collision.relativeVelocity.ProjectOnPlane(Vector3.up).magnitude;
-                bool nearHorizontalSurface = Mathf.Abs(contact.normal.y) >= 0.95f;
+                    Vector3.ProjectOnPlane(collision.relativeVelocity, Vector3.up).magnitude;
                 if (horizontalMomentum >= _maximumImpactImpulse ||
-                    (!nearHorizontalSurface && collision.impulse.magnitude >= _maximumImpactImpulse))
+                    collision.impulse.magnitude >= _maximumImpactImpulse)
                 {
                     _impactWarning = true;
                     return;
@@ -201,6 +203,9 @@ namespace Ngecor.Construction
                 partBody.linearDamping = 0.2f;
                 partBody.angularDamping = 0.5f;
                 partBody.linearVelocity = linearVelocity + Vector3.Cross(angularVelocity, partPosition - origin);
+                Vector3 separation = Vector3.ProjectOnPlane(partPosition - origin, Vector3.up);
+                if (separation.sqrMagnitude > 0.01f)
+                    partBody.linearVelocity += separation.normalized * 1.5f;
                 partBody.angularVelocity = angularVelocity;
                 partBody.WakeUp();
             }
