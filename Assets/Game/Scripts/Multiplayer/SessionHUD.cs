@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Netcode;
+using Ngecor.Interaction;
 
 namespace Ngecor.Multiplayer
 {
@@ -11,8 +12,10 @@ namespace Ngecor.Multiplayer
         private string _ipAddress = "127.0.0.1";
         private string _portString = "7777";
         private string _statusMessage = "";
+        private NetworkObject _localPlayerObject;
+        private PlayerGrab _localGrab;
 
-        private static readonly Rect HudArea = new Rect(10, 10, 280, 230);
+        private static readonly Rect HudArea = new Rect(10, 10, 280, 300);
         private static bool _isMouseOverHud;
 
         private void OnEnable()
@@ -53,6 +56,46 @@ namespace Ngecor.Multiplayer
             }
         }
 
+        // NET-003 measurements: RTT per connection, and how far the carried object trails the local hold point.
+        private void DrawLatencyReadout(NetworkManager netManager)
+        {
+            if (netManager == null || !netManager.IsListening)
+                return;
+
+            var transport = netManager.NetworkConfig.NetworkTransport;
+            if (netManager.IsServer)
+            {
+                foreach (var clientId in netManager.ConnectedClientsIds)
+                {
+                    if (clientId != NetworkManager.ServerClientId)
+                        GUILayout.Label($"Client {clientId} RTT: {transport.GetCurrentRtt(clientId)} ms");
+                }
+            }
+            else if (netManager.IsConnectedClient)
+            {
+                GUILayout.Label($"RTT to host: {transport.GetCurrentRtt(NetworkManager.ServerClientId)} ms");
+            }
+
+            var grab = ResolveLocalGrab(netManager);
+            if (grab != null && grab.IsCarrying && grab.HoldPoint != null)
+            {
+                var offset = Vector3.Distance(grab.CarriedObject.transform.position, grab.HoldPoint.position);
+                GUILayout.Label($"Carried offset from hold point: {offset:0.00} m");
+            }
+        }
+
+        private PlayerGrab ResolveLocalGrab(NetworkManager netManager)
+        {
+            var playerObject = netManager.LocalClient != null ? netManager.LocalClient.PlayerObject : null;
+            if (playerObject != _localPlayerObject)
+            {
+                _localPlayerObject = playerObject;
+                _localGrab = playerObject != null ? playerObject.GetComponent<PlayerGrab>() : null;
+            }
+
+            return _localGrab;
+        }
+
         private void OnGUI()
         {
             if (Event.current != null)
@@ -71,7 +114,7 @@ namespace Ngecor.Multiplayer
             var netManager = NetworkManager.Singleton;
             bool isListening = netManager != null && netManager.IsListening;
 
-            GUILayout.BeginArea(new Rect(10, 10, 280, 230), GUI.skin.box);
+            GUILayout.BeginArea(new Rect(10, 10, 280, 300), GUI.skin.box);
             GUILayout.Label("<b>Ngecor — Multiplayer Prototype</b>");
 
             string stateLabel = _sessionManager.CurrentState.ToString();
@@ -91,6 +134,8 @@ namespace Ngecor.Multiplayer
             {
                 GUILayout.Label($"<b>Status:</b> {stateLabel}");
             }
+
+            DrawLatencyReadout(netManager);
 
             if (netManager != null && !isListening && !string.IsNullOrEmpty(netManager.DisconnectReason))
             {

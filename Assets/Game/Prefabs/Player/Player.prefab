@@ -196,6 +196,7 @@ GameObject:
   - component: {fileID: 4021336305554302109}
   - component: {fileID: 357876425461150531}
   - component: {fileID: 4563724051797546851}
+  - component: {fileID: 392277238938492568}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -498,6 +499,23 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   _playerGrab: {fileID: 0}
   _playerMovement: {fileID: 0}
+--- !u!114 &392277238938492568
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4296605569635645888}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c2a65671a5871ad409f8f2ff5954ee7c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ngecor.Multiplayer::Ngecor.Multiplayer.NetworkPlayerPush
+  ShowTopMostFoldoutHeaderGroup: 1
+  _playerMovement: {fileID: 7415163370245125735}
+  _sendInterval: 0.05
+  _intentDuration: 0.15
+  _maxContactReach: 1.5
 --- !u!1 &7889076200833104320
 GameObject:
   m_ObjectHideFlags: 0

@@ -12,7 +12,25 @@ namespace Ngecor.Multiplayer
         [SerializeField] private PlayerGrab _playerGrab;
         [SerializeField] private PlayerMovement _playerMovement;
 
-        private bool CanReplicate => IsServer && IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+        private const ulong NoObject = ulong.MaxValue;
+
+        // Host-written mirror of what this player carries. Every client applies it, including one that joins later, so
+        // an object is never free on one peer and held on another.
+        private readonly NetworkVariable<ulong> _carriedObjectId = new(
+            NoObject,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
+
+        private GrabbableObject _mirroredCarried;
+        private ulong _pendingCarriedId = NoObject;
+
+        // Host-written: the hold interaction (wheelbarrow handles) this player uses. The owning client follows it.
+        private readonly NetworkVariable<ulong> _heldInteractableId = new(
+            NoObject,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Server);
+
+        private IHoldInteractable _mirroredHeld;
 
         private void Awake()
         {
@@ -62,7 +80,20 @@ namespace Ngecor.Multiplayer
                     _playerGrab.GrabRequestHandler = HandleLocalGrabRequest;
                     _playerGrab.DropRequestHandler = HandleLocalDropRequest;
                     _playerGrab.ThrowRequestHandler = HandleLocalThrowRequest;
+                    _playerGrab.BeginInteractionRequestHandler = HandleLocalBeginInteraction;
                 }
+            }
+
+            if (!IsServer)
+            {
+                _carriedObjectId.OnValueChanged += OnCarriedObjectChanged;
+                ApplyCarriedObject(_carriedObjectId.Value);
+            }
+
+            if (IsOwner && !IsServer && _playerGrab != null)
+            {
+                _playerGrab.InteractionEnded += HandleOwnerInteractionEnded;
+                _heldInteractableId.OnValueChanged += OnHeldInteractableChanged;
             }
         }
 
@@ -70,20 +101,20 @@ namespace Ngecor.Multiplayer
         {
             EnsureDependencies();
             if (_playerGrab != null && _playerGrab.IsCarrying)
-            {
-                if (_playerGrab.ExecuteDrop())
-                {
-                    if (CanReplicate)
-                    {
-                        ReplicateDropClientRpc();
-                    }
-                }
-            }
+                _playerGrab.ExecuteDrop(); // Update mirrors the change to clients.
         }
 
         public override void OnNetworkDespawn()
         {
             base.OnNetworkDespawn();
+
+            _carriedObjectId.OnValueChanged -= OnCarriedObjectChanged;
+            _pendingCarriedId = NoObject;
+            _mirroredCarried = null;
+            _heldInteractableId.OnValueChanged -= OnHeldInteractableChanged;
+            _mirroredHeld = null;
+            if (_playerGrab != null)
+                _playerGrab.InteractionEnded -= HandleOwnerInteractionEnded;
 
             if (_playerGrab != null)
             {
@@ -96,6 +127,7 @@ namespace Ngecor.Multiplayer
                     _playerGrab.GrabRequestHandler = null;
                     _playerGrab.DropRequestHandler = null;
                     _playerGrab.ThrowRequestHandler = null;
+                    _playerGrab.BeginInteractionRequestHandler = null;
                 }
             }
 
@@ -268,35 +300,7 @@ namespace Ngecor.Multiplayer
             if (grabbable == null)
                 return;
 
-            if (_playerGrab.ExecuteGrab(grabbable))
-            {
-                if (CanReplicate)
-                {
-                    ReplicateGrabClientRpc(targetNetObj.NetworkObjectId);
-                }
-            }
-        }
-
-        [ClientRpc]
-        private void ReplicateGrabClientRpc(ulong networkObjectId)
-        {
-            if (IsServer)
-                return;
-
-            EnsurePlayerGrab();
-            if (_playerGrab == null || _playerGrab.IsCarrying)
-                return;
-
-            if (NetworkManager.Singleton == null || NetworkManager.Singleton.SpawnManager == null)
-                return;
-
-            if (NetworkManager.Singleton.SpawnManager.SpawnedObjects.TryGetValue(networkObjectId, out var targetNetObj))
-            {
-                if (targetNetObj != null && targetNetObj.TryGetComponent<GrabbableObject>(out var grabbable))
-                {
-                    _playerGrab.ExecuteGrab(grabbable);
-                }
-            }
+            _playerGrab.ExecuteGrab(grabbable);
         }
 
         public bool HandleLocalDropRequest()
@@ -333,19 +337,6 @@ namespace Ngecor.Multiplayer
                 return;
 
             ExecuteDropAndReplicate();
-        }
-
-        [ClientRpc]
-        private void ReplicateDropClientRpc()
-        {
-            if (IsServer)
-                return;
-
-            EnsurePlayerGrab();
-            if (_playerGrab != null && _playerGrab.IsCarrying)
-            {
-                _playerGrab.ExecuteDrop();
-            }
         }
 
         public bool HandleLocalThrowRequest(Vector3 throwDir)
@@ -398,26 +389,176 @@ namespace Ngecor.Multiplayer
                 return;
 
             Vector3 unitDir = throwDir.normalized;
-            if (_playerGrab.ExecuteThrow(unitDir))
+            // A client's copy is kinematic under NetworkRigidbody, so to the client a throw is just a release;
+            // the flight arrives through NetworkTransform.
+            _playerGrab.ExecuteThrow(unitDir);
+        }
+
+        private void Update()
+        {
+            if (!IsSpawned || _playerGrab == null)
+                return;
+
+            if (IsServer)
             {
-                if (CanReplicate)
-                {
-                    ReplicateThrowClientRpc(unitDir);
-                }
+                MirrorCarriedObject();
+                MirrorHeldInteractable();
+            }
+            else if (_pendingCarriedId != NoObject)
+                ApplyCarriedObject(_pendingCarriedId);
+        }
+
+        public bool HandleLocalBeginInteraction(IHoldInteractable target)
+        {
+            EnsureDependencies();
+            if (_playerGrab == null || target == null)
+                return false;
+
+            NetworkObject targetNetObj = null;
+            if (target is Component component && component != null)
+                component.TryGetComponent(out targetNetObj);
+
+            if (targetNetObj == null || !targetNetObj.IsSpawned)
+            {
+                // A non-networked interactable has no host copy to drive; offline it runs locally.
+                if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+                    return false;
+
+                return _playerGrab.ExecuteBeginInteraction(target);
+            }
+
+            if (IsServer)
+                return _playerGrab.ExecuteBeginInteraction(target);
+
+            RequestBeginInteractionServerRpc(targetNetObj.NetworkObjectId);
+            return true;
+        }
+
+        [ServerRpc]
+        private void RequestBeginInteractionServerRpc(ulong networkObjectId)
+        {
+            EnsureDependencies();
+            if (_playerGrab == null || _playerGrab.IsCarrying || _playerGrab.IsUsingInteractable)
+                return;
+
+            if (!TryGetSpawned(networkObjectId, out var networkObject) ||
+                !networkObject.TryGetComponent<IHoldInteractable>(out var target) || !target.CanInteract(gameObject))
+                return;
+
+            _playerGrab.ExecuteBeginInteraction(target); // Update mirrors the result to the owner.
+        }
+
+        [ServerRpc]
+        private void RequestEndInteractionServerRpc()
+        {
+            EnsureDependencies();
+            if (_playerGrab != null)
+                _playerGrab.ExecuteEndInteraction();
+        }
+
+        private void MirrorHeldInteractable()
+        {
+            var held = _playerGrab.HeldInteractable;
+            if (ReferenceEquals(held, _mirroredHeld))
+                return;
+
+            _mirroredHeld = held;
+            var id = NoObject;
+            if (held is Component component && component != null &&
+                component.TryGetComponent<NetworkObject>(out var networkObject) && networkObject.IsSpawned)
+                id = networkObject.NetworkObjectId;
+            _heldInteractableId.Value = id;
+        }
+
+        private void OnHeldInteractableChanged(ulong previous, ulong current)
+        {
+            EnsureDependencies();
+            if (_playerGrab == null)
+                return;
+
+            if (current == NoObject)
+            {
+                if (_playerGrab.IsUsingInteractable)
+                    _playerGrab.ExecuteEndInteraction();
+                return;
+            }
+
+            if (_playerGrab.IsUsingInteractable)
+                return;
+
+            if (!TryGetSpawned(current, out var networkObject) ||
+                !networkObject.TryGetComponent<IHoldInteractable>(out var target) ||
+                !_playerGrab.ExecuteBeginInteraction(target))
+            {
+                // The host accepted, but this player cannot take the grip from here (path blocked, now carrying):
+                // hand it back so the host does not keep pushing for nobody.
+                RequestEndInteractionServerRpc();
             }
         }
 
-        [ClientRpc]
-        private void ReplicateThrowClientRpc(Vector3 throwDir)
+        private void HandleOwnerInteractionEnded()
         {
-            if (IsServer)
+            if (IsServer || !IsSpawned || _heldInteractableId.Value == NoObject)
                 return;
 
-            EnsurePlayerGrab();
-            if (_playerGrab != null && _playerGrab.IsCarrying)
+            RequestEndInteractionServerRpc();
+        }
+
+        private void MirrorCarriedObject()
+        {
+            var carried = _playerGrab.CarriedObject;
+            // ReferenceEquals: a destroyed carried object compares equal to null under Unity's ==, and must still
+            // publish NoObject.
+            if (ReferenceEquals(carried, _mirroredCarried))
+                return;
+
+            _mirroredCarried = carried;
+            var id = NoObject;
+            if (carried != null && carried.TryGetComponent<NetworkObject>(out var networkObject) && networkObject.IsSpawned)
+                id = networkObject.NetworkObjectId;
+            _carriedObjectId.Value = id;
+        }
+
+        private void OnCarriedObjectChanged(ulong previous, ulong current) => ApplyCarriedObject(current);
+
+        private void ApplyCarriedObject(ulong networkObjectId)
+        {
+            _pendingCarriedId = NoObject;
+            EnsureDependencies();
+            if (_playerGrab == null)
+                return;
+
+            var current = _playerGrab.CarriedObject;
+            if (networkObjectId == NoObject)
             {
-                _playerGrab.ExecuteThrow(throwDir);
+                if (current != null)
+                    _playerGrab.ExecuteDrop();
+                return;
             }
+
+            GrabbableObject target = null;
+            if (TryGetSpawned(networkObjectId, out var networkObject))
+                networkObject.TryGetComponent(out target);
+
+            if (target != null && ReferenceEquals(current, target))
+                return;
+
+            if (current != null)
+                _playerGrab.ExecuteDrop();
+
+            // Late join or out-of-order updates: the object may not be spawned yet, or its previous holder's drop may
+            // not have arrived. Update retries until it applies.
+            if (target == null || !_playerGrab.ExecuteReplicatedGrab(target))
+                _pendingCarriedId = networkObjectId;
+        }
+
+        private static bool TryGetSpawned(ulong networkObjectId, out NetworkObject networkObject)
+        {
+            networkObject = null;
+            var manager = NetworkManager.Singleton;
+            return manager != null && manager.SpawnManager != null &&
+                   manager.SpawnManager.SpawnedObjects.TryGetValue(networkObjectId, out networkObject) &&
+                   networkObject != null;
         }
     }
 }

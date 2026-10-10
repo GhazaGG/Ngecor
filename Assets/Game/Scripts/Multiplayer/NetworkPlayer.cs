@@ -25,6 +25,12 @@ namespace Ngecor.Multiplayer
             NetworkVariableReadPermission.Everyone,
             NetworkVariableWritePermission.Owner);
 
+        // Owner's W/A/S/D as intent: the host needs it to push a wheelbarrow this player holds.
+        private readonly NetworkVariable<Vector2> _networkMoveInput = new(
+            Vector2.zero,
+            NetworkVariableReadPermission.Everyone,
+            NetworkVariableWritePermission.Owner);
+
         private void Awake()
         {
             EnsureComponentReferences();
@@ -124,9 +130,14 @@ namespace Ngecor.Multiplayer
                 {
                     _networkCameraPitch.Value = currentPitch;
                 }
+
+                var moveInput = _playerMovement.MovementInput;
+                if ((_networkMoveInput.Value - moveInput).sqrMagnitude > 0.0001f)
+                    _networkMoveInput.Value = moveInput;
             }
             else if (!IsOwner && _playerMovement != null)
             {
+                _playerMovement.SetRemoteMovementInput(_networkMoveInput.Value);
                 float targetPitch = _networkCameraPitch.Value;
                 if (Mathf.Abs(_playerMovement.CameraPitch - targetPitch) < 0.05f)
                 {

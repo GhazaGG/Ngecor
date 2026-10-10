@@ -43,14 +43,21 @@ namespace Ngecor.Vehicle
         private Vector3 _previousHeading;
         private PhysicsMaterial[] _legRestMaterials;
         private bool _legsMoving;
+        private Collider[] _ignoredHolderColliders;
+        private Collider[] _bodyColliders;
 
         public string InteractionPrompt => "Push";
 
         private Rigidbody Rigidbody => _rigidbody != null ? _rigidbody : (_rigidbody = GetComponent<Rigidbody>());
 
+        // Only the peer that simulates the body (the host, or offline) applies forces; a network client's copy is
+        // kinematic and only moves its own player along.
+        private bool SimulatesBody => Rigidbody != null && !Rigidbody.isKinematic;
+        private bool DrivesPlayer => _interactingPlayer != null && _interactingPlayer.IsLocalPlayer;
+
         public bool CanInteract(GameObject interactor)
         {
-            if (interactor == null || Rigidbody == null || Rigidbody.isKinematic || _interactingPlayer != null)
+            if (interactor == null || Rigidbody == null || _interactingPlayer != null)
                 return false;
 
             var grab = interactor.GetComponent<PlayerGrab>();
@@ -72,7 +79,15 @@ namespace Ngecor.Vehicle
             var player = interactor.GetComponent<PlayerMovement>();
             var grab = interactor.GetComponent<PlayerGrab>();
             var controller = interactor.GetComponent<CharacterController>();
-            if (player == null || player.LocalCamera == null || grab == null || controller == null)
+            if (player == null || grab == null || controller == null)
+                return false;
+
+            // Networked, the host simulates the barrow and the owning client moves its own player, so each peer takes
+            // only its part. Offline, and for the host's own player, one peer does both.
+            var drivesPlayer = player.IsLocalPlayer;
+            if (drivesPlayer && (player.LocalCamera == null || !controller.enabled))
+                return false;
+            if (!drivesPlayer && !SimulatesBody)
                 return false;
 
             if (!TryGetGripPose(controller, out var handlePoint, out var gripPosition, out var outward))
@@ -81,6 +96,30 @@ namespace Ngecor.Vehicle
                 return false;
             }
 
+            if (drivesPlayer)
+            {
+                if (!TryAlignPlayerToGrip(interactor, player, grab, controller, handlePoint, gripPosition, outward))
+                    return false;
+            }
+            else
+            {
+                // The owning client aligns its own player; here only check the request came from within reach.
+                if (Vector3.Distance(interactor.transform.position, gripPosition) > grab.MaxGrabDistance)
+                    return false;
+                IgnoreHolderCollisions(interactor);
+            }
+
+            _previousHeading = -outward;
+            _interactingPlayer = player;
+            _interactingGrab = grab;
+            _interactingController = controller;
+            return true;
+        }
+
+        private bool TryAlignPlayerToGrip(
+            GameObject interactor, PlayerMovement player, PlayerGrab grab, CharacterController controller,
+            Vector3 handlePoint, Vector3 gripPosition, Vector3 outward)
+        {
             var startPosition = interactor.transform.position;
             var sideOffset = Vector3.ProjectOnPlane(startPosition - handlePoint, outward);
             sideOffset.y = 0f;
@@ -112,10 +151,6 @@ namespace Ngecor.Vehicle
             }
 
             player.transform.rotation = Quaternion.LookRotation(-outward, Vector3.up);
-            _previousHeading = -outward;
-            _interactingPlayer = player;
-            _interactingGrab = grab;
-            _interactingController = controller;
             return true;
         }
 
@@ -127,7 +162,7 @@ namespace Ngecor.Vehicle
 
         private void FixedUpdate()
         {
-            if (_interactingPlayer != null && _interactingPlayer.isActiveAndEnabled && Rigidbody != null && !Rigidbody.isKinematic)
+            if (_interactingPlayer != null && _interactingPlayer.isActiveAndEnabled && SimulatesBody)
                 ApplyWheelGripAndSteering();
         }
 
@@ -136,9 +171,11 @@ namespace Ngecor.Vehicle
             if (_interactingPlayer == null)
                 return;
 
-            if (Rigidbody == null || Rigidbody.isKinematic || !_interactingPlayer.isActiveAndEnabled ||
-                _interactingPlayer.LocalCamera == null || _interactingGrab == null || !_interactingGrab.isActiveAndEnabled ||
-                _interactingController == null || !_interactingController.enabled)
+            var drivesPlayer = DrivesPlayer;
+            var simulatesBody = SimulatesBody;
+            if ((!drivesPlayer && !simulatesBody) || !_interactingPlayer.isActiveAndEnabled ||
+                _interactingGrab == null || !_interactingGrab.isActiveAndEnabled || _interactingController == null ||
+                (drivesPlayer && (_interactingPlayer.LocalCamera == null || !_interactingController.enabled)))
             {
                 StopInteraction("The wheelbarrow interaction ended because the player or wheelbarrow is unavailable.");
                 return;
@@ -157,6 +194,20 @@ namespace Ngecor.Vehicle
                 return;
             }
 
+            if (drivesPlayer)
+                FollowHandle(gripPosition, outward);
+
+            if (!simulatesBody)
+                return;
+
+            var input = _interactingPlayer.MovementInput;
+            SetLegsMoving(Mathf.Abs(input.y) > 0.01f);
+            if (Mathf.Abs(input.y) > 0.01f)
+                ApplyGroundPlanePush(handlePoint, -outward, input.y);
+        }
+
+        private void FollowHandle(Vector3 gripPosition, Vector3 outward)
+        {
             // The player leads sideways within a short leash (CharacterController.Move, so walls and obstacles
             // stop it); the follow step only restores the lateral part beyond that leash.
             var right = Vector3.Cross(Vector3.up, -outward).normalized;
@@ -177,11 +228,6 @@ namespace Ngecor.Vehicle
                     _interactingPlayer.transform.Rotate(Vector3.up, deltaYaw, Space.World);
             }
             _previousHeading = currentHeading;
-
-            var input = _interactingPlayer.MovementInput;
-            SetLegsMoving(Mathf.Abs(input.y) > 0.01f);
-            if (Mathf.Abs(input.y) > 0.01f)
-                ApplyGroundPlanePush(handlePoint, -outward, input.y);
         }
 
         // Push along the ground surface (normal from the wheel raycast) instead of horizontally: on a ramp a horizontal
@@ -499,6 +545,40 @@ namespace Ngecor.Vehicle
             return true;
         }
 
+        // Host only: a remote holder's replica trails its real position by the network delay, so pulling the barrow
+        // back (S) would run it into the replica's capsule. The owning client still collides with its own copy.
+        private void IgnoreHolderCollisions(GameObject holder)
+        {
+            _ignoredHolderColliders = holder.GetComponentsInChildren<Collider>();
+            _bodyColliders = GetComponentsInChildren<Collider>();
+            SetHolderCollisionsIgnored(true);
+        }
+
+        private void RestoreHolderCollisions()
+        {
+            SetHolderCollisionsIgnored(false);
+            _ignoredHolderColliders = null;
+        }
+
+        private void SetHolderCollisionsIgnored(bool ignored)
+        {
+            if (_ignoredHolderColliders == null || _bodyColliders == null)
+                return;
+
+            foreach (var holderCollider in _ignoredHolderColliders)
+            {
+                // IgnoreCollision needs both colliders active; the host's copy of a client's CharacterController is off.
+                if (holderCollider == null || !holderCollider.enabled || !holderCollider.gameObject.activeInHierarchy)
+                    continue;
+
+                foreach (var bodyCollider in _bodyColliders)
+                {
+                    if (bodyCollider != null && bodyCollider.enabled && bodyCollider.gameObject.activeInHierarchy)
+                        Physics.IgnoreCollision(holderCollider, bodyCollider, ignored);
+                }
+            }
+        }
+
         private void StopInteraction(string feedback = null)
         {
             var player = _interactingPlayer;
@@ -507,6 +587,7 @@ namespace Ngecor.Vehicle
             _interactingController = null;
             _previousHeading = Vector3.zero;
             SetLegsMoving(false);
+            RestoreHolderCollisions();
             if (player != null)
             {
                 player.SetInteractableMovement(false);

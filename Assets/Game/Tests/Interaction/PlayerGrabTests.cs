@@ -206,6 +206,15 @@ namespace Ngecor.Interaction.Tests
                 .SetValue(_playerMovement, _moveReference);
         }
 
+        // The prefab is a network object: NetworkRigidbody keeps its body kinematic until a session spawns it. These tests
+        // run without a session, so give the body the state the host has after the spawn.
+        private static GameObject InstantiateWheelbarrowPrefab(GameObject prefab)
+        {
+            var wheelbarrow = Object.Instantiate(prefab);
+            wheelbarrow.GetComponent<Rigidbody>().isKinematic = false;
+            return wheelbarrow;
+        }
+
         private static System.Type FindWheelbarrowInteractionType()
         {
             foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
@@ -839,7 +848,7 @@ namespace Ngecor.Interaction.Tests
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Game/Prefabs/Vehicle/Wheelbarrow.prefab");
             Assert.That(prefab, Is.Not.Null, "The original wheelbarrow prefab must be available to Play Mode tests.");
 
-            var wheelbarrow = Object.Instantiate(prefab);
+            var wheelbarrow = InstantiateWheelbarrowPrefab(prefab);
             wheelbarrow.name = "WheelbarrowPrefabTest";
             wheelbarrow.transform.position = new Vector3(0f, 0.5f, 1.9f);
             _targetObject1 = wheelbarrow;
@@ -911,6 +920,106 @@ namespace Ngecor.Interaction.Tests
         }
 
         [UnityTest]
+        public IEnumerator RequestGrab_WithBeginInteractionHandler_RoutesTheHoldThroughTheHandler()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out var handle);
+            _targetObject1 = interaction.gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_detector.CurrentHit.collider, Is.SameAs(handle));
+
+            IHoldInteractable routed = null;
+            _playerGrab.BeginInteractionRequestHandler = target =>
+            {
+                routed = target;
+                return true;
+            };
+
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+            Assert.That(routed, Is.SameAs(interaction), "The hold request must reach the handler.");
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False,
+                "With a handler, only the handler (the host) decides whether the hold starts.");
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteEndInteraction_ReleasesTheHoldAndRaisesInteractionEndedOnce()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out _);
+            _targetObject1 = interaction.gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+            Assert.That(_playerGrab.HeldInteractable, Is.SameAs(interaction));
+
+            var ended = 0;
+            _playerGrab.InteractionEnded += () => ended++;
+
+            Assert.That(_playerGrab.ExecuteEndInteraction(), Is.True);
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False);
+            Assert.That(_playerGrab.HeldInteractable, Is.Null);
+            Assert.That(ended, Is.EqualTo(1));
+            Assert.That(_playerGrab.ExecuteEndInteraction(), Is.False);
+            Assert.That(ended, Is.EqualTo(1), "Ending twice must not report a second end.");
+        }
+
+        [UnityTest]
+        public IEnumerator InteractionEnded_FiresWhenTheWheelbarrowReleasesTheHoldItself()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out _);
+            _targetObject1 = interaction.gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            var ended = 0;
+            _playerGrab.InteractionEnded += () => ended++;
+            interaction.transform.position = new Vector3(0f, 1.4f, 20f);
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False);
+            Assert.That(ended, Is.EqualTo(1), "The network layer must hear about holds the interactable ends.");
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteReplicatedGrab_AttachesBeyondGrabDistance()
+        {
+            var grabbable = CreateGrabbable("Far", new Vector3(0f, 1.4f, 10f));
+            _targetObject1 = grabbable.gameObject;
+            yield return null;
+
+            Assert.That(_playerGrab.ExecuteGrab(grabbable), Is.False, "A local grab still respects the distance limit.");
+            Assert.That(_playerGrab.ExecuteReplicatedGrab(grabbable), Is.True,
+                "The host already validated this grab; a lagging copy of the holder must not refuse it.");
+            Assert.That(_playerGrab.CarriedObject, Is.SameAs(grabbable));
+            Assert.That(grabbable.IsHeld, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteReplicatedGrab_RefusesObjectHeldBySomeoneElse()
+        {
+            var grabbable = CreateGrabbable("Held", new Vector3(0f, 1.4f, 2f));
+            _targetObject1 = grabbable.gameObject;
+            var otherHolder = new GameObject("OtherHolder");
+            try
+            {
+                grabbable.OnGrab(otherHolder);
+                yield return null;
+
+                Assert.That(_playerGrab.ExecuteReplicatedGrab(grabbable), Is.False,
+                    "An object must never have two holders, even when updates arrive out of order.");
+                Assert.That(_playerGrab.IsCarrying, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(otherHolder);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator WheelbarrowInteraction_WPushesForwardWhileHeld()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
@@ -933,6 +1042,140 @@ namespace Ngecor.Interaction.Tests
             Assert.That(Vector3.Dot(body.linearVelocity, interaction.transform.forward), Is.LessThanOrEqualTo(5.05f),
                 "The existing mass-aware push speed limit must still apply.");
             Assert.That(body.isKinematic, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_RemoteHolderOnSimulatingPeer_PushesWithoutMovingThePlayer()
+        {
+            var interaction = CreateWheelbarrowForMovement(out _);
+            var body = interaction.GetComponent<Rigidbody>();
+            _playerObject.transform.position = Vector3.zero;
+            _playerMovement.SetLocalPlayer(false);
+            _playerObject.GetComponent<CharacterController>().enabled = false;
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(((IHoldInteractable)interaction).TryBeginInteraction(_playerObject), Is.True,
+                "The host must accept a remote holder it simulates the barrow for.");
+            var playerStart = _playerObject.transform.position;
+
+            _playerMovement.SetRemoteMovementInput(Vector2.up);
+            yield return null;
+            for (var i = 0; i < 4; i++)
+                yield return new WaitForFixedUpdate();
+
+            Assert.That(Vector3.Dot(body.linearVelocity, interaction.transform.forward), Is.GreaterThan(0.1f),
+                "The replicated W must push the barrow on the host.");
+            Assert.That(_playerObject.transform.position, Is.EqualTo(playerStart),
+                "The host must never move a client's player; the owner does.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_RemoteHolderOnSimulatingPeer_IgnoresHolderCollisionsUntilReleased()
+        {
+            var interaction = CreateWheelbarrowForMovement(out var handle);
+            _playerObject.transform.position = Vector3.zero;
+            _playerMovement.SetLocalPlayer(false);
+            _playerObject.GetComponent<CharacterController>().enabled = false;
+            var proxy = new GameObject("RemoteProxy");
+            proxy.transform.SetParent(_playerObject.transform, false);
+            var proxyCollider = proxy.AddComponent<CapsuleCollider>();
+            proxyCollider.height = 1.8f;
+            proxyCollider.radius = 0.35f;
+            proxyCollider.center = new Vector3(0f, 0.9f, 0f);
+            proxy.AddComponent<Rigidbody>().isKinematic = true;
+            Physics.SyncTransforms();
+            yield return null;
+
+            var hold = (IHoldInteractable)interaction;
+            Assert.That(hold.TryBeginInteraction(_playerObject), Is.True);
+            Assert.That(Physics.GetIgnoreCollision(proxyCollider, handle), Is.True,
+                "The holder's replica trails the real player; pulling the barrow back must not hit it on the host.");
+
+            hold.EndInteraction(_playerObject);
+            Assert.That(Physics.GetIgnoreCollision(proxyCollider, handle), Is.False,
+                "Collisions must come back once the hold ends.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_KinematicCopyWithLocalPlayer_FollowsTheHandleWithoutForces()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var interaction = CreateWheelbarrowForMovement(out _);
+            var body = interaction.GetComponent<Rigidbody>();
+            body.isKinematic = true;
+            yield return null;
+            _detector.Detect();
+
+            Assert.That(_playerGrab.RequestGrab(), Is.True, "A network client must be able to hold its kinematic copy.");
+            Assert.That(_playerObject.transform.position.x, Is.EqualTo(0f).Within(0.1f), "The owner snaps to the grip.");
+            var bodyStart = body.position;
+
+            Press(keyboard.wKey);
+            for (var i = 0; i < 4; i++)
+                yield return null;
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True, "A kinematic copy must not end the hold as unavailable.");
+            Assert.That(body.position, Is.EqualTo(bodyStart), "Only the host moves the barrow.");
+            Release(keyboard.wKey);
+
+            var playerZ = _playerObject.transform.position.z;
+            interaction.transform.position += new Vector3(0f, 0f, 1f);
+            Physics.SyncTransforms();
+            Time.captureFramerate = SteeringTestFrameRate; // the follow step is speed * deltaTime; reset in TearDown
+            for (var i = 0; i < 30; i++)
+                yield return null;
+            Assert.That(_playerObject.transform.position.z, Is.GreaterThan(playerZ + 0.5f),
+                "The owner's player must follow the replicated handle.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_KinematicCopyWithRemotePlayer_IsRefused()
+        {
+            var interaction = CreateWheelbarrowForMovement(out _);
+            interaction.GetComponent<Rigidbody>().isKinematic = true;
+            _playerObject.transform.position = Vector3.zero;
+            _playerMovement.SetLocalPlayer(false);
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(((IHoldInteractable)interaction).TryBeginInteraction(_playerObject), Is.False,
+                "A peer that neither simulates the barrow nor controls the player has nothing to do.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_SecondPlayerIsRejectedWithoutLockingMovement()
+        {
+            var interaction = CreateWheelbarrowForMovement(out _);
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            var second = new GameObject("SecondPlayer");
+            try
+            {
+                second.SetActive(false);
+                var controller = second.AddComponent<CharacterController>();
+                controller.height = 1.8f;
+                controller.radius = 0.35f;
+                controller.center = new Vector3(0f, 0.9f, 0f);
+                var secondMovement = second.AddComponent<PlayerMovement>();
+                second.AddComponent<InteractionDetector>();
+                second.AddComponent<PlayerGrab>();
+                second.transform.position = new Vector3(-0.6f, 0f, 0f);
+                second.SetActive(true);
+                Physics.SyncTransforms();
+
+                Assert.That(((IHoldInteractable)interaction).TryBeginInteraction(second), Is.False,
+                    "Only one player may hold the handles.");
+                var locked = (bool)typeof(PlayerMovement)
+                    .GetField("_interactableControlsMovement", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .GetValue(secondMovement);
+                Assert.That(locked, Is.False, "A rejected player must keep normal movement.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(second);
+            }
         }
 
         [UnityTest]
@@ -1508,7 +1751,7 @@ namespace Ngecor.Interaction.Tests
 
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(WheelbarrowPrefabPath);
             Assert.That(prefab, Is.Not.Null, "The original wheelbarrow prefab must be available to Play Mode tests.");
-            var wheelbarrow = Object.Instantiate(prefab);
+            var wheelbarrow = InstantiateWheelbarrowPrefab(prefab);
             wheelbarrow.name = "WheelbarrowPrefabSteeringTest";
             // downhill turns the barrow around so that its nose (and W) points down the slope.
             wheelbarrow.transform.SetPositionAndRotation(

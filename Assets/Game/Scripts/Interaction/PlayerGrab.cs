@@ -87,6 +87,11 @@ namespace Ngecor.Interaction
         public bool UpdateCarriedTransform { get; set; } = true;
         public bool AutoDropEnabled { get; set; } = true;
         public System.Action AutoDropHandler { get; set; }
+        public System.Func<IHoldInteractable, bool> BeginInteractionRequestHandler { get; set; }
+        public IHoldInteractable HeldInteractable => IsUsingInteractable ? _heldInteractable : null;
+        // Raised once per ended hold, whoever ended it (E, the interactable itself, disable), so the network layer
+        // can tell the host.
+        public event System.Action InteractionEnded;
 
         private void Awake()
         {
@@ -109,7 +114,7 @@ namespace Ngecor.Interaction
             if (_interactAction != null && _interactAction.action != null && _interactAction.action.WasPressedThisFrame())
             {
                 if (IsUsingInteractable)
-                    RequestEndInteraction();
+                    ExecuteEndInteraction();
                 else if (IsCarrying)
                     RequestDrop();
                 else
@@ -243,7 +248,7 @@ namespace Ngecor.Interaction
             if (IsCarrying)
                 ExecuteDrop();
             if (IsUsingInteractable)
-                RequestEndInteraction();
+                ExecuteEndInteraction();
 
             if (_playerMovement == null)
                 _playerMovement = GetComponent<PlayerMovement>();
@@ -304,14 +309,22 @@ namespace Ngecor.Interaction
             if (Vector3.Distance(transform.position, _detector.CurrentHit.point) > _maxGrabDistance)
                 return false;
 
-            if (!target.TryBeginInteraction(gameObject))
+            if (BeginInteractionRequestHandler != null)
+                return BeginInteractionRequestHandler(target);
+
+            return ExecuteBeginInteraction(target);
+        }
+
+        public bool ExecuteBeginInteraction(IHoldInteractable target)
+        {
+            if (IsCarrying || IsUsingInteractable || target == null || !target.TryBeginInteraction(gameObject))
                 return false;
 
             _heldInteractable = target;
             return true;
         }
 
-        private bool RequestEndInteraction()
+        public bool ExecuteEndInteraction()
         {
             if (!IsUsingInteractable)
             {
@@ -322,13 +335,17 @@ namespace Ngecor.Interaction
             var target = _heldInteractable;
             _heldInteractable = null;
             target.EndInteraction(gameObject);
+            InteractionEnded?.Invoke();
             return true;
         }
 
         public void NotifyInteractionEnded(IHoldInteractable target, string feedback = null)
         {
             if (ReferenceEquals(_heldInteractable, target))
+            {
                 _heldInteractable = null;
+                InteractionEnded?.Invoke();
+            }
             if (!string.IsNullOrEmpty(feedback))
                 ShowInteractionFeedback(feedback);
         }
@@ -360,6 +377,20 @@ namespace Ngecor.Interaction
 
             float distance = Vector3.Distance(transform.position, target.transform.position);
             if (distance > _maxGrabDistance)
+                return false;
+
+            AttachObject(target);
+            return true;
+        }
+
+        // A grab the host already validated (replication, late join). No distance or line-of-sight check: this peer's
+        // copy of the holder may lag behind the host's.
+        public bool ExecuteReplicatedGrab(GrabbableObject target)
+        {
+            if (IsCarrying || target == null)
+                return false;
+
+            if (target.IsHeld && target.CurrentHolder != gameObject)
                 return false;
 
             AttachObject(target);
