@@ -47,13 +47,13 @@ namespace Ngecor.Material
                 if (_receiver != receiver)
                 {
                     _receiver = receiver;
-                    _receiverCollider = receiver.GetComponent<Collider>();
+                    _receiverCollider = receiver != null ? receiver.GetComponent<Collider>() : null;
                 }
 
                 var destination = _receiverCollider != null
                     ? new Vector3(_receiverCollider.bounds.center.x,
                         _receiverCollider.bounds.max.y + 0.02f, _receiverCollider.bounds.center.z)
-                    : receiver.transform.position;
+                    : _pour.PourDestination;
                 var main = _sandFlow.main;
                 var flightTime = main.startLifetime.constant;
                 var velocity = (destination - _sandFlow.transform.position) / flightTime

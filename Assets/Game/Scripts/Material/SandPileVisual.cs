@@ -7,6 +7,7 @@ namespace Ngecor.Material
     public sealed class SandPileVisual : MonoBehaviour
     {
         [SerializeField] private Transform _mound;
+        [SerializeField, Min(0)] private int _referenceUnits;
 
         private BulkMaterialContainer _container;
         private Vector3 _fullScale;
@@ -27,6 +28,11 @@ namespace Ngecor.Material
 
         private void LateUpdate()
         {
+            Refresh();
+        }
+
+        public void Refresh()
+        {
             if (_mound == null)
                 return;
 
@@ -42,7 +48,8 @@ namespace Ngecor.Material
                 return;
 
             // Similar mounds keep their slope; volume changes with the cube of scale.
-            var scale = Mathf.Pow(Mathf.Clamp01((float)units / capacity), 1f / 3f);
+            var scale = Mathf.Pow(_referenceUnits > 0 ? (float)units / _referenceUnits
+                : Mathf.Clamp01((float)units / capacity), 1f / 3f);
             _mound.localScale = _fullScale * scale;
             var position = _fullPosition;
             position.y -= _fullScale.y * (1f - scale) * 0.5f;

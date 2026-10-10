@@ -9,7 +9,7 @@ namespace Ngecor.Interaction
     {
         [SerializeField, Min(0.1f)] private float _maxDistance = 3f;
         [SerializeField] private LayerMask _layerMask = ~0;
-        [SerializeField] private bool _showDebugFeedback = true;
+        [SerializeField] private bool _showDebugFeedback = false;
 
         private PlayerMovement _playerMovement;
 
@@ -17,6 +17,12 @@ namespace Ngecor.Interaction
         public RaycastHit CurrentHit { get; private set; }
         public bool HasTarget => CurrentTarget != null &&
                                  (!(CurrentTarget is Object unityObject) || unityObject != null);
+
+        public bool ShowDebugFeedback
+        {
+            get => _showDebugFeedback;
+            set => _showDebugFeedback = value;
+        }
 
         public float MaxDistance
         {

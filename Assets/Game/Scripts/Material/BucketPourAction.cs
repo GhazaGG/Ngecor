@@ -13,38 +13,51 @@ namespace Ngecor.Material
         private BulkMaterialContainer _source;
         private BulkMaterialContainer _requestedReceiver;
         private GrabbableObject _grabbable;
+        private GroundMaterialDeposit _ground;
+        private bool _groundRequested;
         private float _flowUntil = float.NegativeInfinity;
         private readonly HashSet<BulkMaterialContainer> _nearbyReceivers = new HashSet<BulkMaterialContainer>();
 
         public BulkMaterialContainer PourReceiver => _requestedReceiver;
+        public Vector3 PourDestination => _requestedReceiver != null
+            ? _requestedReceiver.transform.position : _ground != null ? _ground.DepositPoint : transform.position;
         // Bridge integer transfer ticks and show the final unit for a short time.
-        public bool IsPouring => _requestedReceiver != null && Time.time < _flowUntil;
+        public bool IsPouring => (_requestedReceiver != null || _groundRequested) && Time.time < _flowUntil;
 
         private void Awake()
         {
             _source = GetComponent<BulkMaterialContainer>();
             _grabbable = GetComponent<GrabbableObject>();
+            _ground = GetComponent<GroundMaterialDeposit>();
         }
 
         public bool RequestPour()
         {
-            var receiver = GetNearbyReceiver();
-            if (receiver == null)
+            var receiver = GetNearbyReceiver(out var tied);
+            var ground = receiver == null && !tied && _ground != null && _ground.TryGetSurface(out _);
+            if (receiver == null && !ground)
             {
                 CancelPour();
                 return false;
             }
 
-            if (_requestedReceiver != receiver)
+            if (_requestedReceiver != receiver || _groundRequested != ground)
+            {
                 _flowUntil = float.NegativeInfinity;
+                _source.CancelTransfer();
+            }
             _requestedReceiver = receiver;
+            _groundRequested = ground;
             return true;
         }
 
         public void CancelPour()
         {
             _requestedReceiver = null;
+            _groundRequested = false;
             _flowUntil = float.NegativeInfinity;
+            if (_source != null)
+                _source.CancelTransfer();
         }
 
         public void RegisterNearbyReceiver(BulkMaterialContainer receiver)
@@ -69,11 +82,11 @@ namespace Ngecor.Material
             _nearbyReceivers.Clear();
         }
 
-        private BulkMaterialContainer GetNearbyReceiver()
+        private BulkMaterialContainer GetNearbyReceiver(out bool tied)
         {
             BulkMaterialContainer nearest = null;
             var nearestDistanceSquared = float.PositiveInfinity;
-            var tied = false;
+            tied = false;
             var bucketPosition = transform.position;
             foreach (var receiver in _nearbyReceivers)
             {
@@ -103,10 +116,11 @@ namespace Ngecor.Material
                 return;
             }
 
-            if (_source == null || _requestedReceiver == null)
+            if (_source == null || (_requestedReceiver == null && !_groundRequested))
                 return;
 
-            var moved = _source.TransferForSeconds(_requestedReceiver, _materialType, Time.fixedDeltaTime);
+            var moved = _groundRequested ? _source.TransferToGroundForSeconds(_materialType, Time.fixedDeltaTime)
+                : _source.TransferForSeconds(_requestedReceiver, _materialType, Time.fixedDeltaTime);
             if (moved > 0)
                 _flowUntil = Time.time + 0.2f;
         }
