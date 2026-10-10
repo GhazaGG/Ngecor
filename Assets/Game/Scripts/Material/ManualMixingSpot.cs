@@ -60,7 +60,8 @@ namespace Ngecor.Material
         private float _noticeUntil;
 
         public BulkMaterialContainer Ingredients => _ingredients;
-        public int DryWork => _dryWork;
+        // Dry material added after a finished dry mix starts the dry mix over, so the old count no longer shows.
+        public int DryWork => _dryDone && !IsDryMixed ? 0 : _dryWork;
         public int WetWork => _wetWork;
         public int DryActions => _dryActions;
         public int WetActionsPerBatch => _wetActionsPerBatch;
@@ -95,7 +96,7 @@ namespace Ngecor.Material
                             return "Butuh pasir (min " + _sandUnitsPerBatch + ")";
                         return "Siap aduk kering (tahan R)";
                     case MixingPhase.DryMixing:
-                        return "Aduk kering " + _dryWork + "/" + _dryActions;
+                        return "Aduk kering " + DryWork + "/" + _dryActions;
                     case MixingPhase.DryMixed:
                         return Water < _waterUnitsPerBatch ? "Sudah rata: tuang air" : "Siap aduk basah (tahan R)";
                     case MixingPhase.WetMixing:
@@ -115,7 +116,7 @@ namespace Ngecor.Material
                 if (!HasRecipe)
                     return Concrete > 0 ? MixingPhase.HasConcrete : MixingPhase.NeedsIngredients;
                 if (!IsDryMixed)
-                    return _dryWork > 0 ? MixingPhase.DryMixing : MixingPhase.NeedsIngredients;
+                    return DryWork > 0 ? MixingPhase.DryMixing : MixingPhase.NeedsIngredients;
                 return _wetWork > 0 ? MixingPhase.WetMixing : MixingPhase.DryMixed;
             }
         }
@@ -194,10 +195,8 @@ namespace Ngecor.Material
             _visualKey = -1;
         }
 
-        private static int CeilDiv(int units, int perBatch) => (units + perBatch - 1) / perBatch;
-
-        // Batches the raw dry material in the bed can still make once the missing ingredients arrive.
-        private int DryBatches => Mathf.Max(CeilDiv(Cement, _cementUnitsPerBatch), CeilDiv(Sand, _sandUnitsPerBatch));
+        // Batches the dry material in the bed can make right now.
+        private int DryBatches => Mathf.Min(Cement / _cementUnitsPerBatch, Sand / _sandUnitsPerBatch);
 
         // Raw material can never leave the bed, so the bed only takes what it can still turn into concrete:
         // room stays reserved for the missing ingredients of every batch it holds, and water stops at what the
@@ -219,7 +218,7 @@ namespace Ngecor.Material
                     }
                     limit = DryBatches * _waterUnitsPerBatch - Water;
                     if (limit <= 0)
-                        ShowNotice("Air cukup: aduk basah dulu");
+                        ShowNotice("Air cukup untuk bahan kering yang ada");
                     return limit;
                 case MaterialType.Cement:
                     limit = maxBatches * _cementUnitsPerBatch - Cement;
@@ -308,7 +307,7 @@ namespace Ngecor.Material
             _wetWork = 0;
         }
 
-        private float Progress => !IsDryMixed ? (float)_dryWork / _dryActions
+        private float Progress => !IsDryMixed ? (float)DryWork / _dryActions
             : (float)_wetWork / _wetActionsPerBatch;
 
         private void RefreshVisuals()
@@ -340,7 +339,7 @@ namespace Ngecor.Material
         {
             var color = dry > 0 ? (Cement * _cementColor + Sand * _sandColor) / dry : _concreteColor;
             // Dry mixing evens the colors out; water darkens the mix; finished concrete is its own color.
-            var mixed = IsDryMixed ? 1f : (float)_dryWork / _dryActions;
+            var mixed = IsDryMixed ? 1f : (float)DryWork / _dryActions;
             color = Color.Lerp(color, _dryMixColor, mixed);
             if (dry + Water > 0)
                 color = Color.Lerp(color, _wetColor, (float)Water / (dry + Water));

@@ -94,7 +94,7 @@ namespace Ngecor.Material.Tests
             Assert.That(spot.IsDryMixed, Is.True);
             Assert.That(spot.ExecuteStirAction(), Is.False, "dry-mixed bed needs water");
 
-            Assert.That(spot.Ingredients.AddUnits(MaterialType.Water, 3), Is.EqualTo(3));
+            Assert.That(spot.Ingredients.AddUnits(MaterialType.Water, 3), Is.EqualTo(2), "water for the two batches that can form");
             Assert.That(spot.ExecuteStirAction(), Is.True);
             Assert.That(spot.Phase, Is.EqualTo(MixingPhase.WetMixing));
             Assert.That(spot.ExecuteStirAction(), Is.True);
@@ -102,7 +102,7 @@ namespace Ngecor.Material.Tests
             Assert.That(spot.Ingredients.GetUnits(MaterialType.Concrete), Is.EqualTo(4));
             Assert.That(spot.Ingredients.GetUnits(MaterialType.Cement), Is.EqualTo(1));
             Assert.That(spot.Ingredients.GetUnits(MaterialType.Sand), Is.EqualTo(3));
-            Assert.That(spot.Ingredients.GetUnits(MaterialType.Water), Is.EqualTo(2));
+            Assert.That(spot.Ingredients.GetUnits(MaterialType.Water), Is.EqualTo(1));
             Assert.That(spot.Ingredients.AddUnits(MaterialType.Concrete, 1), Is.Zero, "concrete only comes from mixing");
         }
 
@@ -121,6 +121,9 @@ namespace Ngecor.Material.Tests
 
             spot.Ingredients.AddUnits(MaterialType.Sand, 2);
             Assert.That(spot.IsDryMixed, Is.False);
+            Assert.That(spot.DryWork, Is.Zero, "no stale dry count before the next stir");
+            Assert.That(spot.Phase, Is.EqualTo(MixingPhase.NeedsIngredients));
+            Assert.That(spot.StatusText, Does.Contain("Siap aduk kering"));
             Assert.That(spot.ExecuteStirAction(), Is.True);
             Assert.That(spot.IsDryMixed, Is.True);
             Assert.That(spot.WetWork, Is.Zero, "wet mixing starts over after a re-dry-mix");
@@ -155,10 +158,10 @@ namespace Ngecor.Material.Tests
             var spot = CreateSpot(200);
             Set(spot, "_dryActions", 1);
             spot.Ingredients.AddUnits(MaterialType.Cement, 1);
-            spot.Ingredients.AddUnits(MaterialType.Sand, 2);
+            spot.Ingredients.AddUnits(MaterialType.Sand, 3);
             spot.ExecuteStirAction();
 
-            Assert.That(spot.Ingredients.AddUnits(MaterialType.Water, 50), Is.EqualTo(1));
+            Assert.That(spot.Ingredients.AddUnits(MaterialType.Water, 50), Is.EqualTo(1), "1 cement + 3 sand make one batch");
             Assert.That(spot.TryReceiveBag(Prefab("CementBag").GetComponent<CementBag>()), Is.True);
         }
 
@@ -378,6 +381,8 @@ namespace Ngecor.Material.Tests
         {
             var spot = CreateSpot(100);
             MakeConcrete(spot);
+            spot.Ingredients.AddUnits(MaterialType.Sand, 4);
+            Assert.That(spot.ExecuteStirAction(), Is.True, "dry-mix so the bed takes water");
             var bucket = HeldBucket();
             var stock = bucket.GetComponent<BulkMaterialContainer>();
             Assert.That(stock.ConfigureSingleTypeWhenEmpty(MaterialType.Water), Is.True);
