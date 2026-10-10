@@ -28,6 +28,9 @@ namespace Ngecor.Player
         private float _cameraPitch;
         private float _carriedMass;
         private float _remainingPushImpulse;
+        private Vector3 _movementDirection;
+        private Vector2 _movementInput;
+        private bool _interactableControlsMovement;
         private readonly HashSet<Rigidbody> _pushedBodies = new HashSet<Rigidbody>();
         private RaycastHit[] _stepProbeHits = new RaycastHit[8];
 
@@ -51,6 +54,50 @@ namespace Ngecor.Player
         public bool IsLocalPlayer => _isLocalPlayer;
         public bool IsCursorLocked => _cursorLocked;
         public bool CursorRelockedThisFrame => _cursorRelockedFrame == Time.frameCount;
+        public Vector2 MovementInput => _movementInput;
+        public float MoveSpeed => _moveSpeed;
+
+        // surfaceNormal (zero means world up) is the plane the push lies in; the force acts on the line through the
+        // body's centre of mass inside that plane, so pushing along a ramp neither lifts nor pitches the body.
+        public void ApplyMovementPush(
+            Rigidbody body, Vector3 point, Vector3 pushDirection, float strength, float deltaTime, Vector3 surfaceNormal = default)
+        {
+            if (_isLocalPlayer && isActiveAndEnabled)
+                ApplyContactPush(body, point, pushDirection, deltaTime, strength, surfaceNormal);
+        }
+
+        // Holds a pushed body back to the speed the push would reach (for example a barrow running downhill), using
+        // the same speed law and force limit as the push. It stops the body outrunning the player and never pushes.
+        public void ApplyMovementBrake(
+            Rigidbody body, Vector3 pushDirection, float strength, float deltaTime, Vector3 surfaceNormal = default)
+        {
+            strength = Mathf.Clamp01(strength);
+            if (!_isLocalPlayer || !isActiveAndEnabled || body == null || body.isKinematic || strength <= 0f)
+                return;
+
+            var direction = Vector3.ProjectOnPlane(pushDirection, NormalOrUp(surfaceNormal));
+            if (direction.sqrMagnitude <= Mathf.Epsilon)
+                return;
+
+            direction.Normalize();
+            var centreOfMass = body.worldCenterOfMass;
+            var targetSpeed = CalculatePushTargetSpeed(body.mass, _moveSpeed * strength);
+            var currentSpeed = Vector3.Dot(body.GetPointVelocity(centreOfMass), direction);
+            // Braking is the push law mirrored: a push against the motion toward a speed below the current one. The
+            // response time is one frame so the brake holds the target instead of a proportional lag above it.
+            var brakeForce = CalculatePushForce(
+                body.mass, -targetSpeed, -currentSpeed, deltaTime, deltaTime, _maxPushForce * strength);
+            if (brakeForce > 0f)
+                body.AddForceAtPosition(-direction * (brakeForce * deltaTime), centreOfMass, ForceMode.Impulse);
+        }
+
+        private static Vector3 NormalOrUp(Vector3 surfaceNormal) =>
+            surfaceNormal.sqrMagnitude > Mathf.Epsilon ? surfaceNormal.normalized : Vector3.up;
+
+        public void SetInteractableMovement(bool controlled)
+        {
+            _interactableControlsMovement = controlled;
+        }
 
         public event System.Action<bool> LocalPlayerChanged;
         // Note: IsCursorOverUIHandler is a single static delegate; subsequent subscribers will overwrite previous ones.
@@ -95,6 +142,9 @@ namespace Ngecor.Player
 
         private void OnDisable()
         {
+            _movementDirection = Vector3.zero;
+            _movementInput = Vector2.zero;
+            _interactableControlsMovement = false;
             if (_isLocalPlayer)
                 SetCursorLocked(false);
         }
@@ -102,12 +152,20 @@ namespace Ngecor.Player
         private void Update()
         {
             if (!_isLocalPlayer || _characterController == null)
+            {
+                _movementDirection = Vector3.zero;
+                _movementInput = Vector2.zero;
                 return;
+            }
 
             HandleCursorInput();
 
-            if (_moveAction == null)
+            if (_moveAction == null || _moveAction.action == null)
+            {
+                _movementDirection = Vector3.zero;
+                _movementInput = Vector2.zero;
                 return;
+            }
 
             if (_lookAction != null && _cursorLocked)
             {
@@ -122,8 +180,10 @@ namespace Ngecor.Player
             }
 
             var input = Vector2.ClampMagnitude(_moveAction.action.ReadValue<Vector2>(), 1f);
+            _movementInput = input;
             var direction = transform.right * input.x + transform.forward * input.y;
             direction.y = 0f;
+            _movementDirection = direction.sqrMagnitude > Mathf.Epsilon ? direction.normalized : Vector3.zero;
 
             var deltaTime = Time.deltaTime;
             if (_characterController.isGrounded && _verticalVelocity < 0f)
@@ -131,14 +191,15 @@ namespace Ngecor.Player
             else
                 _verticalVelocity += Physics.gravity.y * deltaTime;
 
+            var controlledDirection = _interactableControlsMovement ? Vector3.zero : direction;
             float massMultiplier = Mathf.Clamp(1f - _carriedMass * _massSpeedPenaltyFactor, _minMassSpeedMultiplier, 1f);
-            var movement = direction * (_moveSpeed * massMultiplier) + Vector3.up * _verticalVelocity;
+            var movement = controlledDirection * (_moveSpeed * massMultiplier) + Vector3.up * _verticalVelocity;
             _remainingPushImpulse = _maxPushForce * deltaTime;
             _pushedBodies.Clear();
 
             var stepOffset = _characterController.stepOffset;
-            var horizontalDistance = direction.magnitude * (_moveSpeed * massMultiplier) * deltaTime;
-            if (ShouldBlockStepOverDynamicBody(direction, horizontalDistance))
+            var horizontalDistance = controlledDirection.magnitude * (_moveSpeed * massMultiplier) * deltaTime;
+            if (ShouldBlockStepOverDynamicBody(controlledDirection, horizontalDistance))
                 _characterController.stepOffset = 0f;
 
             _characterController.Move(movement * deltaTime);
@@ -198,6 +259,9 @@ namespace Ngecor.Player
 
         private void OnControllerColliderHit(ControllerColliderHit hit)
         {
+            if (_interactableControlsMovement)
+                return;
+
             if (hit.moveDirection.y < -0.3f)
                 return;
 
@@ -208,25 +272,28 @@ namespace Ngecor.Player
             ApplyContactPush(hit.rigidbody, hit.point, pushDirection, Time.deltaTime);
         }
 
-        private void ApplyContactPush(Rigidbody body, Vector3 point, Vector3 pushDirection, float deltaTime)
+        private void ApplyContactPush(
+            Rigidbody body, Vector3 point, Vector3 pushDirection, float deltaTime, float strength = 1f, Vector3 surfaceNormal = default)
         {
-            if (body == null || body.isKinematic || _remainingPushImpulse <= 0f || _pushedBodies.Contains(body))
+            strength = Mathf.Clamp01(strength);
+            if (body == null || body.isKinematic || _remainingPushImpulse <= 0f || _pushedBodies.Contains(body) || strength <= 0f)
                 return;
 
-            pushDirection = Vector3.ProjectOnPlane(pushDirection, Vector3.up);
+            var normal = NormalOrUp(surfaceNormal);
+            pushDirection = Vector3.ProjectOnPlane(pushDirection, normal);
             if (pushDirection.sqrMagnitude <= Mathf.Epsilon)
                 return;
 
             pushDirection.Normalize();
-            point.y = body.worldCenterOfMass.y;
+            point -= normal * Vector3.Dot(point - body.worldCenterOfMass, normal);
             var currentSpeed = Vector3.Dot(body.GetPointVelocity(point), pushDirection);
             var pushForce = CalculatePushForce(
                 body.mass,
-                CalculatePushTargetSpeed(body.mass, _moveSpeed),
+                CalculatePushTargetSpeed(body.mass, _moveSpeed * strength),
                 currentSpeed,
                 deltaTime,
                 PushResponseTime,
-                _maxPushForce);
+                _maxPushForce * strength);
             var impulse = Mathf.Min(pushForce * deltaTime, _remainingPushImpulse);
             if (impulse <= 0f)
                 return;

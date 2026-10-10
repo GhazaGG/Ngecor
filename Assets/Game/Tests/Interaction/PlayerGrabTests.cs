@@ -6,11 +6,18 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.TestTools;
 using Ngecor.Player;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 namespace Ngecor.Interaction.Tests
 {
     public class PlayerGrabTests : InputTestFixture
     {
+        // Headless runs are unthrottled (sub-millisecond frames), so one sideways step falls below the
+        // CharacterController's minimum move distance. Pin steering tests to a realistic frame rate.
+        private const int SteeringTestFrameRate = 60;
+
         private GameObject _playerObject;
         private PlayerMovement _playerMovement;
         private InteractionDetector _detector;
@@ -19,6 +26,8 @@ namespace Ngecor.Interaction.Tests
         private GameObject _targetObject2;
         private GameObject _obstacleObject;
         private InputActionAsset _actionAsset;
+        private InputAction _moveAction;
+        private InputActionReference _moveReference;
         private InputAction _interactAction;
         private InputActionReference _interactReference;
         private InputAction _throwAction;
@@ -34,11 +43,18 @@ namespace Ngecor.Interaction.Tests
             _actionAsset = ScriptableObject.CreateInstance<InputActionAsset>();
             var playerMap = new InputActionMap("Player");
             _actionAsset.AddActionMap(playerMap);
+            _moveAction = playerMap.AddAction("Move", InputActionType.Value, expectedControlLayout: "Vector2");
+            _moveAction.AddCompositeBinding("2DVector")
+                .With("Up", "<Keyboard>/w")
+                .With("Down", "<Keyboard>/s")
+                .With("Left", "<Keyboard>/a")
+                .With("Right", "<Keyboard>/d");
             _interactAction = playerMap.AddAction("Interact", InputActionType.Button);
             _interactAction.AddBinding("<Keyboard>/e");
             _throwAction = playerMap.AddAction("Attack", InputActionType.Button);
             _throwAction.AddBinding("<Mouse>/leftButton");
             playerMap.Enable();
+            _moveReference = InputActionReference.Create(_moveAction);
             _interactReference = InputActionReference.Create(_interactAction);
             _throwReference = InputActionReference.Create(_throwAction);
 
@@ -74,8 +90,12 @@ namespace Ngecor.Interaction.Tests
         [TearDown]
         public override void TearDown()
         {
+            Time.captureFramerate = 0;
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
+
+            if (_actionAsset != null)
+                _actionAsset.Disable();
 
             if (_playerObject != null)
                 Object.DestroyImmediate(_playerObject);
@@ -95,9 +115,13 @@ namespace Ngecor.Interaction.Tests
                 _throwAction.Disable();
                 _throwAction = null;
             }
+            if (_moveAction != null)
+            {
+                _moveAction.Disable();
+                _moveAction = null;
+            }
             if (_actionAsset != null)
             {
-                _actionAsset.Disable();
                 Object.DestroyImmediate(_actionAsset);
                 _actionAsset = null;
             }
@@ -105,6 +129,11 @@ namespace Ngecor.Interaction.Tests
             {
                 Object.DestroyImmediate(_interactReference);
                 _interactReference = null;
+            }
+            if (_moveReference != null)
+            {
+                Object.DestroyImmediate(_moveReference);
+                _moveReference = null;
             }
             if (_throwReference != null)
             {
@@ -124,6 +153,70 @@ namespace Ngecor.Interaction.Tests
             rb.isKinematic = false;
             rb.useGravity = true;
             return go.AddComponent<GrabbableObject>();
+        }
+
+        private Component CreateWheelbarrow(string name, Vector3 position, out BoxCollider tray, out BoxCollider handle)
+        {
+            var wheelbarrow = new GameObject(name);
+            wheelbarrow.transform.position = position;
+            var body = wheelbarrow.AddComponent<Rigidbody>();
+            body.useGravity = false;
+            body.mass = 4f;
+            body.centerOfMass = Vector3.zero;
+
+            var interactionType = FindWheelbarrowInteractionType();
+            var interaction = wheelbarrow.AddComponent(interactionType);
+            tray = CreateWheelbarrowCollider(wheelbarrow.transform, "Tray", new Vector3(0f, 0f, 0.25f), new Vector3(0.5f, 0.5f, 0.1f));
+            handle = CreateWheelbarrowCollider(wheelbarrow.transform, "Handle", new Vector3(0f, 0f, -0.25f), Vector3.one * 0.2f);
+
+            var handleField = interactionType.GetField("_handleColliders", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(handleField, Is.Not.Null, "Wheelbarrow interaction must expose its serialized handle colliders.");
+            handleField.SetValue(interaction, new Collider[] { handle });
+            return interaction;
+        }
+
+        private static BoxCollider CreateWheelbarrowCollider(Transform parent, string name, Vector3 localPosition, Vector3 size)
+        {
+            var child = new GameObject(name);
+            child.transform.SetParent(parent, false);
+            child.transform.localPosition = localPosition;
+            var collider = child.AddComponent<BoxCollider>();
+            collider.size = size;
+            return collider;
+        }
+
+        private Component CreateWheelbarrowForMovement(out BoxCollider handle)
+        {
+            EnableMoveInput();
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _obstacleObject.transform.position = new Vector3(0f, -0.5f, 0f);
+            _obstacleObject.transform.localScale = new Vector3(20f, 1f, 20f);
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out handle);
+            _targetObject1 = interaction.gameObject;
+            _playerObject.transform.position = new Vector3(0.6f, 0f, 0f);
+            _playerMovement.LocalCamera.transform.rotation = Quaternion.LookRotation(
+                handle.bounds.center - _playerMovement.LocalCamera.transform.position, Vector3.up);
+            Physics.SyncTransforms();
+            return interaction;
+        }
+
+        private void EnableMoveInput()
+        {
+            typeof(PlayerMovement).GetField("_moveAction", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(_playerMovement, _moveReference);
+        }
+
+        private static System.Type FindWheelbarrowInteractionType()
+        {
+            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var type = assembly.GetType("Ngecor.Vehicle.WheelbarrowInteraction");
+                if (type != null)
+                    return type;
+            }
+
+            Assert.Fail("WheelbarrowInteraction must be available in the loaded Unity assemblies.");
+            return null;
         }
 
         [UnityTest]
@@ -617,6 +710,877 @@ namespace Ngecor.Interaction.Tests
             yield return null;
 
             Assert.That(_playerGrab.IsCarrying, Is.False, "Pressing interact did not drop object.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_StartsOnlyFromConfiguredHandle()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out var tray, out var handle);
+            _targetObject1 = interaction.gameObject;
+
+            _playerObject.transform.position = new Vector3(0f, 0f, 3f);
+            _playerMovement.LocalCamera.transform.rotation = Quaternion.LookRotation(
+                tray.bounds.center - _playerMovement.LocalCamera.transform.position, Vector3.up);
+            Physics.SyncTransforms();
+            yield return null;
+            Assert.That(((IHoldInteractable)interaction).CanInteractFrom(_playerObject, tray), Is.False,
+                "The tray must not start a handle interaction.");
+            _detector.Detect();
+            Assert.That(_detector.CurrentHit.collider, Is.SameAs(tray));
+            Assert.That(_detector.CurrentTarget, Is.Null, "A ray hit on the tray must not start a handle interaction.");
+
+            _playerObject.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            _playerMovement.LocalCamera.transform.localRotation = Quaternion.identity;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+
+            Assert.That(_detector.CurrentHit.collider, Is.SameAs(handle));
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_StaysHeldAtNormalSeparationAndSecondPressReleases()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var first = CreateWheelbarrow("FirstWheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out _);
+            _targetObject1 = first.gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            first.transform.position = new Vector3(0f, 1.4f, 6f);
+            Physics.SyncTransforms();
+            yield return null;
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True,
+                "Normal movement or a lagging wheelbarrow must not end the hold before E is pressed again.");
+
+            Press(keyboard.eKey);
+            yield return null;
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False,
+                "The second Interact press must release the wheelbarrow.");
+            Release(keyboard.eKey);
+
+            var secondPosition = _playerObject.transform.position + _playerObject.transform.forward * 2f;
+            secondPosition.y = 1.4f;
+            var second = CreateWheelbarrow("SecondWheelbarrow", secondPosition, out _, out _);
+            _targetObject2 = second.gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+
+            _detector.Detect();
+            Assert.That((_detector.CurrentTarget as Component)?.gameObject, Is.SameAs(second.gameObject));
+            Assert.That(_playerGrab.RequestGrab(), Is.True,
+                $"A new wheelbarrow must be usable immediately after the previous one is released. Feedback: {_playerGrab.InteractionFeedback ?? "none"}.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_DisableAndReenableClearsAndRestoresHold()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out _);
+            _targetObject1 = interaction.gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            ((Behaviour)interaction).enabled = false;
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False,
+                "Disabling the interactable must clear PlayerGrab's held-interactable state.");
+            Assert.That(_playerGrab.InteractionFeedback, Does.Contain("unavailable"));
+
+            ((Behaviour)interaction).enabled = true;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True,
+                "The wheelbarrow must be usable again after its interaction component is re-enabled.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_AlignsPlayerFromEitherSideOfTheHandles()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out var handle);
+            _targetObject1 = interaction.gameObject;
+            var hold = (IHoldInteractable)interaction;
+            var controller = _playerObject.GetComponent<CharacterController>();
+
+            foreach (var side in new[] { -1.2f, 1.2f })
+            {
+                _playerObject.transform.SetPositionAndRotation(
+                    new Vector3(side, 0f, handle.bounds.center.z), Quaternion.identity);
+                _playerMovement.LocalCamera.transform.rotation = Quaternion.LookRotation(
+                    handle.bounds.center - _playerMovement.LocalCamera.transform.position, Vector3.up);
+                Physics.SyncTransforms();
+                yield return null;
+                _detector.Detect();
+
+                Assert.That(_detector.CurrentHit.collider, Is.SameAs(handle));
+                var expectedRootPosition = handle.bounds.center +
+                    Vector3.ProjectOnPlane(handle.bounds.center - interaction.GetComponent<Rigidbody>().worldCenterOfMass, Vector3.up).normalized *
+                    (handle.bounds.extents.z + controller.radius + controller.skinWidth + 0.05f);
+                expectedRootPosition.y = _playerObject.transform.position.y;
+
+                Assert.That(_playerGrab.RequestGrab(), Is.True);
+                Assert.That(Vector3.Distance(_playerObject.transform.position, expectedRootPosition), Is.LessThan(0.1f),
+                    "Starting beside either handle must route the player behind the handles without moving the wheelbarrow.");
+                Assert.That(interaction.GetComponent<Rigidbody>().linearVelocity, Is.EqualTo(Vector3.zero));
+
+                hold.EndInteraction(_playerObject);
+            }
+        }
+
+#if UNITY_EDITOR
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_AlignsPlayerFromBothConfiguredHandles()
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Game/Prefabs/Vehicle/Wheelbarrow.prefab");
+            Assert.That(prefab, Is.Not.Null, "The original wheelbarrow prefab must be available to Play Mode tests.");
+
+            var wheelbarrow = Object.Instantiate(prefab);
+            wheelbarrow.name = "WheelbarrowPrefabTest";
+            wheelbarrow.transform.position = new Vector3(0f, 0.5f, 1.9f);
+            _targetObject1 = wheelbarrow;
+            var body = wheelbarrow.GetComponent<Rigidbody>();
+            body.useGravity = false;
+            var hold = wheelbarrow.GetComponent<IHoldInteractable>();
+            Assert.That(hold, Is.Not.Null);
+            Physics.SyncTransforms();
+
+            foreach (var handleName in new[] { "Handle_Left", "Handle_Right" })
+            {
+                var handle = wheelbarrow.transform.Find(handleName).GetComponent<Collider>();
+                var side = handleName == "Handle_Left" ? -1.5f : 1.5f;
+                _playerObject.transform.SetPositionAndRotation(
+                    new Vector3(side, 0f, handle.bounds.center.z), Quaternion.identity);
+                _playerMovement.LocalCamera.transform.rotation = Quaternion.LookRotation(
+                    handle.bounds.center - _playerMovement.LocalCamera.transform.position, Vector3.up);
+                Physics.SyncTransforms();
+                yield return null;
+                _detector.Detect();
+
+                Assert.That(_detector.CurrentHit.collider, Is.SameAs(handle),
+                    $"The original {handleName} must be targetable from its side.");
+                Assert.That(_playerGrab.RequestGrab(), Is.True);
+                Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+                hold.EndInteraction(_playerObject);
+            }
+        }
+#endif
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_RejectsBlockedGripPositionWithFeedback()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out _);
+            _targetObject1 = interaction.gameObject;
+            _playerObject.transform.position = new Vector3(0.6f, 0f, 0f);
+            _obstacleObject = new GameObject("BlockedGrip");
+            _obstacleObject.transform.position = new Vector3(0.3f, 0.9f, 0.3f);
+            _obstacleObject.AddComponent<BoxCollider>().size = new Vector3(0.2f, 1.8f, 0.2f);
+            Physics.SyncTransforms();
+            yield return null;
+
+            var startPosition = _playerObject.transform.position;
+            var began = ((IHoldInteractable)interaction).TryBeginInteraction(_playerObject);
+
+            Assert.That(began, Is.False);
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False);
+            Assert.That(Vector3.Distance(_playerObject.transform.position, startPosition), Is.LessThan(0.05f),
+                "A blocked alignment must not leave the player at a partial position.");
+            Assert.That(_playerGrab.InteractionFeedback, Does.Contain("blocked"));
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_ReleasesAfterExtremeSeparation()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out _);
+            _targetObject1 = interaction.gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            interaction.transform.position = new Vector3(0f, 1.4f, 20f);
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False);
+            Assert.That(_playerGrab.InteractionFeedback, Does.Contain("too far"));
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_WPushesForwardWhileHeld()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var interaction = CreateWheelbarrowForMovement(out var handle);
+            var body = interaction.GetComponent<Rigidbody>();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            Press(keyboard.wKey);
+            yield return null;
+            for (var i = 0; i < 4; i++)
+                yield return new WaitForFixedUpdate();
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True,
+                "Pushing the wheelbarrow must not break the hold during normal motion.");
+            Assert.That(_playerMovement.MovementInput.y, Is.EqualTo(1f));
+            Assert.That(Vector3.Dot(body.linearVelocity, interaction.transform.forward), Is.GreaterThan(0.1f),
+                "W must push in the wheelbarrow's forward direction.");
+            Assert.That(Vector3.Dot(body.linearVelocity, interaction.transform.forward), Is.LessThanOrEqualTo(5.05f),
+                "The existing mass-aware push speed limit must still apply.");
+            Assert.That(body.isKinematic, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_DSteersHandleRightAndNoseLeftWhileHeld()
+        {
+            yield return SteerSyntheticWheelbarrow(true);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_ASteersHandleLeftAndNoseRightWhileHeld()
+        {
+            yield return SteerSyntheticWheelbarrow(false);
+        }
+
+        private IEnumerator SteerSyntheticWheelbarrow(bool right)
+        {
+            Time.captureFramerate = SteeringTestFrameRate;
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var interaction = CreateWheelbarrowForMovement(out var handle);
+            var body = interaction.GetComponent<Rigidbody>();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            var side = right ? 1f : -1f;
+            var cartRight = interaction.transform.right;
+            var startHandle = handle.bounds.center;
+            var startPlayer = _playerObject.transform.position;
+
+            Press(right ? keyboard.dKey : keyboard.aKey);
+            yield return new WaitForSeconds(0.2f);
+
+            var handleShift = Vector3.Dot(handle.bounds.center - startHandle, cartRight);
+            var playerShift = Vector3.Dot(_playerObject.transform.position - startPlayer, cartRight);
+            var noseYaw = Vector3.SignedAngle(Vector3.forward, interaction.transform.forward, Vector3.up);
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True,
+                "Steering the wheelbarrow must not break the hold during normal motion.");
+            Assert.That(_playerMovement.MovementInput.x, Is.EqualTo(side), "A/D input must reach the held interaction.");
+            Assert.That(playerShift * side, Is.GreaterThan(0.005f),
+                "A steps the player left and D steps the player right.");
+            Assert.That(handleShift * side, Is.GreaterThan(0.005f),
+                "The handle must follow the player's sideways step in the same direction.");
+            Assert.That(body.angularVelocity.y * side, Is.LessThan(-0.05f),
+                "With the wheel as pivot the nose swings opposite to the handle: A turns it right, D turns it left.");
+            Assert.That(noseYaw * side, Is.LessThan(0f), "The nose heading must turn opposite to the player's step.");
+            Assert.That(Mathf.Abs(body.angularVelocity.y), Is.LessThanOrEqualTo(2.1f), "Steering speed must remain bounded.");
+            Assert.That(Vector3.Angle(interaction.transform.up, Vector3.up), Is.LessThan(3f),
+                "Steering force must yaw the wheelbarrow without rolling it.");
+            Assert.That(body.isKinematic, Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_BlockedPlayerSteeringDoesNotPushTheWheelbarrow()
+        {
+            Time.captureFramerate = SteeringTestFrameRate;
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var interaction = CreateWheelbarrowForMovement(out var handle);
+            var body = interaction.GetComponent<Rigidbody>();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            var playerPosition = _playerObject.transform.position;
+            _targetObject2 = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _targetObject2.name = "SteeringWall";
+            _targetObject2.transform.localScale = new Vector3(1f, 2f, 1f);
+            _targetObject2.transform.position = playerPosition + Vector3.left * (0.35f + 0.02f + 0.5f) + Vector3.up;
+            Physics.SyncTransforms();
+            var startHandle = handle.bounds.center;
+
+            Press(keyboard.aKey);
+            yield return null;
+            for (var i = 0; i < 10; i++)
+                yield return new WaitForFixedUpdate();
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+            Assert.That(Mathf.Abs(_playerObject.transform.position.x - playerPosition.x), Is.LessThan(0.05f),
+                "The wall must stop the player's sideways step.");
+            Assert.That(Mathf.Abs(handle.bounds.center.x - startHandle.x), Is.LessThan(0.05f),
+                "A blocked player must not keep pushing the wheelbarrow away from the grip.");
+            Assert.That(Mathf.Abs(body.angularVelocity.y), Is.LessThan(0.2f));
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_SteeringStopsWhenTheBarrowIsRolledOnItsSide()
+        {
+            Time.captureFramerate = SteeringTestFrameRate;
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var interaction = CreateWheelbarrowForMovement(out var handle);
+            var body = interaction.GetComponent<Rigidbody>();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            Press(keyboard.aKey);
+            body.rotation = Quaternion.Euler(0f, 0f, 25f);
+            body.angularVelocity = Vector3.zero;
+            Physics.SyncTransforms();
+            var startHandle = handle.bounds.center;
+            yield return new WaitForSeconds(0.2f);
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+            Assert.That(Mathf.Abs(body.angularVelocity.y), Is.LessThan(0.05f),
+                "A barrow rolled past the limit must not be steered further.");
+            Assert.That(Mathf.Abs(handle.bounds.center.x - startHandle.x), Is.LessThan(0.02f),
+                "Handle force must stay off while the barrow is on its side.");
+        }
+
+#if UNITY_EDITOR
+        private const string WheelbarrowPrefabPath = "Assets/Game/Prefabs/Vehicle/Wheelbarrow.prefab";
+
+        private Rigidbody _prefabBody;
+        private Vector3 _prefabStart;
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_DSteersHandleRightAndNoseLeftAroundGroundedWheel()
+        {
+            yield return SteerGroundedPrefab(true, 0);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_ASteersHandleLeftAndNoseRightAroundGroundedWheel()
+        {
+            yield return SteerGroundedPrefab(false, 0);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_ASteersHandleLeftAndNoseRightWithThreeCargo()
+        {
+            yield return SteerGroundedPrefab(false, 3);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_DSteersHandleRightAndNoseLeftWithThreeCargo()
+        {
+            yield return SteerGroundedPrefab(true, 3);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_ASteersHandleLeftAndNoseRightOnTwentyDegreeSlope()
+        {
+            yield return SteerGroundedPrefab(false, 0, 20f);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_DSteersHandleRightAndNoseLeftOnTwentyDegreeSlope()
+        {
+            yield return SteerGroundedPrefab(true, 0, 20f);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_LiftedWheelHasNoArtificialGroundGrip()
+        {
+            yield return SpawnAndHoldPrefab(0);
+            var body = _prefabBody;
+            var cartRight = body.transform.right;
+
+            body.useGravity = false;
+            body.position += Vector3.up * 2f;
+            body.linearVelocity = cartRight;
+            body.angularVelocity = Vector3.zero;
+            Physics.SyncTransforms();
+            for (var i = 0; i < 12; i++)
+                yield return new WaitForFixedUpdate();
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+            // The held handle may still hold the barrow back a little, but a ground grip would cancel the sideways
+            // speed within a couple of physics steps.
+            Assert.That(Vector3.Dot(body.linearVelocity, cartRight), Is.GreaterThan(0.6f),
+                "With the wheel off the ground nothing may artificially brake the barrow sideways.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WPushesForwardKeepingFrontWheelDown()
+        {
+            yield return PushGroundedPrefab(true, 0);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WPushesForwardWithThreeCargoKeepingFrontWheelDown()
+        {
+            yield return PushGroundedPrefab(true, 3);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_SReversesKeepingFrontWheelDown()
+        {
+            yield return PushGroundedPrefab(false, 0);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_SReversesWithThreeCargoKeepingFrontWheelDown()
+        {
+            yield return PushGroundedPrefab(false, 3);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WThenSOnTwentyDegreeSlopeKeepsBarrowOnTheGround()
+        {
+            yield return PushThenReverseOnSlope(20f);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WThenSOnTenDegreeSlopeKeepsBarrowOnTheGround()
+        {
+            yield return PushThenReverseOnSlope(10f);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WPushesThreeTwentyFiveKgLoadsOnFlatGround()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            yield return SpawnAndHoldPrefab(3, cargoMass: 25f);
+
+            var body = _prefabBody;
+            var forward = Vector3.ProjectOnPlane(body.transform.forward, Vector3.up).normalized;
+            var start = body.position;
+            Press(keyboard.wKey);
+            yield return null;
+            for (var i = 0; i < 50; i++)
+                yield return new WaitForFixedUpdate();
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+            Assert.That(Vector3.Dot(body.position - start, forward), Is.GreaterThan(0.3f),
+                "Three 25 kg loads in the tray must be movable by pushing W on flat ground.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_HeldWithoutInputOnTwentyDegreeSlopeStaysPut()
+        {
+            yield return SpawnAndHoldPrefab(0, 20f);
+            yield return AssertBarrowStaysPut(100, "A held barrow with no input must act as a parked one on a ramp.");
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_NotHeldOnTwentyDegreeSlopeStaysPut()
+        {
+            yield return SpawnAndHoldPrefab(0, 20f, hold: false);
+            yield return AssertBarrowStaysPut(100, "A parked barrow must keep its original foot friction on a ramp.");
+        }
+
+        private IEnumerator AssertBarrowStaysPut(int fixedSteps, string message)
+        {
+            var start = _prefabBody.position;
+            for (var i = 0; i < fixedSteps; i++)
+                yield return new WaitForFixedUpdate();
+
+            Assert.That(Vector3.Distance(_prefabBody.position, start), Is.LessThan(0.05f), message);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WDownTwentyDegreeSlopeDoesNotOutrunThePlayer()
+        {
+            yield return WalkBarrowDownTwentyDegreeSlope(0);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WDownTwentyDegreeSlopeWithThreeCargoDoesNotOutrunThePlayer()
+        {
+            yield return WalkBarrowDownTwentyDegreeSlope(3);
+        }
+
+        private IEnumerator WalkBarrowDownTwentyDegreeSlope(int cargoCount)
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            yield return SpawnAndHoldPrefab(cargoCount, 20f, downhill: true);
+
+            var body = _prefabBody;
+            var targetSpeed = PlayerMovement.CalculatePushTargetSpeed(body.mass, _playerMovement.MoveSpeed);
+            var downhill = Vector3.ProjectOnPlane(body.transform.forward, Vector3.up).normalized;
+            Press(keyboard.wKey);
+            yield return null;
+
+            var peakSpeed = 0f;
+            for (var i = 0; i < 125; i++)
+            {
+                yield return new WaitForFixedUpdate();
+                peakSpeed = Mathf.Max(peakSpeed, body.linearVelocity.magnitude);
+            }
+
+            Debug.Log($"[VEH-002] downhill cargo={cargoCount} peakSpeed={peakSpeed:F2} target={targetSpeed:F2} " +
+                      $"travel={Vector3.Dot(body.position - _prefabStart, downhill):F2}");
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True,
+                $"Walking downhill must not release the barrow. Feedback: {_playerGrab.InteractionFeedback ?? "none"}.");
+            Assert.That(Vector3.Dot(body.position - _prefabStart, downhill), Is.GreaterThan(1f),
+                "W must walk the barrow down the slope.");
+            Assert.That(peakSpeed, Is.LessThan(targetSpeed * 1.1f),
+                "The barrow must not run away from the player faster than the push speed.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_LegsSlideOnlyWhileHeldAndPushing()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var movingMaterial = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(
+                "Assets/Game/Settings/WheelLowFriction.physicMaterial");
+            Assert.That(movingMaterial, Is.Not.Null);
+            yield return SpawnAndHoldPrefab(0);
+
+            var legs = new[]
+            {
+                _targetObject1.transform.Find("Leg_Left").GetComponent<Collider>(),
+                _targetObject1.transform.Find("Leg_Right").GetComponent<Collider>(),
+            };
+            var rest = new[] { legs[0].sharedMaterial, legs[1].sharedMaterial };
+            Assert.That(rest[0], Is.Not.Null.And.Not.SameAs(movingMaterial), "Legs rest on the high-friction material.");
+
+            yield return null;
+            AssertLegMaterials(legs, rest, "Holding without input keeps the original foot friction.");
+
+            Press(keyboard.wKey);
+            yield return null;
+            yield return null;
+            AssertLegMaterials(legs, new[] { movingMaterial, movingMaterial }, "W while held lowers the foot friction.");
+
+            Release(keyboard.wKey);
+            yield return null;
+            yield return null;
+            AssertLegMaterials(legs, rest, "Releasing the keys restores the original foot friction.");
+
+            Press(keyboard.aKey);
+            yield return null;
+            yield return null;
+            AssertLegMaterials(legs, rest, "Steering with A keeps the original foot friction the A/D feel was tuned with.");
+
+            Release(keyboard.aKey);
+            yield return null;
+            Press(keyboard.sKey);
+            yield return null;
+            yield return null;
+            AssertLegMaterials(legs, new[] { movingMaterial, movingMaterial }, "S while held lowers the foot friction.");
+
+            Release(keyboard.sKey);
+            yield return null;
+            Press(keyboard.eKey);
+            yield return null;
+            Release(keyboard.eKey);
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False, "The second E press releases the barrow.");
+            AssertLegMaterials(legs, rest, "Releasing the barrow with E restores the original foot friction.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_LegsKeepOriginalFrictionWhenInteractionIsDisabledWhilePushing()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var movingMaterial = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(
+                "Assets/Game/Settings/WheelLowFriction.physicMaterial");
+            yield return SpawnAndHoldPrefab(0);
+
+            var legs = new[]
+            {
+                _targetObject1.transform.Find("Leg_Left").GetComponent<Collider>(),
+                _targetObject1.transform.Find("Leg_Right").GetComponent<Collider>(),
+            };
+            var rest = new[] { legs[0].sharedMaterial, legs[1].sharedMaterial };
+            Press(keyboard.wKey);
+            yield return null;
+            yield return null;
+            AssertLegMaterials(legs, new[] { movingMaterial, movingMaterial }, "W while held lowers the foot friction.");
+
+            ((Behaviour)_targetObject1.GetComponent(FindWheelbarrowInteractionType())).enabled = false;
+            AssertLegMaterials(legs, rest, "Disabling the interaction while pushing restores the original foot friction.");
+        }
+
+        private static void AssertLegMaterials(Collider[] legs, PhysicsMaterial[] expected, string message)
+        {
+            for (var i = 0; i < legs.Length; i++)
+                Assert.That(legs[i].sharedMaterial, Is.SameAs(expected[i]), message);
+        }
+
+        private IEnumerator PushThenReverseOnSlope(float slopeDegrees)
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            yield return SpawnAndHoldPrefab(0, slopeDegrees);
+
+            var body = _prefabBody;
+            var wheel = _targetObject1.transform.Find("Wheel");
+            var legLeft = _targetObject1.transform.Find("Leg_Left");
+            var legRight = _targetObject1.transform.Find("Leg_Right");
+            var ground = _obstacleObject.GetComponent<Collider>();
+            var startWheelGap = GetGroundGap(wheel, ground);
+            var startLegLeftGap = GetGroundGap(legLeft, ground);
+            var startLegRightGap = GetGroundGap(legRight, ground);
+            var uphill = Vector3.ProjectOnPlane(body.transform.forward, Vector3.up).normalized;
+
+            Press(keyboard.wKey);
+            for (var i = 0; i < 75; i++)
+                yield return new WaitForFixedUpdate();
+            var travelUp = Vector3.Dot(body.position - _prefabStart, uphill);
+            // Input must be changed from the Update phase; after WaitForFixedUpdate the keyboard has no state buffer.
+            yield return null;
+            Release(keyboard.wKey);
+            yield return null;
+            yield return null;
+            var reverseStart = body.position;
+            Press(keyboard.sKey);
+
+            var maxLift = 0f;
+            for (var i = 0; i < 75; i++)
+            {
+                yield return new WaitForFixedUpdate();
+                var wheelGap = GetGroundGap(wheel, ground);
+                var leftGap = GetGroundGap(legLeft, ground);
+                var rightGap = GetGroundGap(legRight, ground);
+                maxLift = Mathf.Max(
+                    maxLift,
+                    float.IsNaN(wheelGap) ? 1f : wheelGap - startWheelGap,
+                    float.IsNaN(leftGap) ? 1f : leftGap - startLegLeftGap,
+                    float.IsNaN(rightGap) ? 1f : rightGap - startLegRightGap);
+            }
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+            Assert.That(travelUp, Is.GreaterThan(1f), "W must push the barrow up the slope.");
+            Assert.That(Vector3.Dot(body.position - reverseStart, uphill), Is.LessThan(-0.3f),
+                "S must pull the barrow back down the slope.");
+            Assert.That(maxLift, Is.LessThan(0.03f),
+                "Reversing on a slope must not lift the wheel or legs off the ground.");
+        }
+
+        private IEnumerator PushGroundedPrefab(bool forwardPush, int cargoCount)
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            yield return SpawnAndHoldPrefab(cargoCount);
+
+            var body = _prefabBody;
+            var wheel = _targetObject1.transform.Find("Wheel");
+            var ground = _obstacleObject.GetComponent<Collider>();
+            var forward = Vector3.ProjectOnPlane(body.transform.forward, Vector3.up).normalized;
+            var start = body.position;
+            var startPitch = Mathf.Asin(body.transform.forward.y) * Mathf.Rad2Deg;
+            var startGap = GetWheelGroundGap(wheel, ground);
+            Assert.That(startGap, Is.Not.NaN, "The front wheel of the prefab must touch the ground before pushing.");
+
+            var maxPitchChange = 0f;
+            var maxWheelLift = 0f;
+            var peakSpeed = 0f;
+            Press(forwardPush ? keyboard.wKey : keyboard.sKey);
+            yield return null;
+            for (var i = 0; i < 50; i++)
+            {
+                yield return new WaitForFixedUpdate();
+                peakSpeed = Mathf.Max(peakSpeed, Vector3.Dot(body.linearVelocity, forward) * (forwardPush ? 1f : -1f));
+                maxPitchChange = Mathf.Max(
+                    maxPitchChange, Mathf.Abs(Mathf.Asin(body.transform.forward.y) * Mathf.Rad2Deg - startPitch));
+                var gap = GetWheelGroundGap(wheel, ground);
+                maxWheelLift = Mathf.Max(maxWheelLift, float.IsNaN(gap) ? 1f : gap - startGap);
+            }
+
+            var travel = Vector3.Dot(body.position - start, forward);
+            Debug.Log($"[VEH-002] {(forwardPush ? "W" : "S")} cargo={cargoCount} peakSpeed={peakSpeed:F2} travel={travel:F2}");
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+            Assert.That(travel * (forwardPush ? 1f : -1f), Is.GreaterThan(0.3f),
+                forwardPush ? "W must push the barrow forward." : "S must pull the barrow backward.");
+            Assert.That(maxPitchChange, Is.LessThan(5f), "Pushing or pulling must not pitch the barrow.");
+            Assert.That(maxWheelLift, Is.LessThan(0.03f), "The front wheel must stay on the ground.");
+            if (!forwardPush)
+            {
+                // Reverse target is 0.65 of the walking push speed (about 3.2 m/s). With the legs dragging at full
+                // friction the same barrow only reached about 2.3 m/s empty and 1.0 m/s with three cargo cubes.
+                Assert.That(peakSpeed, Is.GreaterThan(cargoCount > 0 ? 2.5f : 2.7f),
+                    "Reversing must roll smoothly toward the push speed instead of dragging the legs.");
+            }
+        }
+
+        private static float GetGroundGap(Transform part, Collider ground)
+        {
+            foreach (var hit in Physics.RaycastAll(part.position + Vector3.up * 0.3f, Vector3.down, 1f))
+            {
+                if (hit.collider == ground)
+                    return hit.distance;
+            }
+
+            return float.NaN;
+        }
+
+        // Distance from the wheel axle down to the ground collider, or NaN when the wheel does not see the ground.
+        private static float GetWheelGroundGap(Transform wheel, Collider ground)
+        {
+            foreach (var hit in Physics.RaycastAll(wheel.position + Vector3.up * 0.2f, Vector3.down, 0.6f))
+            {
+                if (hit.collider == ground)
+                    return hit.distance;
+            }
+
+            return float.NaN;
+        }
+
+        private IEnumerator SteerGroundedPrefab(bool right, int cargoCount, float slopeDegrees = 0f)
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            yield return SpawnAndHoldPrefab(cargoCount, slopeDegrees);
+
+            var body = _prefabBody;
+            var wheel = _targetObject1.transform.Find("Wheel");
+            var handle = _targetObject1.transform.Find("Handle_Left").GetComponent<Collider>();
+            var ground = _obstacleObject.GetComponent<Collider>();
+            var grounded = false;
+            foreach (var hit in Physics.RaycastAll(wheel.position + Vector3.up * 0.2f, Vector3.down, 0.5f))
+                grounded |= hit.collider == ground;
+            Assert.That(grounded, Is.True, "The front wheel of the prefab must touch the ground before steering.");
+
+            var side = right ? 1f : -1f;
+            var cartRight = body.transform.right;
+            var legLeft = _targetObject1.transform.Find("Leg_Left");
+            var legRight = _targetObject1.transform.Find("Leg_Right");
+            var groundNormal = Quaternion.Euler(-slopeDegrees, 0f, 0f) * Vector3.up;
+            var startLegLeftGap = GetGroundGap(legLeft, ground);
+            var startLegRightGap = GetGroundGap(legRight, ground);
+            var startRoll = Mathf.Asin(Vector3.Dot(body.transform.right, groundNormal)) * Mathf.Rad2Deg;
+            var maxLegLift = 0f;
+            var maxRollChange = 0f;
+            var startForward = Vector3.ProjectOnPlane(body.transform.forward, Vector3.up);
+            var startTilt = Vector3.Angle(body.transform.up, Vector3.up);
+            var startHandle = handle.bounds.center;
+            var startPlayer = _playerObject.transform.position;
+            var startWheel = wheel.position;
+
+            var peakYawSpeed = 0f;
+            Press(right ? keyboard.dKey : keyboard.aKey);
+            yield return null;
+            for (var i = 0; i < 25; i++)
+            {
+                yield return new WaitForFixedUpdate();
+                peakYawSpeed = Mathf.Max(peakYawSpeed, Mathf.Abs(body.angularVelocity.y));
+                var leftGap = GetGroundGap(legLeft, ground);
+                var rightGap = GetGroundGap(legRight, ground);
+                maxLegLift = Mathf.Max(
+                    maxLegLift,
+                    float.IsNaN(leftGap) ? 1f : leftGap - startLegLeftGap,
+                    float.IsNaN(rightGap) ? 1f : rightGap - startLegRightGap);
+                maxRollChange = Mathf.Max(
+                    maxRollChange,
+                    Mathf.Abs(Mathf.Asin(Vector3.Dot(body.transform.right, groundNormal)) * Mathf.Rad2Deg - startRoll));
+            }
+
+            var handleShift = Vector3.Dot(handle.bounds.center - startHandle, cartRight);
+            var playerShift = Vector3.Dot(_playerObject.transform.position - startPlayer, cartRight);
+            var wheelTravel = Vector3.ProjectOnPlane(wheel.position - startWheel, Vector3.up).magnitude;
+            var handleTravel = Vector3.ProjectOnPlane(handle.bounds.center - startHandle, Vector3.up).magnitude;
+            var noseYaw = Vector3.SignedAngle(
+                startForward, Vector3.ProjectOnPlane(body.transform.forward, Vector3.up), Vector3.up);
+            var tilt = Vector3.Angle(body.transform.up, Vector3.up);
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True, "Steering must not break the hold.");
+            Assert.That(playerShift * side, Is.GreaterThan(0.03f), "A steps the player left and D steps the player right.");
+            Assert.That(handleShift * side, Is.GreaterThan(0.03f), "The handle must swing the same way as the player.");
+            Assert.That(noseYaw * side, Is.LessThan(-2f), "A must turn the nose right and D must turn it left.");
+            Assert.That(tilt - startTilt, Is.LessThan(8f), "Steering must not roll one side of the wheelbarrow up.");
+            Assert.That(peakYawSpeed, Is.LessThan(2.3f), "Steering speed must stay bounded.");
+            Assert.That(maxRollChange, Is.LessThan(5f), "Steering must not roll the barrow relative to the ground.");
+            Assert.That(maxLegLift, Is.LessThan(0.03f), "Both legs must stay on the ground while steering.");
+            Assert.That(wheelTravel, Is.LessThan(handleTravel * 0.5f),
+                "The front wheel contact must stay a relatively fixed pivot while the handle swings.");
+            Assert.That(body.isKinematic, Is.False);
+        }
+
+        private IEnumerator SpawnAndHoldPrefab(
+            int cargoCount, float slopeDegrees = 0f, float cargoMass = 1f, bool downhill = false, bool hold = true)
+        {
+            Time.captureFramerate = SteeringTestFrameRate;
+            // The player prefab ships with a 350 N push limit; the bare test player defaults to 300 N.
+            typeof(PlayerMovement).GetField("_maxPushForce", BindingFlags.Instance | BindingFlags.NonPublic)
+                .SetValue(_playerMovement, 350f);
+            EnableMoveInput();
+            // Ground whose top surface passes through the origin, pitched up along +Z by slopeDegrees.
+            var slope = Quaternion.Euler(-slopeDegrees, 0f, 0f);
+            var slopeRise = Mathf.Tan(slopeDegrees * Mathf.Deg2Rad);
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _obstacleObject.transform.SetPositionAndRotation(slope * Vector3.down * 0.5f, slope);
+            _obstacleObject.transform.localScale = new Vector3(40f, 1f, 40f);
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(WheelbarrowPrefabPath);
+            Assert.That(prefab, Is.Not.Null, "The original wheelbarrow prefab must be available to Play Mode tests.");
+            var wheelbarrow = Object.Instantiate(prefab);
+            wheelbarrow.name = "WheelbarrowPrefabSteeringTest";
+            // downhill turns the barrow around so that its nose (and W) points down the slope.
+            wheelbarrow.transform.SetPositionAndRotation(
+                new Vector3(0f, 0.3f + slopeRise * 3f, 3f), downhill ? slope * Quaternion.Euler(0f, 180f, 0f) : slope);
+            _targetObject1 = wheelbarrow;
+            _prefabBody = wheelbarrow.GetComponent<Rigidbody>();
+            _prefabStart = _prefabBody.position;
+
+            if (cargoCount > 0)
+            {
+                // Same as the Playground's Cargo_1..3: loose 1 kg cubes resting in the tray.
+                _targetObject2 = new GameObject("Cargo");
+                for (var i = 0; i < cargoCount; i++)
+                {
+                    var cargo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    cargo.transform.SetParent(_targetObject2.transform, true);
+                    cargo.transform.localScale = Vector3.one * 0.4f;
+                    cargo.transform.position = wheelbarrow.transform.TransformPoint(new Vector3(0f, 0.9f, -0.2f + 0.4f * i));
+                    cargo.AddComponent<Rigidbody>().mass = cargoMass;
+                }
+            }
+
+            Physics.SyncTransforms();
+            for (var i = 0; i < 50; i++)
+                yield return new WaitForFixedUpdate();
+
+            if (!hold)
+                yield break;
+
+            var handle = wheelbarrow.transform.Find("Handle_Left").GetComponent<Collider>();
+            // Facing downhill the handles are uphill of the barrow; the grip path would climb into the slope from the
+            // handle's own height, so start a little further up and let the grip step walk down to the handles.
+            var playerZ = handle.bounds.center.z + (downhill ? 0.8f : 0f);
+            _playerObject.transform.SetPositionAndRotation(
+                new Vector3(handle.bounds.center.x - 1.5f, slopeRise * playerZ, playerZ), Quaternion.identity);
+            _playerMovement.LocalCamera.transform.rotation = Quaternion.LookRotation(
+                handle.bounds.center - _playerMovement.LocalCamera.transform.position, Vector3.up);
+            Physics.SyncTransforms();
+            yield return null;
+            // The controller may settle on a slope during that frame; aim again at the thin handle bar.
+            _playerMovement.LocalCamera.transform.rotation = Quaternion.LookRotation(
+                handle.bounds.center - _playerMovement.LocalCamera.transform.position, Vector3.up);
+            _detector.Detect();
+
+            Assert.That(_detector.CurrentHit.collider, Is.SameAs(handle));
+            Assert.That(_playerGrab.RequestGrab(), Is.True,
+                $"Feedback: {_playerGrab.InteractionFeedback ?? "none"}.");
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+        }
+#endif
+
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_SReversesAlongOrientationWhileHeld()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var interaction = CreateWheelbarrowForMovement(out _);
+            var body = interaction.GetComponent<Rigidbody>();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            Press(keyboard.sKey);
+            for (var i = 0; i < 4; i++)
+                yield return new WaitForFixedUpdate();
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True,
+                "The wheelbarrow must remain held while reversing.");
+            Assert.That(_playerMovement.MovementInput.y, Is.EqualTo(-1f), "S input must reach the held interaction.");
+            Assert.That(Vector3.Dot(body.linearVelocity, interaction.transform.forward), Is.LessThan(-0.1f),
+                "S must pull the wheelbarrow backward along its orientation.");
+            Assert.That(Vector3.Dot(body.linearVelocity, interaction.transform.forward), Is.GreaterThanOrEqualTo(-3.4f),
+                "Reverse speed must respect its gentler push strength.");
+            Assert.That(body.isKinematic, Is.False);
         }
 
         [UnityTest]

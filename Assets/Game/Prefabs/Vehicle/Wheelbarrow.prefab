@@ -460,6 +460,7 @@ GameObject:
   m_Component:
   - component: {fileID: 6503865679267296489}
   - component: {fileID: 5399420116509911600}
+  - component: {fileID: 6856268585651620941}
   m_Layer: 0
   m_Name: Wheelbarrow
   m_TagString: Untagged
@@ -519,6 +520,28 @@ Rigidbody:
   m_Interpolate: 1
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &6856268585651620941
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4293283293344403054}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f82c7d28d6597b438f4c71667bdbba5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Ngecor.Vehicle.WheelbarrowInteraction
+  _handleColliders:
+  - {fileID: 1848001282903134755}
+  - {fileID: 7358563733950724741}
+  _legColliders:
+  - {fileID: 6310451345647263478}
+  - {fileID: 5746553791353374172}
+  _movingLegMaterial: {fileID: 13400000, guid: ce8640d089ca9794ebfb79eb46dbd95d, type: 2}
+  _maxSteeringSpeed: 2
+  _steeringLeadSpeed: 1.5
+  _maxSteeringLead: 0.5
 --- !u!1 &5976532713788847577
 GameObject:
   m_ObjectHideFlags: 0
