@@ -988,6 +988,31 @@ namespace Ngecor.Interaction.Tests
             Assert.That(Mathf.Abs(body.angularVelocity.y), Is.LessThan(0.2f));
         }
 
+        [UnityTest]
+        public IEnumerator WheelbarrowInteraction_SteeringStopsWhenTheBarrowIsRolledOnItsSide()
+        {
+            Time.captureFramerate = SteeringTestFrameRate;
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var interaction = CreateWheelbarrowForMovement(out var handle);
+            var body = interaction.GetComponent<Rigidbody>();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            Press(keyboard.aKey);
+            body.rotation = Quaternion.Euler(0f, 0f, 25f);
+            body.angularVelocity = Vector3.zero;
+            Physics.SyncTransforms();
+            var startHandle = handle.bounds.center;
+            yield return new WaitForSeconds(0.2f);
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+            Assert.That(Mathf.Abs(body.angularVelocity.y), Is.LessThan(0.05f),
+                "A barrow rolled past the limit must not be steered further.");
+            Assert.That(Mathf.Abs(handle.bounds.center.x - startHandle.x), Is.LessThan(0.02f),
+                "Handle force must stay off while the barrow is on its side.");
+        }
+
 #if UNITY_EDITOR
         private const string WheelbarrowPrefabPath = "Assets/Game/Prefabs/Vehicle/Wheelbarrow.prefab";
 
@@ -1015,6 +1040,18 @@ namespace Ngecor.Interaction.Tests
         public IEnumerator WheelbarrowPrefab_DSteersHandleRightAndNoseLeftWithThreeCargo()
         {
             yield return SteerGroundedPrefab(true, 3);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_ASteersHandleLeftAndNoseRightOnTwentyDegreeSlope()
+        {
+            yield return SteerGroundedPrefab(false, 0, 20f);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_DSteersHandleRightAndNoseLeftOnTwentyDegreeSlope()
+        {
+            yield return SteerGroundedPrefab(true, 0, 20f);
         }
 
         [UnityTest]
@@ -1057,10 +1094,10 @@ namespace Ngecor.Interaction.Tests
             Assert.That(travel, Is.GreaterThan(0.3f), "The loaded wheelbarrow must still be pushable forward.");
         }
 
-        private IEnumerator SteerGroundedPrefab(bool right, int cargoCount)
+        private IEnumerator SteerGroundedPrefab(bool right, int cargoCount, float slopeDegrees = 0f)
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
-            yield return SpawnAndHoldPrefab(cargoCount);
+            yield return SpawnAndHoldPrefab(cargoCount, slopeDegrees);
 
             var body = _prefabBody;
             var wheel = _targetObject1.transform.Find("Wheel");
@@ -1073,7 +1110,7 @@ namespace Ngecor.Interaction.Tests
 
             var side = right ? 1f : -1f;
             var cartRight = body.transform.right;
-            var startForward = body.transform.forward;
+            var startForward = Vector3.ProjectOnPlane(body.transform.forward, Vector3.up);
             var startTilt = Vector3.Angle(body.transform.up, Vector3.up);
             var startHandle = handle.bounds.center;
             var startPlayer = _playerObject.transform.position;
@@ -1092,7 +1129,8 @@ namespace Ngecor.Interaction.Tests
             var playerShift = Vector3.Dot(_playerObject.transform.position - startPlayer, cartRight);
             var wheelTravel = Vector3.ProjectOnPlane(wheel.position - startWheel, Vector3.up).magnitude;
             var handleTravel = Vector3.ProjectOnPlane(handle.bounds.center - startHandle, Vector3.up).magnitude;
-            var noseYaw = Vector3.SignedAngle(startForward, body.transform.forward, Vector3.up);
+            var noseYaw = Vector3.SignedAngle(
+                startForward, Vector3.ProjectOnPlane(body.transform.forward, Vector3.up), Vector3.up);
             var tilt = Vector3.Angle(body.transform.up, Vector3.up);
 
             Assert.That(_playerGrab.IsUsingInteractable, Is.True, "Steering must not break the hold.");
@@ -1106,22 +1144,25 @@ namespace Ngecor.Interaction.Tests
             Assert.That(body.isKinematic, Is.False);
         }
 
-        private IEnumerator SpawnAndHoldPrefab(int cargoCount)
+        private IEnumerator SpawnAndHoldPrefab(int cargoCount, float slopeDegrees = 0f)
         {
             Time.captureFramerate = SteeringTestFrameRate;
             // The player prefab ships with a 350 N push limit; the bare test player defaults to 300 N.
             typeof(PlayerMovement).GetField("_maxPushForce", BindingFlags.Instance | BindingFlags.NonPublic)
                 .SetValue(_playerMovement, 350f);
             EnableMoveInput();
+            // Ground whose top surface passes through the origin, pitched up along +Z by slopeDegrees.
+            var slope = Quaternion.Euler(-slopeDegrees, 0f, 0f);
+            var slopeRise = Mathf.Tan(slopeDegrees * Mathf.Deg2Rad);
             _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _obstacleObject.transform.position = new Vector3(0f, -0.5f, 0f);
+            _obstacleObject.transform.SetPositionAndRotation(slope * Vector3.down * 0.5f, slope);
             _obstacleObject.transform.localScale = new Vector3(20f, 1f, 20f);
 
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(WheelbarrowPrefabPath);
             Assert.That(prefab, Is.Not.Null, "The original wheelbarrow prefab must be available to Play Mode tests.");
             var wheelbarrow = Object.Instantiate(prefab);
             wheelbarrow.name = "WheelbarrowPrefabSteeringTest";
-            wheelbarrow.transform.position = new Vector3(0f, 0.3f, 3f);
+            wheelbarrow.transform.SetPositionAndRotation(new Vector3(0f, 0.3f + slopeRise * 3f, 3f), slope);
             _targetObject1 = wheelbarrow;
             _prefabBody = wheelbarrow.GetComponent<Rigidbody>();
 
@@ -1145,11 +1186,15 @@ namespace Ngecor.Interaction.Tests
 
             var handle = wheelbarrow.transform.Find("Handle_Left").GetComponent<Collider>();
             _playerObject.transform.SetPositionAndRotation(
-                new Vector3(handle.bounds.center.x - 1.5f, 0f, handle.bounds.center.z), Quaternion.identity);
+                new Vector3(handle.bounds.center.x - 1.5f, slopeRise * handle.bounds.center.z, handle.bounds.center.z),
+                Quaternion.identity);
             _playerMovement.LocalCamera.transform.rotation = Quaternion.LookRotation(
                 handle.bounds.center - _playerMovement.LocalCamera.transform.position, Vector3.up);
             Physics.SyncTransforms();
             yield return null;
+            // The controller may settle on a slope during that frame; aim again at the thin handle bar.
+            _playerMovement.LocalCamera.transform.rotation = Quaternion.LookRotation(
+                handle.bounds.center - _playerMovement.LocalCamera.transform.position, Vector3.up);
             _detector.Detect();
 
             Assert.That(_detector.CurrentHit.collider, Is.SameAs(handle));

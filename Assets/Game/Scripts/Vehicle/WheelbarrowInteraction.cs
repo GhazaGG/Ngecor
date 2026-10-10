@@ -11,18 +11,22 @@ namespace Ngecor.Vehicle
         private const float GripAlignmentTolerance = 0.1f;
         private const float GripPathGroundClearance = 0.02f;
         private const float MaxSeparationMultiplier = 2f;
-        private const float MaxSteeringSpeed = 2f;
         // Same human push limit as PlayerMovement's _maxPushForce on the player prefab (docs/DECISIONS.md).
         private const float MaxSteeringForce = 350f;
         private const float MaxSteeringTilt = 15f;
-        private const float SteeringLeadSpeed = 1.5f;
-        private const float MaxSteeringLead = 0.5f;
         private const float SteeringLeadDeadZone = 0.03f;
         private const float SteeringStiffness = 600f;
         private const float SteeringDamping = 100f;
         private const float ReversePushStrength = 0.65f;
 
         [SerializeField] private Collider[] _handleColliders;
+        [Header("Steering feel")]
+        [Tooltip("Maximum yaw speed (rad/s) that A/D steering may build up.")]
+        [SerializeField, Min(0.1f)] private float _maxSteeringSpeed = 2f;
+        [Tooltip("Sideways walking speed (m/s) of the player while steering.")]
+        [SerializeField, Min(0.1f)] private float _steeringLeadSpeed = 1.5f;
+        [Tooltip("How far (m) the player may step sideways ahead of the handle.")]
+        [SerializeField, Range(0.1f, 1f)] private float _maxSteeringLead = 0.5f;
 
         private Rigidbody _rigidbody;
         private PlayerMovement _interactingPlayer;
@@ -151,7 +155,7 @@ namespace Ngecor.Vehicle
             var right = Vector3.Cross(Vector3.up, -outward).normalized;
             var alignment = gripPosition - _interactingPlayer.transform.position;
             var lateralLead = -Vector3.Dot(alignment, right);
-            var excessLead = Mathf.Sign(lateralLead) * Mathf.Max(0f, Mathf.Abs(lateralLead) - MaxSteeringLead);
+            var excessLead = Mathf.Sign(lateralLead) * Mathf.Max(0f, Mathf.Abs(lateralLead) - _maxSteeringLead);
             var followTarget = alignment - right * Vector3.Dot(alignment, right) - right * excessLead;
             var followStep = Vector3.ClampMagnitude(followTarget, _interactingPlayer.MoveSpeed * Time.deltaTime);
             var moveStep = followStep + GetSteeringLeadStep(right, lateralLead);
@@ -296,7 +300,7 @@ namespace Ngecor.Vehicle
             var leverPoint = new Vector3(handlePoint.x, leverHeight, handlePoint.z);
             var lateralLead = -Vector3.Dot(gripPosition - _interactingPlayer.transform.position, right);
             if (Mathf.Abs(lateralLead) > SteeringLeadDeadZone &&
-                Vector3.Angle(transform.up, Vector3.up) < MaxSteeringTilt)
+                GetRollAngle() < MaxSteeringTilt)
             {
                 // The handle is pulled toward the player's actual sideways position like a leash: force grows with the
                 // lead, so a loaded barrow needs a bigger lead (and answers slower) without measuring its cargo.
@@ -322,10 +326,10 @@ namespace Ngecor.Vehicle
                 // Swinging the handle right turns the nose left (negative yaw), and the other way round. Never push
                 // harder than what keeps this step's yaw below the limit; brake if it is already above it.
                 var yawSpeed = -Rigidbody.angularVelocity.y * Mathf.Sign(lateralLead);
-                var yawHeadroom = Mathf.Max(0f, MaxSteeringSpeed - yawSpeed);
+                var yawHeadroom = Mathf.Max(0f, _maxSteeringSpeed - yawSpeed);
                 pushForce = Mathf.Min(pushForce, yawHeadroom * yawInertia / (leverArm * dt));
-                if (yawSpeed > MaxSteeringSpeed)
-                    pushForce = Mathf.Max(-MaxSteeringForce, Mathf.Min(pushForce, 0f) - (yawSpeed - MaxSteeringSpeed) * MaxSteeringForce);
+                if (yawSpeed > _maxSteeringSpeed)
+                    pushForce = Mathf.Max(-MaxSteeringForce, Mathf.Min(pushForce, 0f) - (yawSpeed - _maxSteeringSpeed) * MaxSteeringForce);
                 Rigidbody.AddForceAtPosition(chaseDirection * pushForce, leverPoint, ForceMode.Force);
             }
             else if (wheelGrounded)
@@ -340,6 +344,9 @@ namespace Ngecor.Vehicle
             }
         }
 
+        // Roll only: pitching up or down a ramp keeps the right axis horizontal, so slopes do not disable steering.
+        private float GetRollAngle() => Mathf.Abs(90f - Vector3.Angle(transform.right, Vector3.up));
+
         private Vector3 GetSteeringLeadStep(Vector3 right, float lateralLead)
         {
             // A (-1) steps the player left, D (+1) steps right; the wheel pivot swings the nose the other way.
@@ -347,9 +354,9 @@ namespace Ngecor.Vehicle
             if (Mathf.Abs(input) <= 0.01f)
                 return Vector3.zero;
 
-            var distance = Mathf.Abs(input) * SteeringLeadSpeed * Time.deltaTime;
+            var distance = Mathf.Abs(input) * _steeringLeadSpeed * Time.deltaTime;
             if (input * lateralLead > 0f)
-                distance = Mathf.Min(distance, Mathf.Max(0f, MaxSteeringLead - Mathf.Abs(lateralLead)));
+                distance = Mathf.Min(distance, Mathf.Max(0f, _maxSteeringLead - Mathf.Abs(lateralLead)));
 
             return right * (Mathf.Sign(input) * distance);
         }
