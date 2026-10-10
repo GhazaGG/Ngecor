@@ -29,13 +29,6 @@ namespace Ngecor.Player.Tests
         private InputActionReference _moveReference;
         private InputActionReference _lookReference;
 
-        [SetUp]
-        public override void Setup()
-        {
-            base.Setup();
-            InputSystem.Update();
-        }
-
         public override void TearDown()
         {
             Cursor.lockState = CursorLockMode.None;
@@ -838,10 +831,8 @@ namespace Ngecor.Player.Tests
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
             var mouse = InputSystem.AddDevice<Mouse>();
-            InputSystem.Update();
             CreatePlayer();
             var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
-            yield return null;
 
             // Baseline run: 0 kg mass
             movement.CarriedMass = 0f;
@@ -849,7 +840,6 @@ namespace Ngecor.Player.Tests
             yield return WaitForFixedFrames(10);
             float distanceBaseline = _player.transform.position.z - TestOrigin.z;
             Release(keyboard.wKey);
-            yield return null;
 
             ResetPlayer();
 
@@ -870,17 +860,14 @@ namespace Ngecor.Player.Tests
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
             var mouse = InputSystem.AddDevice<Mouse>();
-            InputSystem.Update();
             CreatePlayer();
             var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
-            yield return null;
 
             movement.CarriedMass = 0f;
             Press(keyboard.wKey);
             yield return WaitForFixedFrames(10);
             float distanceBaseline = _player.transform.position.z - TestOrigin.z;
             Release(keyboard.wKey);
-            yield return null;
 
             ResetPlayer();
 
@@ -902,8 +889,6 @@ namespace Ngecor.Player.Tests
             if (Mouse.current == null)
                 InputSystem.AddDevice<Mouse>();
 
-            InputSystem.Update();
-
             _actionAsset = ScriptableObject.CreateInstance<InputActionAsset>();
             var playerMap = new InputActionMap("Player");
             _actionAsset.AddActionMap(playerMap);
@@ -916,7 +901,6 @@ namespace Ngecor.Player.Tests
             _lookAction = playerMap.AddAction("Look", InputActionType.Value, expectedControlLayout: "Vector2");
             _lookAction.AddBinding("<Mouse>/delta");
             playerMap.Enable();
-            InputSystem.Update();
             _moveReference = InputActionReference.Create(_moveAction);
             _lookReference = InputActionReference.Create(_lookAction);
 

@@ -59,6 +59,8 @@ namespace Ngecor.Material
         private void OnDisable()
         {
             CancelPour();
+            if (_pourAction != null && _pourAction.action != null)
+                _pourAction.action.Disable();
         }
 
         private bool HasLocalHolder()

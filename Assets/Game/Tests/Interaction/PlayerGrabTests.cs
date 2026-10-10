@@ -88,7 +88,10 @@ namespace Ngecor.Interaction.Tests
             if (_throwReference != null)
                 Object.DestroyImmediate(_throwReference);
             if (_actionAsset != null)
+            {
+                _actionAsset.Disable();
                 Object.DestroyImmediate(_actionAsset);
+            }
 
             base.TearDown();
         }
