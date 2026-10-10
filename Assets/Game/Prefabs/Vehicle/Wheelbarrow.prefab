@@ -535,6 +535,13 @@ MonoBehaviour:
   _handleColliders:
   - {fileID: 1848001282903134755}
   - {fileID: 7358563733950724741}
+  _legColliders:
+  - {fileID: 6310451345647263478}
+  - {fileID: 5746553791353374172}
+  _movingLegMaterial: {fileID: 13400000, guid: ce8640d089ca9794ebfb79eb46dbd95d, type: 2}
+  _maxSteeringSpeed: 2
+  _steeringLeadSpeed: 1.5
+  _maxSteeringLead: 0.5
 --- !u!1 &5976532713788847577
 GameObject:
   m_ObjectHideFlags: 0

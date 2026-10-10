@@ -13,8 +13,6 @@ namespace Ngecor.Vehicle
         private const float MaxSeparationMultiplier = 2f;
         // Same human push limit as PlayerMovement's _maxPushForce on the player prefab (docs/DECISIONS.md).
         private const float MaxSteeringForce = 350f;
-        private const float MaxPushForce = 350f;
-        private const float PushResponseTime = 0.1f;
         private const float MaxSteeringTilt = 15f;
         private const float SteeringLeadDeadZone = 0.03f;
         private const float SteeringStiffness = 600f;
@@ -22,6 +20,11 @@ namespace Ngecor.Vehicle
         private const float ReversePushStrength = 0.65f;
 
         [SerializeField] private Collider[] _handleColliders;
+        [Header("Foot friction while pushing")]
+        [Tooltip("Leg colliders that rest on the ground. They keep their own material (the parking brake) until the player pushes.")]
+        [SerializeField] private Collider[] _legColliders;
+        [Tooltip("Low-friction material the legs use only while the barrow is held and W or S is pressed.")]
+        [SerializeField] private PhysicsMaterial _movingLegMaterial;
         [Header("Steering feel")]
         [Tooltip("Maximum yaw speed (rad/s) that A/D steering may build up.")]
         [SerializeField, Min(0.1f)] private float _maxSteeringSpeed = 2f;
@@ -38,6 +41,8 @@ namespace Ngecor.Vehicle
         private RaycastHit[] _wheelHits = new RaycastHit[4];
         private Transform _wheelTransform;
         private Vector3 _previousHeading;
+        private PhysicsMaterial[] _legRestMaterials;
+        private bool _legsMoving;
 
         public string InteractionPrompt => "Push";
 
@@ -174,33 +179,48 @@ namespace Ngecor.Vehicle
             _previousHeading = currentHeading;
 
             var input = _interactingPlayer.MovementInput;
+            SetLegsMoving(Mathf.Abs(input.y) > 0.01f);
             if (Mathf.Abs(input.y) > 0.01f)
-            {
                 ApplyGroundPlanePush(handlePoint, -outward, input.y);
-            }
         }
 
-        // PlayerMovement.ApplyMovementPush always pushes horizontally. On a ramp that adds a component away from the
-        // ground when pulling the barrow back down (about 78 N at 20 degrees, twice its weight), which hops it off the
-        // ground. Push along the ground surface instead, with the same speed/force law and limits.
+        // Push along the ground surface (normal from the wheel raycast) instead of horizontally: on a ramp a horizontal
+        // pull-back lifts the barrow off the ground. The brake keeps a barrow rolling downhill from outrunning the player.
         private void ApplyGroundPlanePush(Vector3 handlePoint, Vector3 forward, float input)
         {
             var groundNormal = Vector3.up;
             if (TryGetWheelGroundContact(GetWheelPosition(handlePoint), out _, out var contactNormal))
                 groundNormal = contactNormal;
 
-            var direction = Vector3.ProjectOnPlane(forward, groundNormal).normalized * Mathf.Sign(input);
-            if (direction.sqrMagnitude <= Mathf.Epsilon)
-                return;
-
+            var direction = forward * Mathf.Sign(input);
             var strength = Mathf.Clamp01(Mathf.Abs(input) * (input < 0f ? ReversePushStrength : 1f));
             var centreOfMass = Rigidbody.worldCenterOfMass;
-            var targetSpeed = PlayerMovement.CalculatePushTargetSpeed(Rigidbody.mass, _interactingPlayer.MoveSpeed * strength);
-            var currentSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(centreOfMass), direction);
-            var force = PlayerMovement.CalculatePushForce(
-                Rigidbody.mass, targetSpeed, currentSpeed, Time.deltaTime, PushResponseTime, MaxPushForce * strength);
-            if (force > 0f)
-                Rigidbody.AddForceAtPosition(direction * (force * Time.deltaTime), centreOfMass, ForceMode.Impulse);
+            _interactingPlayer.ApplyMovementPush(Rigidbody, centreOfMass, direction, strength, Time.deltaTime, groundNormal);
+            _interactingPlayer.ApplyMovementBrake(Rigidbody, direction, strength, Time.deltaTime, groundNormal);
+        }
+
+        // Held and pushing (W/S): the legs slide, so the barrow rolls on its wheel instead of dragging like a table.
+        // Otherwise, including while only steering with A/D, they keep their own material: that is the parking brake that
+        // holds an idle barrow on a ramp and the friction the approved A/D steering feel was tuned with.
+        private void SetLegsMoving(bool moving)
+        {
+            if (moving == _legsMoving || _legColliders == null || _movingLegMaterial == null)
+                return;
+
+            if (_legRestMaterials == null || _legRestMaterials.Length != _legColliders.Length)
+            {
+                _legRestMaterials = new PhysicsMaterial[_legColliders.Length];
+                for (var i = 0; i < _legColliders.Length; i++)
+                    _legRestMaterials[i] = _legColliders[i] != null ? _legColliders[i].sharedMaterial : null;
+            }
+
+            for (var i = 0; i < _legColliders.Length; i++)
+            {
+                if (_legColliders[i] != null)
+                    _legColliders[i].sharedMaterial = moving ? _movingLegMaterial : _legRestMaterials[i];
+            }
+
+            _legsMoving = moving;
         }
 
         private void OnDisable() => StopInteraction("The wheelbarrow interaction ended because the wheelbarrow is unavailable.");
@@ -486,6 +506,7 @@ namespace Ngecor.Vehicle
             _interactingGrab = null;
             _interactingController = null;
             _previousHeading = Vector3.zero;
+            SetLegsMoving(false);
             if (player != null)
             {
                 player.SetInteractableMovement(false);

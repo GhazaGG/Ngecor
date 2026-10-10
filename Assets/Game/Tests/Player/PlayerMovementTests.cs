@@ -342,6 +342,55 @@ namespace Ngecor.Player.Tests
         }
 
         [UnityTest]
+        public IEnumerator MovementPushWithSurfaceNormalPushesAlongTheSurface()
+        {
+            CreatePlayer(true);
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            var body = CreatePushTarget(size: 0.5f);
+            body.useGravity = false;
+            var rampNormal = Quaternion.Euler(-20f, 0f, 0f) * Vector3.up;
+
+            SetPrivateField(typeof(Ngecor.Player.PlayerMovement), movement, "_remainingPushImpulse", 100f);
+            movement.ApplyMovementPush(body, body.worldCenterOfMass, Vector3.forward, 1f, 1f / 30f, rampNormal);
+            yield return WaitForFixedFrames(1);
+
+            Assert.That(body.linearVelocity.magnitude, Is.GreaterThan(0.1f), "The push must still move the body.");
+            Assert.That(Vector3.Dot(body.linearVelocity, rampNormal), Is.EqualTo(0f).Within(0.001f),
+                "A push on a ramp must not add a component toward or away from the surface.");
+        }
+
+        [UnityTest]
+        public IEnumerator MovementBrakeSlowsABodyFasterThanThePushSpeed()
+        {
+            CreatePlayer(true);
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            var body = CreatePushTarget(size: 0.5f);
+            body.useGravity = false;
+            body.linearVelocity = Vector3.forward * 8f;
+
+            movement.ApplyMovementBrake(body, Vector3.forward, 1f, 1f / 30f);
+            yield return WaitForFixedFrames(1);
+
+            Assert.That(body.linearVelocity.z, Is.LessThan(7f).And.GreaterThan(5f),
+                "The brake must slow a body running ahead of the 5 m/s push speed, but only toward that speed.");
+        }
+
+        [UnityTest]
+        public IEnumerator MovementBrakeLeavesASlowBodyAlone()
+        {
+            CreatePlayer(true);
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            var body = CreatePushTarget(size: 0.5f);
+            body.useGravity = false;
+            body.linearVelocity = Vector3.forward * 2f;
+
+            movement.ApplyMovementBrake(body, Vector3.forward, 1f, 1f / 30f);
+            yield return WaitForFixedFrames(1);
+
+            Assert.That(body.linearVelocity.z, Is.EqualTo(2f).Within(0.01f), "The brake never pushes or slows a slow body.");
+        }
+
+        [UnityTest]
         public IEnumerator ContactPushMoves25KgBodyMoreSlowlyThanPlayer()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
@@ -487,7 +536,7 @@ namespace Ngecor.Player.Tests
             for (var i = 0; i < 9; i++)
             {
                 InvokePrivateMethod(movement, "ApplyContactPush", body, contactPoint,
-                    Vector3.forward, pushDeltaTime, 1f);
+                    Vector3.forward, pushDeltaTime, 1f, Vector3.zero);
             }
 
             yield return WaitForFixedFrames(1, 30);

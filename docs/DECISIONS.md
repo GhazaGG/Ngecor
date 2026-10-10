@@ -249,6 +249,21 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Usulan meryzennn di PR #89; disetujui pemilik proyek pada 2026-10-06.
 
+### 2026-10-10 — Friksi kaki gerobak saat dipegang (VEH-002)
+
+**Decision:**
+- Saat gerobak dipegang dan ada input maju/mundur (W/S), kaki gerobak memakai material friksi rendah (`WheelLowFriction`). Saat tidak ada input W/S, saat hanya A/D, saat dilepas (E, pemisahan ekstrem, disable), dan saat gerobak diparkir, kaki memakai kembali material aslinya (`FeetHighFriction`, 0,8) sebagai rem parkir. `FeetHighFriction`, massa gerobak, dan nilai kemudi tidak diubah.
+- Dorongan W/S memakai fungsi dorong `PlayerMovement` yang sama (batas 350 N, mundur 0,65) pada bidang permukaan tanah. Saat W/S ditekan, gaya rem melawan gerobak yang melaju lebih cepat dari kecepatan dorong player (misalnya menuruni ramp), dengan batas gaya yang sama.
+- Kaki tidak diangkat dan handle tidak diangkat di PR ini.
+
+**Reason:** Kaki yang tetap menempel di tanah membuat gerobak yang dipegang terasa seperti menyeret meja: mundur hanya sekitar 0,86 m/s di Playground, tersendat, dan muatan berat (tiga beban 25 kg) tidak bergerak sama sekali. Friksi rendah hanya saat didorong memperbaiki hal itu tanpa membuat gerobak yang diparkir meluncur di ramp, dan rem turunan menjaga gerobak tidak mendahului player. A/D tidak ikut menurunkan friksi karena feel belok sudah disetujui pemilik dengan friksi asli, dan tes kemudi di ramp 20° menunjukkan pivot roda bergeser lebih jauh bila kaki ikut meluncur.
+
+**Revisit:** Setelah playtest logistik. Bila gerobak bermuatan berat masih melaju di turunan (rem memakai massa Rigidbody gerobak, bukan massa muatan lepas) atau A/D juga perlu friksi rendah, pertimbangkan opsi handle terangkat saat dipegang sehingga beban pindah ke roda, sebagai issue terpisah.
+
+**Applies from:** VEH-002 (#14, PR #92).
+
+**Owner/source:** Keputusan pemilik proyek, 2026-10-10 (opsi B pada PR #92). Pembatasan ke input W/S adalah keputusan implementasi karena tes kemudi yang ada; mohon dikonfirmasi pemilik.
+
 ## Anggaran performa
 
 Angka di bawah adalah titik awal. Ubah lewat PR setelah ada data Profiler, jangan diubah karena satu fitur sulit memenuhinya.

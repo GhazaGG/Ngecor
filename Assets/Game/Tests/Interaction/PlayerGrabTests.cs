@@ -1113,6 +1113,169 @@ namespace Ngecor.Interaction.Tests
             yield return PushThenReverseOnSlope(10f);
         }
 
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WPushesThreeTwentyFiveKgLoadsOnFlatGround()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            yield return SpawnAndHoldPrefab(3, cargoMass: 25f);
+
+            var body = _prefabBody;
+            var forward = Vector3.ProjectOnPlane(body.transform.forward, Vector3.up).normalized;
+            var start = body.position;
+            Press(keyboard.wKey);
+            yield return null;
+            for (var i = 0; i < 50; i++)
+                yield return new WaitForFixedUpdate();
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+            Assert.That(Vector3.Dot(body.position - start, forward), Is.GreaterThan(0.3f),
+                "Three 25 kg loads in the tray must be movable by pushing W on flat ground.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_HeldWithoutInputOnTwentyDegreeSlopeStaysPut()
+        {
+            yield return SpawnAndHoldPrefab(0, 20f);
+            yield return AssertBarrowStaysPut(100, "A held barrow with no input must act as a parked one on a ramp.");
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_NotHeldOnTwentyDegreeSlopeStaysPut()
+        {
+            yield return SpawnAndHoldPrefab(0, 20f, hold: false);
+            yield return AssertBarrowStaysPut(100, "A parked barrow must keep its original foot friction on a ramp.");
+        }
+
+        private IEnumerator AssertBarrowStaysPut(int fixedSteps, string message)
+        {
+            var start = _prefabBody.position;
+            for (var i = 0; i < fixedSteps; i++)
+                yield return new WaitForFixedUpdate();
+
+            Assert.That(Vector3.Distance(_prefabBody.position, start), Is.LessThan(0.05f), message);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WDownTwentyDegreeSlopeDoesNotOutrunThePlayer()
+        {
+            yield return WalkBarrowDownTwentyDegreeSlope(0);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WDownTwentyDegreeSlopeWithThreeCargoDoesNotOutrunThePlayer()
+        {
+            yield return WalkBarrowDownTwentyDegreeSlope(3);
+        }
+
+        private IEnumerator WalkBarrowDownTwentyDegreeSlope(int cargoCount)
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            yield return SpawnAndHoldPrefab(cargoCount, 20f, downhill: true);
+
+            var body = _prefabBody;
+            var targetSpeed = PlayerMovement.CalculatePushTargetSpeed(body.mass, _playerMovement.MoveSpeed);
+            var downhill = Vector3.ProjectOnPlane(body.transform.forward, Vector3.up).normalized;
+            Press(keyboard.wKey);
+            yield return null;
+
+            var peakSpeed = 0f;
+            for (var i = 0; i < 125; i++)
+            {
+                yield return new WaitForFixedUpdate();
+                peakSpeed = Mathf.Max(peakSpeed, body.linearVelocity.magnitude);
+            }
+
+            Debug.Log($"[VEH-002] downhill cargo={cargoCount} peakSpeed={peakSpeed:F2} target={targetSpeed:F2} " +
+                      $"travel={Vector3.Dot(body.position - _prefabStart, downhill):F2}");
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True,
+                $"Walking downhill must not release the barrow. Feedback: {_playerGrab.InteractionFeedback ?? "none"}.");
+            Assert.That(Vector3.Dot(body.position - _prefabStart, downhill), Is.GreaterThan(1f),
+                "W must walk the barrow down the slope.");
+            Assert.That(peakSpeed, Is.LessThan(targetSpeed * 1.1f),
+                "The barrow must not run away from the player faster than the push speed.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_LegsSlideOnlyWhileHeldAndPushing()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var movingMaterial = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(
+                "Assets/Game/Settings/WheelLowFriction.physicMaterial");
+            Assert.That(movingMaterial, Is.Not.Null);
+            yield return SpawnAndHoldPrefab(0);
+
+            var legs = new[]
+            {
+                _targetObject1.transform.Find("Leg_Left").GetComponent<Collider>(),
+                _targetObject1.transform.Find("Leg_Right").GetComponent<Collider>(),
+            };
+            var rest = new[] { legs[0].sharedMaterial, legs[1].sharedMaterial };
+            Assert.That(rest[0], Is.Not.Null.And.Not.SameAs(movingMaterial), "Legs rest on the high-friction material.");
+
+            yield return null;
+            AssertLegMaterials(legs, rest, "Holding without input keeps the original foot friction.");
+
+            Press(keyboard.wKey);
+            yield return null;
+            yield return null;
+            AssertLegMaterials(legs, new[] { movingMaterial, movingMaterial }, "W while held lowers the foot friction.");
+
+            Release(keyboard.wKey);
+            yield return null;
+            yield return null;
+            AssertLegMaterials(legs, rest, "Releasing the keys restores the original foot friction.");
+
+            Press(keyboard.aKey);
+            yield return null;
+            yield return null;
+            AssertLegMaterials(legs, rest, "Steering with A keeps the original foot friction the A/D feel was tuned with.");
+
+            Release(keyboard.aKey);
+            yield return null;
+            Press(keyboard.sKey);
+            yield return null;
+            yield return null;
+            AssertLegMaterials(legs, new[] { movingMaterial, movingMaterial }, "S while held lowers the foot friction.");
+
+            Release(keyboard.sKey);
+            yield return null;
+            Press(keyboard.eKey);
+            yield return null;
+            Release(keyboard.eKey);
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False, "The second E press releases the barrow.");
+            AssertLegMaterials(legs, rest, "Releasing the barrow with E restores the original foot friction.");
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_LegsKeepOriginalFrictionWhenInteractionIsDisabledWhilePushing()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var movingMaterial = AssetDatabase.LoadAssetAtPath<PhysicsMaterial>(
+                "Assets/Game/Settings/WheelLowFriction.physicMaterial");
+            yield return SpawnAndHoldPrefab(0);
+
+            var legs = new[]
+            {
+                _targetObject1.transform.Find("Leg_Left").GetComponent<Collider>(),
+                _targetObject1.transform.Find("Leg_Right").GetComponent<Collider>(),
+            };
+            var rest = new[] { legs[0].sharedMaterial, legs[1].sharedMaterial };
+            Press(keyboard.wKey);
+            yield return null;
+            yield return null;
+            AssertLegMaterials(legs, new[] { movingMaterial, movingMaterial }, "W while held lowers the foot friction.");
+
+            ((Behaviour)_targetObject1.GetComponent(FindWheelbarrowInteractionType())).enabled = false;
+            AssertLegMaterials(legs, rest, "Disabling the interaction while pushing restores the original foot friction.");
+        }
+
+        private static void AssertLegMaterials(Collider[] legs, PhysicsMaterial[] expected, string message)
+        {
+            for (var i = 0; i < legs.Length; i++)
+                Assert.That(legs[i].sharedMaterial, Is.SameAs(expected[i]), message);
+        }
+
         private IEnumerator PushThenReverseOnSlope(float slopeDegrees)
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
@@ -1178,11 +1341,13 @@ namespace Ngecor.Interaction.Tests
 
             var maxPitchChange = 0f;
             var maxWheelLift = 0f;
+            var peakSpeed = 0f;
             Press(forwardPush ? keyboard.wKey : keyboard.sKey);
             yield return null;
             for (var i = 0; i < 50; i++)
             {
                 yield return new WaitForFixedUpdate();
+                peakSpeed = Mathf.Max(peakSpeed, Vector3.Dot(body.linearVelocity, forward) * (forwardPush ? 1f : -1f));
                 maxPitchChange = Mathf.Max(
                     maxPitchChange, Mathf.Abs(Mathf.Asin(body.transform.forward.y) * Mathf.Rad2Deg - startPitch));
                 var gap = GetWheelGroundGap(wheel, ground);
@@ -1190,11 +1355,19 @@ namespace Ngecor.Interaction.Tests
             }
 
             var travel = Vector3.Dot(body.position - start, forward);
+            Debug.Log($"[VEH-002] {(forwardPush ? "W" : "S")} cargo={cargoCount} peakSpeed={peakSpeed:F2} travel={travel:F2}");
             Assert.That(_playerGrab.IsUsingInteractable, Is.True);
             Assert.That(travel * (forwardPush ? 1f : -1f), Is.GreaterThan(0.3f),
                 forwardPush ? "W must push the barrow forward." : "S must pull the barrow backward.");
             Assert.That(maxPitchChange, Is.LessThan(5f), "Pushing or pulling must not pitch the barrow.");
             Assert.That(maxWheelLift, Is.LessThan(0.03f), "The front wheel must stay on the ground.");
+            if (!forwardPush)
+            {
+                // Reverse target is 0.65 of the walking push speed (about 3.2 m/s). With the legs dragging at full
+                // friction the same barrow only reached about 2.3 m/s empty and 1.0 m/s with three cargo cubes.
+                Assert.That(peakSpeed, Is.GreaterThan(cargoCount > 0 ? 2.5f : 2.7f),
+                    "Reversing must roll smoothly toward the push speed instead of dragging the legs.");
+            }
         }
 
         private static float GetGroundGap(Transform part, Collider ground)
@@ -1289,7 +1462,8 @@ namespace Ngecor.Interaction.Tests
             Assert.That(body.isKinematic, Is.False);
         }
 
-        private IEnumerator SpawnAndHoldPrefab(int cargoCount, float slopeDegrees = 0f)
+        private IEnumerator SpawnAndHoldPrefab(
+            int cargoCount, float slopeDegrees = 0f, float cargoMass = 1f, bool downhill = false, bool hold = true)
         {
             Time.captureFramerate = SteeringTestFrameRate;
             // The player prefab ships with a 350 N push limit; the bare test player defaults to 300 N.
@@ -1307,7 +1481,9 @@ namespace Ngecor.Interaction.Tests
             Assert.That(prefab, Is.Not.Null, "The original wheelbarrow prefab must be available to Play Mode tests.");
             var wheelbarrow = Object.Instantiate(prefab);
             wheelbarrow.name = "WheelbarrowPrefabSteeringTest";
-            wheelbarrow.transform.SetPositionAndRotation(new Vector3(0f, 0.3f + slopeRise * 3f, 3f), slope);
+            // downhill turns the barrow around so that its nose (and W) points down the slope.
+            wheelbarrow.transform.SetPositionAndRotation(
+                new Vector3(0f, 0.3f + slopeRise * 3f, 3f), downhill ? slope * Quaternion.Euler(0f, 180f, 0f) : slope);
             _targetObject1 = wheelbarrow;
             _prefabBody = wheelbarrow.GetComponent<Rigidbody>();
             _prefabStart = _prefabBody.position;
@@ -1322,7 +1498,7 @@ namespace Ngecor.Interaction.Tests
                     cargo.transform.SetParent(_targetObject2.transform, true);
                     cargo.transform.localScale = Vector3.one * 0.4f;
                     cargo.transform.position = wheelbarrow.transform.TransformPoint(new Vector3(0f, 0.9f, -0.2f + 0.4f * i));
-                    cargo.AddComponent<Rigidbody>().mass = 1f;
+                    cargo.AddComponent<Rigidbody>().mass = cargoMass;
                 }
             }
 
@@ -1330,10 +1506,15 @@ namespace Ngecor.Interaction.Tests
             for (var i = 0; i < 50; i++)
                 yield return new WaitForFixedUpdate();
 
+            if (!hold)
+                yield break;
+
             var handle = wheelbarrow.transform.Find("Handle_Left").GetComponent<Collider>();
+            // Facing downhill the handles are uphill of the barrow; the grip path would climb into the slope from the
+            // handle's own height, so start a little further up and let the grip step walk down to the handles.
+            var playerZ = handle.bounds.center.z + (downhill ? 0.8f : 0f);
             _playerObject.transform.SetPositionAndRotation(
-                new Vector3(handle.bounds.center.x - 1.5f, slopeRise * handle.bounds.center.z, handle.bounds.center.z),
-                Quaternion.identity);
+                new Vector3(handle.bounds.center.x - 1.5f, slopeRise * playerZ, playerZ), Quaternion.identity);
             _playerMovement.LocalCamera.transform.rotation = Quaternion.LookRotation(
                 handle.bounds.center - _playerMovement.LocalCamera.transform.position, Vector3.up);
             Physics.SyncTransforms();
@@ -1344,7 +1525,8 @@ namespace Ngecor.Interaction.Tests
             _detector.Detect();
 
             Assert.That(_detector.CurrentHit.collider, Is.SameAs(handle));
-            Assert.That(_playerGrab.RequestGrab(), Is.True);
+            Assert.That(_playerGrab.RequestGrab(), Is.True,
+                $"Feedback: {_playerGrab.InteractionFeedback ?? "none"}.");
             Assert.That(_playerGrab.IsUsingInteractable, Is.True);
         }
 #endif

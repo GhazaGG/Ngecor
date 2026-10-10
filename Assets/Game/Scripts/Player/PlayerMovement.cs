@@ -56,11 +56,42 @@ namespace Ngecor.Player
         public Vector2 MovementInput => _movementInput;
         public float MoveSpeed => _moveSpeed;
 
-        public void ApplyMovementPush(Rigidbody body, Vector3 point, Vector3 pushDirection, float strength, float deltaTime)
+        // surfaceNormal (zero means world up) is the plane the push lies in; the force acts on the line through the
+        // body's centre of mass inside that plane, so pushing along a ramp neither lifts nor pitches the body.
+        public void ApplyMovementPush(
+            Rigidbody body, Vector3 point, Vector3 pushDirection, float strength, float deltaTime, Vector3 surfaceNormal = default)
         {
             if (_isLocalPlayer && isActiveAndEnabled)
-                ApplyContactPush(body, point, pushDirection, deltaTime, strength);
+                ApplyContactPush(body, point, pushDirection, deltaTime, strength, surfaceNormal);
         }
+
+        // Holds a pushed body back to the speed the push would reach (for example a barrow running downhill), using
+        // the same speed law and force limit as the push. It stops the body outrunning the player and never pushes.
+        public void ApplyMovementBrake(
+            Rigidbody body, Vector3 pushDirection, float strength, float deltaTime, Vector3 surfaceNormal = default)
+        {
+            strength = Mathf.Clamp01(strength);
+            if (!_isLocalPlayer || !isActiveAndEnabled || body == null || body.isKinematic || strength <= 0f)
+                return;
+
+            var direction = Vector3.ProjectOnPlane(pushDirection, NormalOrUp(surfaceNormal));
+            if (direction.sqrMagnitude <= Mathf.Epsilon)
+                return;
+
+            direction.Normalize();
+            var centreOfMass = body.worldCenterOfMass;
+            var targetSpeed = CalculatePushTargetSpeed(body.mass, _moveSpeed * strength);
+            var currentSpeed = Vector3.Dot(body.GetPointVelocity(centreOfMass), direction);
+            // Braking is the push law mirrored: a push against the motion toward a speed below the current one. The
+            // response time is one frame so the brake holds the target instead of a proportional lag above it.
+            var brakeForce = CalculatePushForce(
+                body.mass, -targetSpeed, -currentSpeed, deltaTime, deltaTime, _maxPushForce * strength);
+            if (brakeForce > 0f)
+                body.AddForceAtPosition(-direction * (brakeForce * deltaTime), centreOfMass, ForceMode.Impulse);
+        }
+
+        private static Vector3 NormalOrUp(Vector3 surfaceNormal) =>
+            surfaceNormal.sqrMagnitude > Mathf.Epsilon ? surfaceNormal.normalized : Vector3.up;
 
         public void SetInteractableMovement(bool controlled)
         {
@@ -214,18 +245,20 @@ namespace Ngecor.Player
             ApplyContactPush(hit.rigidbody, hit.point, pushDirection, Time.deltaTime);
         }
 
-        private void ApplyContactPush(Rigidbody body, Vector3 point, Vector3 pushDirection, float deltaTime, float strength = 1f)
+        private void ApplyContactPush(
+            Rigidbody body, Vector3 point, Vector3 pushDirection, float deltaTime, float strength = 1f, Vector3 surfaceNormal = default)
         {
             strength = Mathf.Clamp01(strength);
             if (body == null || body.isKinematic || _remainingPushImpulse <= 0f || _pushedBodies.Contains(body) || strength <= 0f)
                 return;
 
-            pushDirection = Vector3.ProjectOnPlane(pushDirection, Vector3.up);
+            var normal = NormalOrUp(surfaceNormal);
+            pushDirection = Vector3.ProjectOnPlane(pushDirection, normal);
             if (pushDirection.sqrMagnitude <= Mathf.Epsilon)
                 return;
 
             pushDirection.Normalize();
-            point.y = body.worldCenterOfMass.y;
+            point -= normal * Vector3.Dot(point - body.worldCenterOfMass, normal);
             var currentSpeed = Vector3.Dot(body.GetPointVelocity(point), pushDirection);
             var pushForce = CalculatePushForce(
                 body.mass,
