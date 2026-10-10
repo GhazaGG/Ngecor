@@ -59,7 +59,10 @@ namespace Ngecor.Player.Tests
                 UnityEngine.Object.DestroyImmediate(_lookReference);
 
             if (_actionAsset != null)
+            {
+                _actionAsset.Disable();
                 UnityEngine.Object.DestroyImmediate(_actionAsset);
+            }
 
             base.TearDown();
         }
@@ -827,6 +830,7 @@ namespace Ngecor.Player.Tests
         public IEnumerator CarriedMass_When25kg_ReducesEffectiveSpeed()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
             CreatePlayer();
             var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
 
@@ -855,6 +859,7 @@ namespace Ngecor.Player.Tests
         public IEnumerator CarriedMass_ClampedAtMaximumPenalty()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
+            var mouse = InputSystem.AddDevice<Mouse>();
             CreatePlayer();
             var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
 
@@ -879,6 +884,11 @@ namespace Ngecor.Player.Tests
 
         private void CreatePlayer(bool? isLocalPlayer = true)
         {
+            if (Keyboard.current == null)
+                InputSystem.AddDevice<Keyboard>();
+            if (Mouse.current == null)
+                InputSystem.AddDevice<Mouse>();
+
             _actionAsset = ScriptableObject.CreateInstance<InputActionAsset>();
             var playerMap = new InputActionMap("Player");
             _actionAsset.AddActionMap(playerMap);

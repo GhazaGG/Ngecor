@@ -71,7 +71,10 @@ namespace Ngecor.Multiplayer
             {
                 if (_playerGrab.ExecuteDrop())
                 {
-                    ReplicateDropClientRpc();
+                    if (IsServer && IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+                    {
+                        ReplicateDropClientRpc();
+                    }
                 }
             }
         }
@@ -265,7 +268,10 @@ namespace Ngecor.Multiplayer
 
             if (_playerGrab.ExecuteGrab(grabbable))
             {
-                ReplicateGrabClientRpc(targetNetObj.NetworkObjectId);
+                if (IsServer && IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+                {
+                    ReplicateGrabClientRpc(targetNetObj.NetworkObjectId);
+                }
             }
         }
 
@@ -392,7 +398,10 @@ namespace Ngecor.Multiplayer
             Vector3 unitDir = throwDir.normalized;
             if (_playerGrab.ExecuteThrow(unitDir))
             {
-                ReplicateThrowClientRpc(unitDir);
+                if (IsServer && IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+                {
+                    ReplicateThrowClientRpc(unitDir);
+                }
             }
         }
 
