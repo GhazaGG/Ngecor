@@ -13,6 +13,8 @@ namespace Ngecor.Vehicle
         private const float MaxSeparationMultiplier = 2f;
         // Same human push limit as PlayerMovement's _maxPushForce on the player prefab (docs/DECISIONS.md).
         private const float MaxSteeringForce = 350f;
+        private const float MaxPushForce = 350f;
+        private const float PushResponseTime = 0.1f;
         private const float MaxSteeringTilt = 15f;
         private const float SteeringLeadDeadZone = 0.03f;
         private const float SteeringStiffness = 600f;
@@ -174,10 +176,31 @@ namespace Ngecor.Vehicle
             var input = _interactingPlayer.MovementInput;
             if (Mathf.Abs(input.y) > 0.01f)
             {
-                var pushStrength = Mathf.Abs(input.y) * (input.y < 0f ? ReversePushStrength : 1f);
-                _interactingPlayer.ApplyMovementPush(
-                    Rigidbody, handlePoint, transform.forward * Mathf.Sign(input.y), pushStrength, Time.deltaTime);
+                ApplyGroundPlanePush(handlePoint, -outward, input.y);
             }
+        }
+
+        // PlayerMovement.ApplyMovementPush always pushes horizontally. On a ramp that adds a component away from the
+        // ground when pulling the barrow back down (about 78 N at 20 degrees, twice its weight), which hops it off the
+        // ground. Push along the ground surface instead, with the same speed/force law and limits.
+        private void ApplyGroundPlanePush(Vector3 handlePoint, Vector3 forward, float input)
+        {
+            var groundNormal = Vector3.up;
+            if (TryGetWheelGroundContact(GetWheelPosition(handlePoint), out _, out var contactNormal))
+                groundNormal = contactNormal;
+
+            var direction = Vector3.ProjectOnPlane(forward, groundNormal).normalized * Mathf.Sign(input);
+            if (direction.sqrMagnitude <= Mathf.Epsilon)
+                return;
+
+            var strength = Mathf.Clamp01(Mathf.Abs(input) * (input < 0f ? ReversePushStrength : 1f));
+            var centreOfMass = Rigidbody.worldCenterOfMass;
+            var targetSpeed = PlayerMovement.CalculatePushTargetSpeed(Rigidbody.mass, _interactingPlayer.MoveSpeed * strength);
+            var currentSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(centreOfMass), direction);
+            var force = PlayerMovement.CalculatePushForce(
+                Rigidbody.mass, targetSpeed, currentSpeed, Time.deltaTime, PushResponseTime, MaxPushForce * strength);
+            if (force > 0f)
+                Rigidbody.AddForceAtPosition(direction * (force * Time.deltaTime), centreOfMass, ForceMode.Impulse);
         }
 
         private void OnDisable() => StopInteraction("The wheelbarrow interaction ended because the wheelbarrow is unavailable.");
@@ -271,7 +294,9 @@ namespace Ngecor.Vehicle
         }
 
         // A/D: the player steps sideways first (see LateUpdate); the handle then chases that position, and the front
-        // wheel contact is the pivot. Both forces act at centre-of-mass height so they yaw the barrow without rolling it.
+        // wheel contact is the pivot. Both forces lie in the plane through the centre of mass that is perpendicular to the
+        // barrow's own up axis, so their couple turns the barrow about that axis only (no roll), also on a ramp where
+        // the barrow is pitched and a world-vertical couple would partly roll it.
         private void ApplyWheelGripAndSteering()
         {
             if (_interactingController == null ||
@@ -279,25 +304,27 @@ namespace Ngecor.Vehicle
                 return;
 
             var right = Vector3.Cross(Vector3.up, -outward).normalized;
-            var leverHeight = Rigidbody.worldCenterOfMass.y;
+            var bodyUp = transform.up;
+            var forceRight = Vector3.Cross(bodyUp, Vector3.ProjectOnPlane(-outward, bodyUp)).normalized;
+            var centreOfMass = Rigidbody.worldCenterOfMass;
             var wheelPosition = GetWheelPosition(handlePoint);
             var wheelGrounded = TryGetWheelGroundContact(wheelPosition, out var wheelContactPoint);
 
             // The ground only resists the wheel sideways while it really touches something.
             if (wheelGrounded)
             {
-                var wheelLateralSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(wheelContactPoint), right);
+                var wheelLateralSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(wheelContactPoint), forceRight);
                 if (Mathf.Abs(wheelLateralSpeed) > 0.001f)
                 {
                     var desiredGripForce = -wheelLateralSpeed * Mathf.Max(1f, Rigidbody.mass) / Time.fixedDeltaTime;
                     var maxGripForce = Mathf.Max(MaxSteeringForce * 2f, Rigidbody.mass * 30f);
-                    var gripPoint = new Vector3(wheelContactPoint.x, leverHeight, wheelContactPoint.z);
                     Rigidbody.AddForceAtPosition(
-                        right * Mathf.Clamp(desiredGripForce, -maxGripForce, maxGripForce), gripPoint, ForceMode.Force);
+                        forceRight * Mathf.Clamp(desiredGripForce, -maxGripForce, maxGripForce),
+                        InYawPlane(wheelContactPoint, centreOfMass, bodyUp), ForceMode.Force);
                 }
             }
 
-            var leverPoint = new Vector3(handlePoint.x, leverHeight, handlePoint.z);
+            var leverPoint = InYawPlane(handlePoint, centreOfMass, bodyUp);
             var lateralLead = -Vector3.Dot(gripPosition - _interactingPlayer.transform.position, right);
             if (Mathf.Abs(lateralLead) > SteeringLeadDeadZone &&
                 GetRollAngle() < MaxSteeringTilt)
@@ -305,17 +332,17 @@ namespace Ngecor.Vehicle
                 // The handle is pulled toward the player's actual sideways position like a leash: force grows with the
                 // lead, so a loaded barrow needs a bigger lead (and answers slower) without measuring its cargo.
                 // A blocked player has no lead, so nothing pushes.
-                var chaseDirection = right * Mathf.Sign(lateralLead);
+                var chaseDirection = forceRight * Mathf.Sign(lateralLead);
                 var handleSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(leverPoint), chaseDirection);
 
                 // Effective mass of the handle point: yaw inertia (about the wheel while it touches the ground) over the
                 // lever arm squared. The spring and damper are capped to what stays stable at this physics step; the
                 // light empty barrow otherwise flips its yaw back and forth every step.
                 var wheelArm = wheelGrounded
-                    ? Vector3.ProjectOnPlane(Rigidbody.worldCenterOfMass - wheelPosition, Vector3.up).magnitude
+                    ? Vector3.ProjectOnPlane(centreOfMass - wheelPosition, bodyUp).magnitude
                     : 0f;
                 var yawInertia = Rigidbody.inertiaTensor.y + Rigidbody.mass * wheelArm * wheelArm;
-                var leverArm = Mathf.Max(0.1f, Vector3.ProjectOnPlane(handlePoint - wheelPosition, Vector3.up).magnitude);
+                var leverArm = Mathf.Max(0.1f, Vector3.ProjectOnPlane(handlePoint - wheelPosition, bodyUp).magnitude);
                 var handleMass = yawInertia / (leverArm * leverArm);
                 var dt = Time.fixedDeltaTime;
                 var stiffness = Mathf.Min(SteeringStiffness, 0.25f * handleMass / (dt * dt));
@@ -325,7 +352,7 @@ namespace Ngecor.Vehicle
 
                 // Swinging the handle right turns the nose left (negative yaw), and the other way round. Never push
                 // harder than what keeps this step's yaw below the limit; brake if it is already above it.
-                var yawSpeed = -Rigidbody.angularVelocity.y * Mathf.Sign(lateralLead);
+                var yawSpeed = -Vector3.Dot(Rigidbody.angularVelocity, bodyUp) * Mathf.Sign(lateralLead);
                 var yawHeadroom = Mathf.Max(0f, _maxSteeringSpeed - yawSpeed);
                 pushForce = Mathf.Min(pushForce, yawHeadroom * yawInertia / (leverArm * dt));
                 if (yawSpeed > _maxSteeringSpeed)
@@ -334,15 +361,18 @@ namespace Ngecor.Vehicle
             }
             else if (wheelGrounded)
             {
-                var handleLateralSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(leverPoint), right);
+                var handleLateralSpeed = Vector3.Dot(Rigidbody.GetPointVelocity(leverPoint), forceRight);
                 if (Mathf.Abs(handleLateralSpeed) > 0.01f)
                 {
                     var maxDamping = Mathf.Max(50f, Rigidbody.mass * 10f);
                     var dampingForce = Mathf.Clamp(-handleLateralSpeed * Rigidbody.mass * 4f, -maxDamping, maxDamping);
-                    Rigidbody.AddForceAtPosition(right * dampingForce, leverPoint, ForceMode.Force);
+                    Rigidbody.AddForceAtPosition(forceRight * dampingForce, leverPoint, ForceMode.Force);
                 }
             }
         }
+
+        private static Vector3 InYawPlane(Vector3 point, Vector3 centreOfMass, Vector3 bodyUp) =>
+            point - bodyUp * Vector3.Dot(point - centreOfMass, bodyUp);
 
         // Roll only: pitching up or down a ramp keeps the right axis horizontal, so slopes do not disable steering.
         private float GetRollAngle() => Mathf.Abs(90f - Vector3.Angle(transform.right, Vector3.up));
@@ -378,8 +408,13 @@ namespace Ngecor.Vehicle
         }
 
         private bool TryGetWheelGroundContact(Vector3 wheelPosition, out Vector3 groundContactPoint)
+            => TryGetWheelGroundContact(wheelPosition, out groundContactPoint, out _);
+
+        private bool TryGetWheelGroundContact(
+            Vector3 wheelPosition, out Vector3 groundContactPoint, out Vector3 groundNormal)
         {
             groundContactPoint = wheelPosition;
+            groundNormal = Vector3.up;
             var rayStart = wheelPosition + Vector3.up * 0.2f;
             const float rayDistance = 0.5f;
             var hitCount = Physics.RaycastNonAlloc(
@@ -395,6 +430,7 @@ namespace Ngecor.Vehicle
                     continue;
 
                 groundContactPoint = _wheelHits[i].point;
+                groundNormal = _wheelHits[i].normal;
                 return true;
             }
 

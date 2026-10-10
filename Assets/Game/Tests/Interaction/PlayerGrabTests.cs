@@ -1017,6 +1017,7 @@ namespace Ngecor.Interaction.Tests
         private const string WheelbarrowPrefabPath = "Assets/Game/Prefabs/Vehicle/Wheelbarrow.prefab";
 
         private Rigidbody _prefabBody;
+        private Vector3 _prefabStart;
 
         [UnityTest]
         public IEnumerator WheelbarrowPrefab_DSteersHandleRightAndNoseLeftAroundGroundedWheel()
@@ -1100,6 +1101,67 @@ namespace Ngecor.Interaction.Tests
             yield return PushGroundedPrefab(false, 3);
         }
 
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WThenSOnTwentyDegreeSlopeKeepsBarrowOnTheGround()
+        {
+            yield return PushThenReverseOnSlope(20f);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WThenSOnTenDegreeSlopeKeepsBarrowOnTheGround()
+        {
+            yield return PushThenReverseOnSlope(10f);
+        }
+
+        private IEnumerator PushThenReverseOnSlope(float slopeDegrees)
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            yield return SpawnAndHoldPrefab(0, slopeDegrees);
+
+            var body = _prefabBody;
+            var wheel = _targetObject1.transform.Find("Wheel");
+            var legLeft = _targetObject1.transform.Find("Leg_Left");
+            var legRight = _targetObject1.transform.Find("Leg_Right");
+            var ground = _obstacleObject.GetComponent<Collider>();
+            var startWheelGap = GetGroundGap(wheel, ground);
+            var startLegLeftGap = GetGroundGap(legLeft, ground);
+            var startLegRightGap = GetGroundGap(legRight, ground);
+            var uphill = Vector3.ProjectOnPlane(body.transform.forward, Vector3.up).normalized;
+
+            Press(keyboard.wKey);
+            for (var i = 0; i < 75; i++)
+                yield return new WaitForFixedUpdate();
+            var travelUp = Vector3.Dot(body.position - _prefabStart, uphill);
+            // Input must be changed from the Update phase; after WaitForFixedUpdate the keyboard has no state buffer.
+            yield return null;
+            Release(keyboard.wKey);
+            yield return null;
+            yield return null;
+            var reverseStart = body.position;
+            Press(keyboard.sKey);
+
+            var maxLift = 0f;
+            for (var i = 0; i < 75; i++)
+            {
+                yield return new WaitForFixedUpdate();
+                var wheelGap = GetGroundGap(wheel, ground);
+                var leftGap = GetGroundGap(legLeft, ground);
+                var rightGap = GetGroundGap(legRight, ground);
+                maxLift = Mathf.Max(
+                    maxLift,
+                    float.IsNaN(wheelGap) ? 1f : wheelGap - startWheelGap,
+                    float.IsNaN(leftGap) ? 1f : leftGap - startLegLeftGap,
+                    float.IsNaN(rightGap) ? 1f : rightGap - startLegRightGap);
+            }
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.True);
+            Assert.That(travelUp, Is.GreaterThan(1f), "W must push the barrow up the slope.");
+            Assert.That(Vector3.Dot(body.position - reverseStart, uphill), Is.LessThan(-0.3f),
+                "S must pull the barrow back down the slope.");
+            Assert.That(maxLift, Is.LessThan(0.03f),
+                "Reversing on a slope must not lift the wheel or legs off the ground.");
+        }
+
         private IEnumerator PushGroundedPrefab(bool forwardPush, int cargoCount)
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
@@ -1135,6 +1197,17 @@ namespace Ngecor.Interaction.Tests
             Assert.That(maxWheelLift, Is.LessThan(0.03f), "The front wheel must stay on the ground.");
         }
 
+        private static float GetGroundGap(Transform part, Collider ground)
+        {
+            foreach (var hit in Physics.RaycastAll(part.position + Vector3.up * 0.3f, Vector3.down, 1f))
+            {
+                if (hit.collider == ground)
+                    return hit.distance;
+            }
+
+            return float.NaN;
+        }
+
         // Distance from the wheel axle down to the ground collider, or NaN when the wheel does not see the ground.
         private static float GetWheelGroundGap(Transform wheel, Collider ground)
         {
@@ -1163,6 +1236,14 @@ namespace Ngecor.Interaction.Tests
 
             var side = right ? 1f : -1f;
             var cartRight = body.transform.right;
+            var legLeft = _targetObject1.transform.Find("Leg_Left");
+            var legRight = _targetObject1.transform.Find("Leg_Right");
+            var groundNormal = Quaternion.Euler(-slopeDegrees, 0f, 0f) * Vector3.up;
+            var startLegLeftGap = GetGroundGap(legLeft, ground);
+            var startLegRightGap = GetGroundGap(legRight, ground);
+            var startRoll = Mathf.Asin(Vector3.Dot(body.transform.right, groundNormal)) * Mathf.Rad2Deg;
+            var maxLegLift = 0f;
+            var maxRollChange = 0f;
             var startForward = Vector3.ProjectOnPlane(body.transform.forward, Vector3.up);
             var startTilt = Vector3.Angle(body.transform.up, Vector3.up);
             var startHandle = handle.bounds.center;
@@ -1176,6 +1257,15 @@ namespace Ngecor.Interaction.Tests
             {
                 yield return new WaitForFixedUpdate();
                 peakYawSpeed = Mathf.Max(peakYawSpeed, Mathf.Abs(body.angularVelocity.y));
+                var leftGap = GetGroundGap(legLeft, ground);
+                var rightGap = GetGroundGap(legRight, ground);
+                maxLegLift = Mathf.Max(
+                    maxLegLift,
+                    float.IsNaN(leftGap) ? 1f : leftGap - startLegLeftGap,
+                    float.IsNaN(rightGap) ? 1f : rightGap - startLegRightGap);
+                maxRollChange = Mathf.Max(
+                    maxRollChange,
+                    Mathf.Abs(Mathf.Asin(Vector3.Dot(body.transform.right, groundNormal)) * Mathf.Rad2Deg - startRoll));
             }
 
             var handleShift = Vector3.Dot(handle.bounds.center - startHandle, cartRight);
@@ -1192,6 +1282,8 @@ namespace Ngecor.Interaction.Tests
             Assert.That(noseYaw * side, Is.LessThan(-2f), "A must turn the nose right and D must turn it left.");
             Assert.That(tilt - startTilt, Is.LessThan(8f), "Steering must not roll one side of the wheelbarrow up.");
             Assert.That(peakYawSpeed, Is.LessThan(2.3f), "Steering speed must stay bounded.");
+            Assert.That(maxRollChange, Is.LessThan(5f), "Steering must not roll the barrow relative to the ground.");
+            Assert.That(maxLegLift, Is.LessThan(0.03f), "Both legs must stay on the ground while steering.");
             Assert.That(wheelTravel, Is.LessThan(handleTravel * 0.5f),
                 "The front wheel contact must stay a relatively fixed pivot while the handle swings.");
             Assert.That(body.isKinematic, Is.False);
@@ -1209,7 +1301,7 @@ namespace Ngecor.Interaction.Tests
             var slopeRise = Mathf.Tan(slopeDegrees * Mathf.Deg2Rad);
             _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             _obstacleObject.transform.SetPositionAndRotation(slope * Vector3.down * 0.5f, slope);
-            _obstacleObject.transform.localScale = new Vector3(20f, 1f, 20f);
+            _obstacleObject.transform.localScale = new Vector3(40f, 1f, 40f);
 
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(WheelbarrowPrefabPath);
             Assert.That(prefab, Is.Not.Null, "The original wheelbarrow prefab must be available to Play Mode tests.");
@@ -1218,6 +1310,7 @@ namespace Ngecor.Interaction.Tests
             wheelbarrow.transform.SetPositionAndRotation(new Vector3(0f, 0.3f + slopeRise * 3f, 3f), slope);
             _targetObject1 = wheelbarrow;
             _prefabBody = wheelbarrow.GetComponent<Rigidbody>();
+            _prefabStart = _prefabBody.position;
 
             if (cargoCount > 0)
             {
