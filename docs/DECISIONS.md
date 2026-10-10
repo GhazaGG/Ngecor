@@ -330,6 +330,20 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Keputusan pemilik proyek, 2026-10-10 (opsi B pada PR #92). Pembatasan ke input W/S adalah keputusan implementasi karena tes kemudi yang ada; mohon dikonfirmasi pemilik.
 
+### 2026-10-11 — Dorongan client dan gerobak lewat niat (NET-003)
+
+**Usulan:**
+- Dorongan kontak client: client pemilik melaporkan benda jaringan yang ditabrak (titik kontak dan arah horizontal) saat `CharacterController`-nya menyentuh benda kinematic. Host memvalidasi (jarak horizontal dari posisi player di host paling jauh 1,5 m, tinggi kontak −0,5 sampai 2,5 m, arah horizontal, benda bukan kinematic di host) lalu mendorong dengan hukum dan batas gaya yang sama dengan dorongan lokal (`_maxPushForce`, 350 N). Satu niat berlaku 0,15 detik; client mengirim paling sering setiap 0,05 detik. Menabrak player lain tidak mengirim niat. Client tidak pernah mengubah posisi benda.
+- Gerobak: host menjalankan gaya dorong, rem, kemudi, dan friksi kaki dari W/A/S/D client yang direplikasi. Client pemilik hanya menggerakkan player-nya sendiri mengikuti handle. Di host, collider replika player pemegang diabaikan terhadap gerobak selama dipegang. Hanya satu pemegang pada satu waktu.
+- Benda yang dibawa (grab) dan interaksi yang dipegang (handle gerobak) dicerminkan host lewat `NetworkVariable` yang hanya ditulis server, sehingga client yang join belakangan melihat state yang sama. Ini menggantikan ClientRpc NET-002 yang tidak sampai ke client yang terlambat.
+- `NetworkRigidbody` memaksa Rigidbody menjadi kinematic sampai objek di-spawn oleh sesi. Tes yang memuat `Wheelbarrow.prefab` tanpa sesi mengembalikan body ke dinamis, meniru state host setelah spawn.
+
+**Hasil tes latency:** lihat PR NET-003 (#22). Catatan lag benda yang dibawa client dan tes berdiri di atas benda milik host dilaporkan di sana. Keputusan revisit authority (client pemegang mensimulasikan benda yang dipegangnya) tetap ada pada pemilik proyek dan tidak diubah di sini.
+
+**Status:** Usulan NET-003 (#22), menunggu review PR dan playtest feel.
+
+**Source:** Implementasi NET-003 oleh meryzennn, mengikuti keputusan 2026-10-01 (authority) dan 2026-10-02 (dorongan lewat kontak), serta catatan TL pada issue #22.
+
 ## Anggaran performa
 
 Angka di bawah adalah titik awal. Ubah lewat PR setelah ada data Profiler, jangan diubah karena satu fitur sulit memenuhinya.
