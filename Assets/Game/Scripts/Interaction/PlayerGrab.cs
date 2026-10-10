@@ -27,8 +27,11 @@ namespace Ngecor.Interaction
         private PlayerMovement _playerMovement;
         private InteractionDetector _detector;
         private GrabbableObject _carriedObject;
+        private IHoldInteractable _heldInteractable;
         private Transform _resolvedHoldPoint;
         private Collider[] _playerColliders;
+        private string _interactionFeedback;
+        private float _interactionFeedbackUntil;
 
         private bool _savedWasKinematic;
         private bool _savedUseGravity;
@@ -43,8 +46,10 @@ namespace Ngecor.Interaction
         private int _separatingCount;
 
         public bool IsCarrying => _carriedObject != null && _carriedObject.gameObject != null;
+        public bool IsUsingInteractable => _heldInteractable is Object heldObject && heldObject != null;
         public GrabbableObject CarriedObject => IsCarrying ? _carriedObject : null;
         public Transform HoldPoint => ResolveHoldPoint();
+        public string InteractionFeedback => Time.unscaledTime < _interactionFeedbackUntil ? _interactionFeedback : null;
         public float CarriedRadius => _carriedRadius;
         public float PinchDropDelay
         {
@@ -96,7 +101,9 @@ namespace Ngecor.Interaction
             // Handle Interact Input (Grab / Drop)
             if (_interactAction != null && _interactAction.action != null && _interactAction.action.WasPressedThisFrame())
             {
-                if (IsCarrying)
+                if (IsUsingInteractable)
+                    RequestEndInteraction();
+                else if (IsCarrying)
                     RequestDrop();
                 else
                     RequestGrab();
@@ -132,6 +139,17 @@ namespace Ngecor.Interaction
                 string objectName = _carriedObject != null ? _carriedObject.gameObject.name : "Object";
                 GUI.Box(new Rect(Screen.width / 2f - 120f, Screen.height / 2f + 75f, 240f, 30f),
                     $"[Carrying]: {objectName} (Drop)");
+            }
+            else if (IsUsingInteractable)
+            {
+                var component = _heldInteractable as Component;
+                string objectName = component != null ? component.gameObject.name : "Object";
+                GUI.Box(new Rect(Screen.width / 2f - 120f, Screen.height / 2f + 75f, 240f, 30f),
+                    $"[Using]: {objectName} (Release)");
+            }
+            else if (!string.IsNullOrEmpty(InteractionFeedback))
+            {
+                GUI.Box(new Rect(Screen.width / 2f - 180f, Screen.height / 2f + 75f, 360f, 42f), InteractionFeedback);
             }
         }
 
@@ -187,6 +205,8 @@ namespace Ngecor.Interaction
         {
             if (IsCarrying)
                 ExecuteDrop();
+            if (IsUsingInteractable)
+                RequestEndInteraction();
 
             if (_playerMovement == null)
                 _playerMovement = GetComponent<PlayerMovement>();
@@ -226,11 +246,60 @@ namespace Ngecor.Interaction
             if (_detector == null)
                 _detector = GetComponent<InteractionDetector>();
 
+            if (_detector != null && _detector.CurrentTarget is IHoldInteractable holdInteractable)
+                return RequestBeginInteraction(holdInteractable);
+
             var target = _detector != null ? _detector.CurrentTarget as GrabbableObject : null;
             if (target == null && _detector != null && _detector.CurrentTarget is Component comp)
                 target = comp.GetComponentInParent<GrabbableObject>();
 
             return RequestGrab(target);
+        }
+
+        private bool RequestBeginInteraction(IHoldInteractable target)
+        {
+            if (IsCarrying || IsUsingInteractable || target == null || _detector == null ||
+                _detector.CurrentTarget != target ||
+                !target.CanInteractFrom(gameObject, _detector.CurrentHit.collider) ||
+                !target.CanInteract(gameObject))
+                return false;
+
+            if (Vector3.Distance(transform.position, _detector.CurrentHit.point) > _maxGrabDistance)
+                return false;
+
+            if (!target.TryBeginInteraction(gameObject))
+                return false;
+
+            _heldInteractable = target;
+            return true;
+        }
+
+        private bool RequestEndInteraction()
+        {
+            if (!IsUsingInteractable)
+            {
+                _heldInteractable = null;
+                return false;
+            }
+
+            var target = _heldInteractable;
+            _heldInteractable = null;
+            target.EndInteraction(gameObject);
+            return true;
+        }
+
+        public void NotifyInteractionEnded(IHoldInteractable target, string feedback = null)
+        {
+            if (ReferenceEquals(_heldInteractable, target))
+                _heldInteractable = null;
+            if (!string.IsNullOrEmpty(feedback))
+                ShowInteractionFeedback(feedback);
+        }
+
+        public void ShowInteractionFeedback(string message)
+        {
+            _interactionFeedback = message;
+            _interactionFeedbackUntil = Time.unscaledTime + 3f;
         }
 
         public bool RequestGrab(GrabbableObject target)
