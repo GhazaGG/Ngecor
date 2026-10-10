@@ -42,7 +42,10 @@ namespace Ngecor.Player
         private void Start()
         {
             if (_isLocalPlayer)
+            {
+                EnablePlayerActions();
                 SetCursorLocked(true);
+            }
         }
 
         private int _cursorRelockedFrame = -1;
@@ -63,7 +66,22 @@ namespace Ngecor.Player
                 return;
 
             _isLocalPlayer = isLocalPlayer;
+            if (isLocalPlayer)
+                EnablePlayerActions();
             SetCursorLocked(isLocalPlayer);
+        }
+
+        private void EnablePlayerActions()
+        {
+            var action = _moveAction != null ? _moveAction.action : null;
+            if (action == null)
+                return;
+
+            var actionMap = action.actionMap;
+            if (actionMap != null)
+                actionMap.Enable();
+            else
+                action.Enable();
         }
 
         private void OnDisable()

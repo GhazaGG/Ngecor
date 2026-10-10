@@ -15,6 +15,7 @@ namespace Ngecor.Material
         private GrabbableObject _grabbable;
         private GroundMaterialDeposit _ground;
         private bool _groundRequested;
+        private bool _singleUnitPour;
         private float _flowUntil = float.NegativeInfinity;
         private readonly HashSet<BulkMaterialContainer> _nearbyReceivers = new HashSet<BulkMaterialContainer>();
 
@@ -48,6 +49,21 @@ namespace Ngecor.Material
             }
             _requestedReceiver = receiver;
             _groundRequested = ground;
+            _singleUnitPour = false;
+            return true;
+        }
+
+        public bool RequestSingleUnitPour()
+        {
+            if (!RequestPour())
+                return false;
+
+            _singleUnitPour = true;
+            _source.CancelTransfer();
+            var moved = _groundRequested
+                ? _ground.Deposit(_materialType, 1)
+                : _source.TransferUnitsTo(_requestedReceiver, _materialType, 1);
+            _flowUntil = moved > 0 ? Time.time + 0.2f : float.NegativeInfinity;
             return true;
         }
 
@@ -55,6 +71,7 @@ namespace Ngecor.Material
         {
             _requestedReceiver = null;
             _groundRequested = false;
+            _singleUnitPour = false;
             _flowUntil = float.NegativeInfinity;
             if (_source != null)
                 _source.CancelTransfer();
@@ -118,6 +135,13 @@ namespace Ngecor.Material
 
             if (_source == null || (_requestedReceiver == null && !_groundRequested))
                 return;
+
+            if (_singleUnitPour)
+            {
+                if (Time.time >= _flowUntil)
+                    CancelPour();
+                return;
+            }
 
             var moved = _groundRequested ? _source.TransferToGroundForSeconds(_materialType, Time.fixedDeltaTime)
                 : _source.TransferForSeconds(_requestedReceiver, _materialType, Time.fixedDeltaTime);

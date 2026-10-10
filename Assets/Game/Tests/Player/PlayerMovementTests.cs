@@ -279,7 +279,9 @@ namespace Ngecor.Player.Tests
             var keyboard = InputSystem.AddDevice<Keyboard>();
             CreatePlayer(null);
 
+            _actionAsset.Disable();
             _player.GetComponent<Ngecor.Player.PlayerMovement>().SetLocalPlayer(true);
+            Assert.That(_moveAction.enabled, Is.True);
             Press(keyboard.wKey);
             yield return WaitForFixedFrames(8);
 
