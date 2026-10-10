@@ -18,10 +18,16 @@ namespace Ngecor.EditorTools
         private const string TestSackName = "Mixing Test Cement Sack";
         private const string DrumName = "Water Drum";
 
-        // Rebuilds the mixing spot, creates the water drum, and cleans Dev_Ghaza so every ingredient
-        // has to be carried to the spot.
+        // Creates the mixing spot and water drum prefabs when missing, and cleans Dev_Ghaza so every ingredient
+        // has to be carried to the spot. Existing prefabs keep their Inspector tuning.
         [MenuItem("Ngecor/Setup Manual Mixing Spot")]
-        public static void Setup()
+        public static void Setup() => Run(false);
+
+        // Overwrites both prefabs with the defaults; Inspector tuning on them is lost.
+        [MenuItem("Ngecor/Rebuild Manual Mixing Prefabs")]
+        public static void RebuildPrefabs() => Run(true);
+
+        private static void Run(bool rebuildPrefabs)
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
                 return;
@@ -32,8 +38,10 @@ namespace Ngecor.EditorTools
                 throw new System.InvalidOperationException("Material assets are missing.");
             var water = LoadOrCreateWaterMaterial(sand);
 
-            BuildSpotPrefab(sand, cement, concrete);
-            BuildDrumPrefab(concrete, water);
+            if (rebuildPrefabs || AssetDatabase.LoadAssetAtPath<GameObject>(SpotPrefabPath) == null)
+                BuildSpotPrefab(sand, cement, concrete);
+            if (rebuildPrefabs || AssetDatabase.LoadAssetAtPath<GameObject>(DrumPrefabPath) == null)
+                BuildDrumPrefab(concrete, water);
 
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
             PlaceInScene(scene);
