@@ -88,3 +88,9 @@ Items 1 to 6 of the TL prompt are implemented and the automated suite passes on 
 - Post the PR comment (hash, test counts, speeds, per-point hand-test results once they exist) and update the PR body head and counts.
 - Decide on the downhill-grab issue and on heavy loose cargo (option C, handle lift, was kept out of scope).
 - Merge or rebase `main` before review.
+
+## Addendum: hand test, profiler and merge of main
+
+- Owner hand test in Playground (reported by the developer, not by me): grip from both handles, W, A/D, W+A/D, W up and down ramps, reverse on ramps, idle hold, release and parked barrow on ramps, blocked grip feedback and a clean Console all passed. Reverse in the empty barrow felt smooth. Three 25 kg loads: W moves them but very slowly, S barely moves. The front wheel sometimes lifts when reversing on a ramp (reported as not a problem). Decision: option A, close #92 with these as known issues and open follow-ups.
+- Profiler (developer screenshot): `WheelbarrowInteraction.LateUpdate` GC Alloc 0 B on one sample frame; no sustained capture and `FixedUpdate` not inspected.
+- Merged `origin/main` (MAT-004, MIX-003, INT-006 and history reports). Only conflict: `docs/DECISIONS.md`, both new entries kept. Merge commit `2673bcd`. Full PlayMode suite on the merged tree (scratch copy synced from the worktree): **197 tests, 196 passed, 0 failed, 1 skipped** (same graphics-device skip). Note: a first attempt at this run used a scratch copy that had not received the merged files and reported 157; it was discarded and redone.
