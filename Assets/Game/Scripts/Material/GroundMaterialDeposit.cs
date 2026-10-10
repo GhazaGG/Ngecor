@@ -57,7 +57,9 @@ namespace Ngecor.Material
 
         public int Deposit(MaterialType type, int requestedUnits)
         {
-            if (requestedUnits <= 0 || _source.GetUnits(type) == 0 || !TryGetSurface(out var surface))
+            // Water does not form a pile; it stays in the source so the player can recover it.
+            if (requestedUnits <= 0 || type == MaterialType.Water || _source.GetUnits(type) == 0
+                || !TryGetSurface(out var surface))
                 return 0;
             var count = Physics.OverlapSphereNonAlloc(surface.point, _mergeRadius, _pileHits,
                 Physics.AllLayers, QueryTriggerInteraction.Ignore);

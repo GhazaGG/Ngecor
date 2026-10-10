@@ -174,8 +174,30 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 10483451}
   m_SourcePrefab: {fileID: 100100000, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+--- !u!1 &10483450 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+  m_PrefabInstance: {fileID: 10483449}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &10483451
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 10483450}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e0dfcc53e6c3a24b91871e53d3a6fbc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.GrabbableObject
+  _prompt: Grab
+  _canGrab: 1
 --- !u!1 &21908535
 GameObject:
   m_ObjectHideFlags: 0
@@ -845,8 +867,30 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 414781085}
   m_SourcePrefab: {fileID: 100100000, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+--- !u!1 &414781084 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+  m_PrefabInstance: {fileID: 414781083}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &414781085
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 414781084}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e0dfcc53e6c3a24b91871e53d3a6fbc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.GrabbableObject
+  _prompt: Grab
+  _canGrab: 1
 --- !u!1 &541214212
 GameObject:
   m_ObjectHideFlags: 0
@@ -1101,8 +1145,30 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 758797311}
   m_SourcePrefab: {fileID: 100100000, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+--- !u!1 &758797310 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+  m_PrefabInstance: {fileID: 758797309}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &758797311
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 758797310}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e0dfcc53e6c3a24b91871e53d3a6fbc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.GrabbableObject
+  _prompt: Grab
+  _canGrab: 1
 --- !u!1 &786438938
 GameObject:
   m_ObjectHideFlags: 0
@@ -1395,6 +1461,63 @@ Transform:
   - {fileID: 712775893}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &1130202753
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 2136929377582819048, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
+      propertyPath: m_Name
+      value: Manual Mixing Spot
+      objectReference: {fileID: 0}
+    - target: {fileID: 4199552895150691992, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 4199552895150691992, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.075
+      objectReference: {fileID: 0}
+    - target: {fileID: 4199552895150691992, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 4199552895150691992, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4199552895150691992, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4199552895150691992, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4199552895150691992, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4199552895150691992, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4199552895150691992, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4199552895150691992, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 93b9cdac0197bf341a3893ef7dc4faa8, type: 3}
 --- !u!1 &1166643107
 GameObject:
   m_ObjectHideFlags: 0
@@ -1714,6 +1837,63 @@ Transform:
   - {fileID: 1166643108}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &1317096345
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 3555366887302959017, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
+      propertyPath: m_Name
+      value: Water Drum
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424381744229868072, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 3.75
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424381744229868072, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.56
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424381744229868072, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 5.031089
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424381744229868072, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424381744229868072, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424381744229868072, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424381744229868072, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424381744229868072, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424381744229868072, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6424381744229868072, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: fab3aef29187a5844a933c336b85c9c8, type: 3}
 --- !u!1 &1322066640
 GameObject:
   m_ObjectHideFlags: 0
@@ -2001,8 +2181,30 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1391288169}
   m_SourcePrefab: {fileID: 100100000, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+--- !u!1 &1391288168 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+  m_PrefabInstance: {fileID: 1391288167}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1391288169
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1391288168}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e0dfcc53e6c3a24b91871e53d3a6fbc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.GrabbableObject
+  _prompt: Grab
+  _canGrab: 1
 --- !u!1001 &1455055190
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -2384,8 +2586,30 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1802117659}
   m_SourcePrefab: {fileID: 100100000, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+--- !u!1 &1802117658 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+  m_PrefabInstance: {fileID: 1802117657}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1802117659
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1802117658}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e0dfcc53e6c3a24b91871e53d3a6fbc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.GrabbableObject
+  _prompt: Grab
+  _canGrab: 1
 --- !u!1 &1806817857
 GameObject:
   m_ObjectHideFlags: 0
@@ -2693,8 +2917,30 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 2875376289994169803}
   m_SourcePrefab: {fileID: 100100000, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+--- !u!1 &2875376289994169802 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7144188770030115099, guid: 442102afc3251df4f85bee5d299c67ae, type: 3}
+  m_PrefabInstance: {fileID: 2875376289994169801}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &2875376289994169803
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2875376289994169802}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e0dfcc53e6c3a24b91871e53d3a6fbc, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Ngecor.Interaction::Ngecor.Interaction.GrabbableObject
+  _prompt: Grab
+  _canGrab: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -2719,3 +2965,5 @@ SceneRoots:
   - {fileID: 1672382305}
   - {fileID: 541214217}
   - {fileID: 946931062}
+  - {fileID: 1130202753}
+  - {fileID: 1317096345}
