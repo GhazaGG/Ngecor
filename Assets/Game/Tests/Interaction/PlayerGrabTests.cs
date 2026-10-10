@@ -1077,21 +1077,74 @@ namespace Ngecor.Interaction.Tests
         }
 
         [UnityTest]
-        public IEnumerator WheelbarrowPrefab_WPushesForwardWithThreeCargo()
+        public IEnumerator WheelbarrowPrefab_WPushesForwardKeepingFrontWheelDown()
+        {
+            yield return PushGroundedPrefab(true, 0);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_WPushesForwardWithThreeCargoKeepingFrontWheelDown()
+        {
+            yield return PushGroundedPrefab(true, 3);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_SReversesKeepingFrontWheelDown()
+        {
+            yield return PushGroundedPrefab(false, 0);
+        }
+
+        [UnityTest]
+        public IEnumerator WheelbarrowPrefab_SReversesWithThreeCargoKeepingFrontWheelDown()
+        {
+            yield return PushGroundedPrefab(false, 3);
+        }
+
+        private IEnumerator PushGroundedPrefab(bool forwardPush, int cargoCount)
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
-            yield return SpawnAndHoldPrefab(3);
+            yield return SpawnAndHoldPrefab(cargoCount);
 
             var body = _prefabBody;
-            var forward = body.transform.forward;
+            var wheel = _targetObject1.transform.Find("Wheel");
+            var ground = _obstacleObject.GetComponent<Collider>();
+            var forward = Vector3.ProjectOnPlane(body.transform.forward, Vector3.up).normalized;
             var start = body.position;
+            var startPitch = Mathf.Asin(body.transform.forward.y) * Mathf.Rad2Deg;
+            var startGap = GetWheelGroundGap(wheel, ground);
+            Assert.That(startGap, Is.Not.NaN, "The front wheel of the prefab must touch the ground before pushing.");
 
-            Press(keyboard.wKey);
-            yield return new WaitForSeconds(1f);
+            var maxPitchChange = 0f;
+            var maxWheelLift = 0f;
+            Press(forwardPush ? keyboard.wKey : keyboard.sKey);
+            yield return null;
+            for (var i = 0; i < 50; i++)
+            {
+                yield return new WaitForFixedUpdate();
+                maxPitchChange = Mathf.Max(
+                    maxPitchChange, Mathf.Abs(Mathf.Asin(body.transform.forward.y) * Mathf.Rad2Deg - startPitch));
+                var gap = GetWheelGroundGap(wheel, ground);
+                maxWheelLift = Mathf.Max(maxWheelLift, float.IsNaN(gap) ? 1f : gap - startGap);
+            }
 
             var travel = Vector3.Dot(body.position - start, forward);
             Assert.That(_playerGrab.IsUsingInteractable, Is.True);
-            Assert.That(travel, Is.GreaterThan(0.3f), "The loaded wheelbarrow must still be pushable forward.");
+            Assert.That(travel * (forwardPush ? 1f : -1f), Is.GreaterThan(0.3f),
+                forwardPush ? "W must push the barrow forward." : "S must pull the barrow backward.");
+            Assert.That(maxPitchChange, Is.LessThan(5f), "Pushing or pulling must not pitch the barrow.");
+            Assert.That(maxWheelLift, Is.LessThan(0.03f), "The front wheel must stay on the ground.");
+        }
+
+        // Distance from the wheel axle down to the ground collider, or NaN when the wheel does not see the ground.
+        private static float GetWheelGroundGap(Transform wheel, Collider ground)
+        {
+            foreach (var hit in Physics.RaycastAll(wheel.position + Vector3.up * 0.2f, Vector3.down, 0.6f))
+            {
+                if (hit.collider == ground)
+                    return hit.distance;
+            }
+
+            return float.NaN;
         }
 
         private IEnumerator SteerGroundedPrefab(bool right, int cargoCount, float slopeDegrees = 0f)
