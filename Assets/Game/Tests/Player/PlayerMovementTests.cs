@@ -29,6 +29,14 @@ namespace Ngecor.Player.Tests
         private InputActionReference _moveReference;
         private InputActionReference _lookReference;
 
+        [SetUp]
+        public override void Setup()
+        {
+            base.Setup();
+            if (InputSystem.actions != null)
+                InputSystem.actions.Disable();
+        }
+
         public override void TearDown()
         {
             Cursor.lockState = CursorLockMode.None;

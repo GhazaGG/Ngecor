@@ -28,6 +28,8 @@ namespace Ngecor.Interaction.Tests
         public override void Setup()
         {
             base.Setup();
+            if (InputSystem.actions != null)
+                InputSystem.actions.Disable();
 
             _actionAsset = ScriptableObject.CreateInstance<InputActionAsset>();
             var playerMap = new InputActionMap("Player");
