@@ -911,6 +911,106 @@ namespace Ngecor.Interaction.Tests
         }
 
         [UnityTest]
+        public IEnumerator RequestGrab_WithBeginInteractionHandler_RoutesTheHoldThroughTheHandler()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out var handle);
+            _targetObject1 = interaction.gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_detector.CurrentHit.collider, Is.SameAs(handle));
+
+            IHoldInteractable routed = null;
+            _playerGrab.BeginInteractionRequestHandler = target =>
+            {
+                routed = target;
+                return true;
+            };
+
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+            Assert.That(routed, Is.SameAs(interaction), "The hold request must reach the handler.");
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False,
+                "With a handler, only the handler (the host) decides whether the hold starts.");
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteEndInteraction_ReleasesTheHoldAndRaisesInteractionEndedOnce()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out _);
+            _targetObject1 = interaction.gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+            Assert.That(_playerGrab.HeldInteractable, Is.SameAs(interaction));
+
+            var ended = 0;
+            _playerGrab.InteractionEnded += () => ended++;
+
+            Assert.That(_playerGrab.ExecuteEndInteraction(), Is.True);
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False);
+            Assert.That(_playerGrab.HeldInteractable, Is.Null);
+            Assert.That(ended, Is.EqualTo(1));
+            Assert.That(_playerGrab.ExecuteEndInteraction(), Is.False);
+            Assert.That(ended, Is.EqualTo(1), "Ending twice must not report a second end.");
+        }
+
+        [UnityTest]
+        public IEnumerator InteractionEnded_FiresWhenTheWheelbarrowReleasesTheHoldItself()
+        {
+            var interaction = CreateWheelbarrow("Wheelbarrow", new Vector3(0f, 1.4f, 1.4f), out _, out _);
+            _targetObject1 = interaction.gameObject;
+            Physics.SyncTransforms();
+            yield return null;
+            _detector.Detect();
+            Assert.That(_playerGrab.RequestGrab(), Is.True);
+
+            var ended = 0;
+            _playerGrab.InteractionEnded += () => ended++;
+            interaction.transform.position = new Vector3(0f, 1.4f, 20f);
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(_playerGrab.IsUsingInteractable, Is.False);
+            Assert.That(ended, Is.EqualTo(1), "The network layer must hear about holds the interactable ends.");
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteReplicatedGrab_AttachesBeyondGrabDistance()
+        {
+            var grabbable = CreateGrabbable("Far", new Vector3(0f, 1.4f, 10f));
+            _targetObject1 = grabbable.gameObject;
+            yield return null;
+
+            Assert.That(_playerGrab.ExecuteGrab(grabbable), Is.False, "A local grab still respects the distance limit.");
+            Assert.That(_playerGrab.ExecuteReplicatedGrab(grabbable), Is.True,
+                "The host already validated this grab; a lagging copy of the holder must not refuse it.");
+            Assert.That(_playerGrab.CarriedObject, Is.SameAs(grabbable));
+            Assert.That(grabbable.IsHeld, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator ExecuteReplicatedGrab_RefusesObjectHeldBySomeoneElse()
+        {
+            var grabbable = CreateGrabbable("Held", new Vector3(0f, 1.4f, 2f));
+            _targetObject1 = grabbable.gameObject;
+            var otherHolder = new GameObject("OtherHolder");
+            try
+            {
+                grabbable.OnGrab(otherHolder);
+                yield return null;
+
+                Assert.That(_playerGrab.ExecuteReplicatedGrab(grabbable), Is.False,
+                    "An object must never have two holders, even when updates arrive out of order.");
+                Assert.That(_playerGrab.IsCarrying, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(otherHolder);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator WheelbarrowInteraction_WPushesForwardWhileHeld()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
