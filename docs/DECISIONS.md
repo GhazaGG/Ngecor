@@ -299,6 +299,24 @@ Owner/source: orang atau link keputusan
 
 **Owner/source:** Keputusan pemilik proyek, 2026-10-10 (opsi B pada PR #92). Pembatasan ke input W/S adalah keputusan implementasi karena tes kemudi yang ada; mohon dikonfirmasi pemilik.
 
+### 2026-10-10 — Rem tangan pickup berkapasitas gaya (VEH-003)
+
+**Decision:**
+- Pickup terparkir (`Pickup.prefab`) adalah satu Rigidbody dengan collider primitif dan empat roda `SphereCollider` ber-material `WheelLowFriction`. Tanpa input menyetir dan tanpa `WheelCollider`, mengikuti pola gerobak.
+- `PickupWheels` memberi roda belakang rem tangan dengan **kapasitas gaya tetap** (`_handbrakeHoldForce`, nilai awal 544 N untuk pickup 600 kg). Selama beban di bawah kapasitas, rem menahan pickup; di atasnya pickup merayap mundur. Batas overload muncul dari massa muatan yang benar-benar menekan pickup. Tidak ada counter muatan.
+- Mengganjal roda dengan benda fisik atau menurunkan muatan menghentikan rayapan lewat kontak dan massa biasa, tanpa logika khusus.
+- Pickup yang ditahan rem dan diam sekitar 0,5 detik ditidurkan (`Rigidbody.Sleep`) supaya sesuai [Anggaran performa](#anggaran-performa). Tidur dibatalkan kalau kecepatannya bertambah selama jendela diam itu (tanda muatan melewati kapasitas dan mulai merayap). Tabrakan, muatan baru, atau `SetHandbrake` membangunkannya.
+
+**Batas:** Rumus di issue (`F/(g·sinθ) − M`) tidak akurat karena roda low-friction masih menyumbang gesekan; kapasitas nyata bergantung pada material roda dan material tanah (gesekan efektif terukur sekitar 0,09, lebih besar dari 0,05 nominal, sebabnya belum diketahui). Mengganti material tanah atau default physics menggeser batas overload. Simulasi batchmode di `Ramp_Gentle` (10°) menunjukkan 4 sak semen (100 kg) tertahan dengan margin sekitar 33%, 5 sak tertahan, dan 6 sak (150 kg) merayap sekitar 0,9 m dalam 10 detik. Batas kapasitas kabur sekitar ±3 kg dan kepekaannya tinggi: 1 N gaya rem setara sekitar 1,25 kg muatan. Di `Ramp_20Degree` rem 544 N tidak sanggup menahan, bahkan pickup kosong menggelinding turun; jadi parkir yang valid hanya di `Ramp_Gentle`. Solver iterations per-Rigidbody tidak dapat diserialisasi di prefab, jadi prefab memakai default proyek. Dinding bak 0,15 m dan bibir tailgate 0,07 m; muatan hanya jatuh pada kemiringan sekitar 45° (tidak pada roll 25° atau benturan 4 m/s), karena sak datar baru terguling sekitar 82° dan `CementBag` meredam benturan.
+
+**Reason:** Overload yang berasal dari massa fisik dan rem berbatas memenuhi dua prinsip inti: risikonya punya pemicu yang masuk akal dan bisa dipulihkan pemain (ganjal atau turunkan muatan). Rem berbasis kapasitas gaya dipilih karena `WheelCollider` memakai raycast sehingga ganjal benda fisik tidak menahannya.
+
+**Status:** Nilai awal dari simulasi batchmode, **belum dites di Play Mode**. Menunggu playtest feel dan review PR. Cargo yang jatuh baru terlihat pada kemiringan sekitar 45°; seberapa mudah muatan jatuh masih perlu ditinjau.
+
+**Applies from:** VEH-003 (#44); LEVEL-001 (unload flow) dan TOOL-001 (#81) memakai pickup ini.
+
+**Source:** Issue VEH-003 (#44). Angka tuning berasal dari task ini, belum disetujui pemilik proyek.
+
 ## Anggaran performa
 
 Angka di bawah adalah titik awal. Ubah lewat PR setelah ada data Profiler, jangan diubah karena satu fitur sulit memenuhinya.
