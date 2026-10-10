@@ -113,6 +113,10 @@ namespace Ngecor.Player
         // Note: IsCursorOverUIHandler is a single static delegate; subsequent subscribers will overwrite previous ones.
         public static System.Func<bool> IsCursorOverUIHandler { get; set; }
 
+        // Set by the network layer on the owning client. Bodies the host simulates are kinematic here, so contact
+        // with one is reported as a push intent instead of being pushed locally.
+        public System.Action<Rigidbody, Vector3, Vector3> KinematicContactPushHandler { get; set; }
+
         public float CarriedMass
         {
             get => _carriedMass;
@@ -282,6 +286,12 @@ namespace Ngecor.Player
             var pushDirection = Vector3.ProjectOnPlane(hit.moveDirection, Vector3.up);
             if (pushDirection.sqrMagnitude <= Mathf.Epsilon)
                 return;
+
+            if (hit.rigidbody != null && hit.rigidbody.isKinematic)
+            {
+                KinematicContactPushHandler?.Invoke(hit.rigidbody, hit.point, pushDirection);
+                return;
+            }
 
             ApplyContactPush(hit.rigidbody, hit.point, pushDirection, Time.deltaTime);
         }

@@ -910,6 +910,30 @@ namespace Ngecor.Player.Tests
         }
 
         [UnityTest]
+        public IEnumerator ContactWithKinematicRigidbodyReportsPushIntent()
+        {
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            CreatePlayer();
+            var movement = _player.GetComponent<Ngecor.Player.PlayerMovement>();
+            var body = CreatePushTarget(true, 1.5f);
+            var startingPosition = body.position;
+            Rigidbody reportedBody = null;
+            var reportedDirection = Vector3.zero;
+            movement.KinematicContactPushHandler = (hitBody, point, direction) =>
+            {
+                reportedBody = hitBody;
+                reportedDirection = direction;
+            };
+
+            Press(keyboard.wKey);
+            yield return WaitForFixedFrames(30);
+
+            Assert.That(reportedBody, Is.SameAs(body), "A host-simulated (kinematic here) body must be reported.");
+            Assert.That(Vector3.Dot(reportedDirection.normalized, Vector3.forward), Is.GreaterThan(0.9f));
+            Assert.That(body.position, Is.EqualTo(startingPosition), "The report must not move the body locally.");
+        }
+
+        [UnityTest]
         public IEnumerator ContactPushesHorizontally()
         {
             var keyboard = InputSystem.AddDevice<Keyboard>();
