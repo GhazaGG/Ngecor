@@ -196,5 +196,41 @@ namespace Ngecor.Multiplayer.Tests
             bool isValid = _interaction.ValidateGrabTarget(_grabbable, _playerGrab.MaxGrabDistance);
             Assert.That(isValid, Is.True, "Grab must be accepted when target is directly visible.");
         }
+
+        [Test]
+        public void HandleLocalBeginInteraction_OfflineWithoutNetworkObject_BeginsLocally()
+        {
+            var holdObject = new GameObject("Hold");
+            try
+            {
+                var hold = holdObject.AddComponent<FakeHoldInteractable>();
+
+                Assert.That(_interaction.HandleLocalBeginInteraction(hold), Is.True);
+                Assert.That(_playerGrab.HeldInteractable, Is.SameAs(hold));
+                Assert.That(hold.BeginCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                Object.DestroyImmediate(holdObject);
+            }
+        }
+
+        [Test]
+        public void HandleLocalBeginInteraction_OfflineWhenTargetRefuses_StaysFree()
+        {
+            var holdObject = new GameObject("Hold");
+            try
+            {
+                var hold = holdObject.AddComponent<FakeHoldInteractable>();
+                hold.AcceptBegin = false;
+
+                Assert.That(_interaction.HandleLocalBeginInteraction(hold), Is.False);
+                Assert.That(_playerGrab.IsUsingInteractable, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(holdObject);
+            }
+        }
     }
 }
