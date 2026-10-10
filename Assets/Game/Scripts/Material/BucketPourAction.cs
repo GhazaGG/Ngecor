@@ -15,6 +15,8 @@ namespace Ngecor.Material
         private BulkMaterialContainer _collectSource;
         private bool _collectRequested;
         private MaterialType _collectType;
+        private bool _restoreTypeOnCancel;
+        private MaterialType _typeBeforeCollect;
         private GrabbableObject _grabbable;
         private GroundMaterialDeposit _ground;
         private bool _groundRequested;
@@ -77,6 +79,10 @@ namespace Ngecor.Material
             _flowUntil = float.NegativeInfinity;
             if (_source != null)
                 _source.CancelTransfer();
+            // A pickup cancelled before its first unit leaves the empty bucket as it was.
+            if (_restoreTypeOnCancel && _source != null && _source.TotalUnits == 0)
+                _source.ConfigureSingleTypeWhenEmpty(_typeBeforeCollect);
+            _restoreTypeOnCancel = false;
         }
 
         public void RegisterNearbyReceiver(BulkMaterialContainer receiver)
@@ -91,9 +97,8 @@ namespace Ngecor.Material
                 return;
 
             _nearbyReceivers.Remove(receiver);
-            if (_collectSource == receiver)
-                _collectSource = null;
-            if (_requestedReceiver == receiver)
+            // Reset the whole request so a held R can pick the next source.
+            if (_collectSource == receiver || _requestedReceiver == receiver)
                 CancelPour();
         }
 
@@ -147,7 +152,11 @@ namespace Ngecor.Material
                 : _groundRequested ? _source.TransferToGroundForSeconds(CurrentMaterialType, Time.fixedDeltaTime)
                 : _source.TransferForSeconds(_requestedReceiver, CurrentMaterialType, Time.fixedDeltaTime);
             if (moved > 0)
+            {
                 _flowUntil = Time.time + 0.2f;
+                if (_collectRequested)
+                    _restoreTypeOnCancel = false;
+            }
         }
 
         private bool RequestCollect()
@@ -155,30 +164,18 @@ namespace Ngecor.Material
             if (_source == null || _source.TotalUnits != 0)
                 return false;
 
-            BulkMaterialContainer nearest = null;
-            var nearestType = default(MaterialType);
-            var nearestDistance = float.PositiveInfinity;
-            var tied = false;
-            foreach (var receiver in _nearbyReceivers)
-            {
-                if (receiver == null || !receiver.TryGetComponent<CollectOnlyType>(out _)
-                    || !CollectOnlyType.TryGetCollectType(receiver, false, out var type))
-                    continue;
-                var distance = (receiver.transform.position - transform.position).sqrMagnitude;
-                if (distance < nearestDistance)
-                {
-                    nearest = receiver;
-                    nearestType = type;
-                    nearestDistance = distance;
-                    tied = false;
-                }
-                else if (distance == nearestDistance)
-                    tied = true;
-            }
-            if (nearest == null || tied || !_source.ConfigureSingleTypeWhenEmpty(nearestType))
+            // Same unique-nearest, no-fallback rule as pouring: a nearer ordinary container blocks pickup.
+            var nearest = GetNearbyReceiver(out var tied);
+            if (nearest == null || tied || !nearest.TryGetComponent<CollectOnlyType>(out _)
+                || !CollectOnlyType.TryGetCollectType(nearest, false, out var nearestType))
                 return false;
 
             CancelPour();
+            var hadType = _source.TryGetSingleType(out var previous);
+            if (!_source.ConfigureSingleTypeWhenEmpty(nearestType))
+                return false;
+            _restoreTypeOnCancel = hadType && previous != nearestType;
+            _typeBeforeCollect = previous;
             _collectSource = nearest;
             _collectType = nearestType;
             _collectRequested = true;

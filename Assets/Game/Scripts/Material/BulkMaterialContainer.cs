@@ -200,6 +200,12 @@ namespace Ngecor.Material
             return accepted && (AcceptFilter == null || AcceptFilter(type));
         }
 
+        public bool TryGetSingleType(out MaterialType type)
+        {
+            type = _singleType;
+            return _mode == ContainerMode.SingleType;
+        }
+
         public bool ConfigureSingleTypeWhenEmpty(MaterialType type)
         {
             if (TotalUnits != 0 || !Enum.IsDefined(typeof(MaterialType), type))

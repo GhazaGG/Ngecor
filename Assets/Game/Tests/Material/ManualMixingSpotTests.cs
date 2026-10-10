@@ -276,6 +276,99 @@ namespace Ngecor.Material.Tests
             Assert.That(spot.Ingredients.GetUnits(MaterialType.Sand), Is.GreaterThan(0));
         }
 
+        [Test]
+        public void TapAndReleaseAtDrumDoesNotLockTheEmptyBucketType()
+        {
+            var drum = CreateDrum(new Vector3(0f, 0f, 0.5f));
+            var bucket = HeldBucket();
+            var stock = bucket.GetComponent<BulkMaterialContainer>();
+            Assert.That(stock.ConfigureSingleTypeWhenEmpty(MaterialType.Sand), Is.True);
+            var action = bucket.GetComponent<BucketPourAction>();
+            action.RegisterNearbyReceiver(drum);
+
+            Assert.That(action.RequestPour(), Is.True);
+            Assert.That(Read(action, "_collectSource"), Is.SameAs(drum));
+            action.CancelPour();
+
+            Assert.That(stock.TotalUnits, Is.Zero);
+            Assert.That(stock.Accepts(MaterialType.Sand), Is.True);
+            Assert.That(stock.Accepts(MaterialType.Water), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator NearerOrdinaryContainerBlocksPickupFromFartherSource()
+        {
+            var drum = CreateDrum(new Vector3(0f, 0f, 0.8f));
+            var ordinary = new GameObject("Ordinary Container");
+            _objects.Add(ordinary);
+            ordinary.transform.position = new Vector3(0f, 0f, 0.2f);
+            var plain = ordinary.AddComponent<BulkMaterialContainer>();
+            var bucket = HeldBucket();
+            var action = bucket.GetComponent<BucketPourAction>();
+            action.RegisterNearbyReceiver(plain);
+            action.RegisterNearbyReceiver(drum);
+
+            action.RequestPour();
+            Assert.That(Read(action, "_collectSource"), Is.Null);
+            for (var i = 0; i < 20; i++)
+            {
+                action.RequestPour();
+                yield return new WaitForFixedUpdate();
+            }
+            Assert.That(bucket.GetComponent<BulkMaterialContainer>().TotalUnits, Is.Zero);
+            Assert.That(drum.GetUnits(MaterialType.Water), Is.EqualTo(50));
+        }
+
+        [Test]
+        public void ExactTieBetweenSourcesCancelsPickup()
+        {
+            var left = CreateDrum(new Vector3(-0.5f, 0f, 0f));
+            var right = CreateDrum(new Vector3(0.5f, 0f, 0f));
+            var bucket = HeldBucket();
+            bucket.transform.position = Vector3.zero;
+            var action = bucket.GetComponent<BucketPourAction>();
+            action.RegisterNearbyReceiver(left);
+            action.RegisterNearbyReceiver(right);
+
+            action.RequestPour();
+            Assert.That(Read(action, "_collectSource"), Is.Null);
+            Assert.That(Read(action, "_collectRequested"), Is.False);
+        }
+
+        [Test]
+        public void HeldBucketPicksTheNextSourceAfterLeavingTheFirst()
+        {
+            var first = CreateDrum(new Vector3(0f, 0f, 0.5f));
+            var second = CreateDrum(new Vector3(0f, 0f, 3f));
+            var bucket = HeldBucket();
+            var action = bucket.GetComponent<BucketPourAction>();
+            action.RegisterNearbyReceiver(first);
+            Assert.That(action.RequestPour(), Is.True);
+            Assert.That(Read(action, "_collectSource"), Is.SameAs(first));
+
+            action.UnregisterNearbyReceiver(first);
+            Assert.That(Read(action, "_collectRequested"), Is.False);
+            action.RegisterNearbyReceiver(second);
+            Assert.That(action.RequestPour(), Is.True);
+            Assert.That(Read(action, "_collectSource"), Is.SameAs(second));
+        }
+
+        private BulkMaterialContainer CreateDrum(Vector3 position)
+        {
+            var drum = new GameObject("Drum");
+            _objects.Add(drum);
+            drum.transform.position = position;
+            var water = drum.AddComponent<BulkMaterialContainer>();
+            Set(water, "_capacity", 50);
+            Set(water, "_mode", ContainerMode.SingleType);
+            Set(water, "_singleType", MaterialType.Water);
+            water.AddUnits(MaterialType.Water, 50);
+            var rule = drum.AddComponent<CollectOnlyType>();
+            Set(rule, "_type", MaterialType.Water);
+            Set(rule, "_shovelCanCollect", false);
+            return water;
+        }
+
         // Runs the real dry-mix, water, wet-mix flow; the spot refuses concrete from any other source.
         private static void MakeConcrete(ManualMixingSpot spot)
         {
@@ -305,6 +398,7 @@ namespace Ngecor.Material.Tests
         private GameObject HeldBucket()
         {
             var bucket = Prefab("Bucket");
+            bucket.transform.position = Vector3.zero;
             bucket.GetComponent<Rigidbody>().isKinematic = true;
             bucket.GetComponent<BucketPourInput>().enabled = false;
             var holder = new GameObject("Test Holder");
