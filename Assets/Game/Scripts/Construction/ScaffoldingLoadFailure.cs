@@ -9,6 +9,7 @@ namespace Ngecor.Construction
         [SerializeField, Min(0f)] private float _wobbleDuration = 2f;
         [SerializeField, Min(0f)] private float _wobbleTorque = 2f;
         [SerializeField, Min(0f)] private float _maximumImpactImpulse = 75f;
+        [SerializeField, Min(0f)] private float _breakPartSeparationSpeed = 1.5f;
         [SerializeField] private Transform _playerLoadProbe;
         [SerializeField] private Transform[] _breakParts = new Transform[4];
         [SerializeField] private float[] _partMasses = { 20f, 20f, 12.5f, 12.5f };
@@ -205,7 +206,7 @@ namespace Ngecor.Construction
                 partBody.linearVelocity = linearVelocity + Vector3.Cross(angularVelocity, partPosition - origin);
                 Vector3 separation = Vector3.ProjectOnPlane(partPosition - origin, Vector3.up);
                 if (separation.sqrMagnitude > 0.01f)
-                    partBody.linearVelocity += separation.normalized * 1.5f;
+                    partBody.linearVelocity += separation.normalized * _breakPartSeparationSpeed;
                 partBody.angularVelocity = angularVelocity;
                 partBody.WakeUp();
             }
