@@ -206,6 +206,15 @@ namespace Ngecor.Interaction.Tests
                 .SetValue(_playerMovement, _moveReference);
         }
 
+        // The prefab is a network object: NetworkRigidbody keeps its body kinematic until a session spawns it. These tests
+        // run without a session, so give the body the state the host has after the spawn.
+        private static GameObject InstantiateWheelbarrowPrefab(GameObject prefab)
+        {
+            var wheelbarrow = Object.Instantiate(prefab);
+            wheelbarrow.GetComponent<Rigidbody>().isKinematic = false;
+            return wheelbarrow;
+        }
+
         private static System.Type FindWheelbarrowInteractionType()
         {
             foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
@@ -839,7 +848,7 @@ namespace Ngecor.Interaction.Tests
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Game/Prefabs/Vehicle/Wheelbarrow.prefab");
             Assert.That(prefab, Is.Not.Null, "The original wheelbarrow prefab must be available to Play Mode tests.");
 
-            var wheelbarrow = Object.Instantiate(prefab);
+            var wheelbarrow = InstantiateWheelbarrowPrefab(prefab);
             wheelbarrow.name = "WheelbarrowPrefabTest";
             wheelbarrow.transform.position = new Vector3(0f, 0.5f, 1.9f);
             _targetObject1 = wheelbarrow;
@@ -1742,7 +1751,7 @@ namespace Ngecor.Interaction.Tests
 
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(WheelbarrowPrefabPath);
             Assert.That(prefab, Is.Not.Null, "The original wheelbarrow prefab must be available to Play Mode tests.");
-            var wheelbarrow = Object.Instantiate(prefab);
+            var wheelbarrow = InstantiateWheelbarrowPrefab(prefab);
             wheelbarrow.name = "WheelbarrowPrefabSteeringTest";
             // downhill turns the barrow around so that its nose (and W) points down the slope.
             wheelbarrow.transform.SetPositionAndRotation(
