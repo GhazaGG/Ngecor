@@ -967,6 +967,71 @@ namespace Ngecor.Interaction.Tests
         }
 
         [UnityTest]
+        public IEnumerator CarriedObject_WhenAutoDropDisabled_PushedTooCloseAgainstPlayer_ExceedingPinchDelay_DoesNotDrop()
+        {
+            // Wall placed right at player capsule face (Z=0.25m), leaving no space for 0.4m carried box
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var wall = _obstacleObject;
+            wall.name = "PinchingWall";
+            wall.transform.position = new Vector3(0f, 1.4f, 0.25f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+
+            _targetObject1 = CreateGrabbable("PinchBoxDisabled", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            _playerGrab.AutoDropEnabled = false;
+            yield return null;
+
+            // Wait until after _pinchDropDelay (0.3s)
+            yield return new WaitForSeconds(_playerGrab.PinchDropDelay + 0.1f);
+            yield return null;
+
+            // With AutoDropEnabled = false, carried object must remain held even when pinched
+            Assert.That(_playerGrab.IsCarrying, Is.True, "Carried object must remain held when AutoDropEnabled is false!");
+            Assert.That(grabbable.IsHeld, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator CarriedObject_WhenAutoDropHandlerConfigured_PushedTooCloseAgainstPlayer_ExceedingPinchDelay_InvokesHandlerExactlyOnce()
+        {
+            // Wall placed right at player capsule face (Z=0.25m), leaving no space for 0.4m carried box
+            _obstacleObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var wall = _obstacleObject;
+            wall.name = "PinchingWall";
+            wall.transform.position = new Vector3(0f, 1.4f, 0.25f);
+            wall.transform.localScale = new Vector3(2f, 2f, 0.1f);
+
+            _targetObject1 = CreateGrabbable("PinchBoxHandler", new Vector3(0f, 1.4f, 2f)).gameObject;
+            _targetObject1.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            var grabbable = _targetObject1.GetComponent<GrabbableObject>();
+
+            Physics.SyncTransforms();
+            yield return null;
+
+            _playerGrab.ExecuteGrab(grabbable);
+            int handlerCallCount = 0;
+            _playerGrab.AutoDropHandler = () =>
+            {
+                handlerCallCount++;
+                _playerGrab.ExecuteDrop();
+            };
+            yield return null;
+
+            // Wait until after _pinchDropDelay (0.3s)
+            yield return new WaitForSeconds(_playerGrab.PinchDropDelay + 0.1f);
+            yield return null;
+
+            Assert.That(handlerCallCount, Is.EqualTo(1), "AutoDropHandler must be invoked exactly once when pinched past delay!");
+            Assert.That(_playerGrab.IsCarrying, Is.False, "Carried object must be dropped after handler executes!");
+            Assert.That(grabbable.IsHeld, Is.False);
+        }
+
+        [UnityTest]
         public IEnumerator OnDisable_WhileCarryingHeavyObject_ResetsCarriedMassToZero()
         {
             _targetObject1 = CreateGrabbable("HeavyDisableTarget", new Vector3(0f, 1.4f, 2f)).gameObject;

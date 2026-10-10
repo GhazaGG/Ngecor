@@ -12,6 +12,8 @@ namespace Ngecor.Multiplayer
         [SerializeField] private PlayerGrab _playerGrab;
         [SerializeField] private PlayerMovement _playerMovement;
 
+        private bool CanReplicate => IsServer && IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening;
+
         private void Awake()
         {
             EnsureDependencies();
@@ -71,7 +73,7 @@ namespace Ngecor.Multiplayer
             {
                 if (_playerGrab.ExecuteDrop())
                 {
-                    if (IsServer && IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+                    if (CanReplicate)
                     {
                         ReplicateDropClientRpc();
                     }
@@ -268,7 +270,7 @@ namespace Ngecor.Multiplayer
 
             if (_playerGrab.ExecuteGrab(grabbable))
             {
-                if (IsServer && IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+                if (CanReplicate)
                 {
                     ReplicateGrabClientRpc(targetNetObj.NetworkObjectId);
                 }
@@ -398,7 +400,7 @@ namespace Ngecor.Multiplayer
             Vector3 unitDir = throwDir.normalized;
             if (_playerGrab.ExecuteThrow(unitDir))
             {
-                if (IsServer && IsSpawned && NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+                if (CanReplicate)
                 {
                     ReplicateThrowClientRpc(unitDir);
                 }

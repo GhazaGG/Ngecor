@@ -92,8 +92,16 @@ namespace Ngecor.Multiplayer.Tests
         [Test]
         public void GetSafeSpawnPosition_WhenNetManagerNull_ReturnsDefaultOffset()
         {
-            var spawnPos = SessionManager.GetSafeSpawnPosition(null);
+            var spawnPos = SessionManager.GetSafeSpawnPosition(null, null);
             Assert.That(spawnPos.x, Is.GreaterThan(1.0f));
+        }
+
+        [Test]
+        public void GetSafeSpawnPosition_WithCustomCandidates_ReturnsFirstCandidate()
+        {
+            var customCandidates = new Vector3[] { new Vector3(5f, 0.05f, -5f) };
+            var spawnPos = SessionManager.GetSafeSpawnPosition(null, customCandidates);
+            Assert.That(spawnPos, Is.EqualTo(customCandidates[0]));
         }
     }
 }

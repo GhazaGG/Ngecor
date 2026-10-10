@@ -5,7 +5,8 @@
     "Unity.Netcode.Runtime",
     "Unity.Networking.Transport",
     "Ngecor.Player",
-    "Ngecor.Interaction"
+    "Ngecor.Interaction",
+    "UnityEngine.UI"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],
